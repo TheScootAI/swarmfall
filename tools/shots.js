@@ -18,9 +18,10 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
     await page.goto(GAME); await page.waitForTimeout(700); return page;
   };
   const start = async page => { await page.tap('#btnPlay'); await page.waitForTimeout(400); await page.touchscreen.tap(195, 400); await page.waitForFunction(() => window.__swarmfall.G.state === 'play'); await page.evaluate(() => { window.__swarmfall.meta.runs = 9; }); };   // runs = 9: no first-time hint banners over the picture
-  // runs the game for `ms` with the ship safe and parked, calling window.__tick each frame if a scene set one
+  // runs the game for `ms` of game time (software rendering is slow, so the wall clock would give a different picture each run) with the ship safe and parked, calling window.__tick each frame if a scene set one
   const hold = (page, ms, x = 120) => page.evaluate(([ms, x]) => new Promise(r => { const s = window.__swarmfall, t0 = performance.now();
-    (function f() { s.P.inv = 0; s.P.hp = s.S.maxHp; s.G.revive = 9; s.P.target = x; if (window.__tick) window.__tick(s); if (performance.now() - t0 > ms) r(); else requestAnimationFrame(f); })(); }), [ms, x]);
+    const g0 = s.G.time;
+    (function f() { s.P.inv = 0; s.P.hp = s.S.maxHp; s.G.revive = 9; s.P.target = x; if (window.__tick) window.__tick(s); if ((s.G.time - g0) * 1000 > ms || performance.now() - t0 > ms * 12) r(); else requestAnimationFrame(f); })(); }), [ms, x]);
   const snap = (page, name) => page.screenshot({ path: path.join(OUT, name + '.png') });
 
   let page = await open();
@@ -48,9 +49,13 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   // a hit on the shield, then booster screen for UI over the scene
   page = await open(); await start(page);
   await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 2; s.nextWave(); s.G.queue.length = 0; for (const e of s.G.enemies) e.hp = 0; window.__tick = null; });
-  await page.waitForFunction(() => window.__swarmfall.G.state === 'cut', null, { timeout: 15000 }); await page.waitForTimeout(1500); await snap(page, '7-shuttle');
-  await page.waitForFunction(() => window.__swarmfall.G.state === 'draft', null, { timeout: 15000 }); await page.waitForTimeout(300); await snap(page, '8-booster');
+  await page.waitForFunction(() => window.__swarmfall.G.state === 'cut', null, { timeout: 90000 }); await page.waitForTimeout(4000); await snap(page, '7-shuttle');
+  await page.waitForFunction(() => window.__swarmfall.G.state === 'draft', null, { timeout: 90000 }); await page.waitForTimeout(300); await snap(page, '8-booster');
 
-  console.log('wrote 8 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
+  // the pause screen, where the graphics setting lives
+  page = await open(); await start(page); await hold(page, 1500);
+  await page.evaluate(() => { document.getElementById('btnPause').click(); }); await page.waitForTimeout(600); await snap(page, '9-pause');
+
+  console.log('wrote 9 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
   await browser.close();
 })();

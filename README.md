@@ -6,11 +6,12 @@ Enemy formations fly in, hold, and dive at you. You launch from a space station.
 
 ## Play
 
-Open `index.html` in a browser, or serve the folder with any static host (GitHub Pages works as is). There is no build step. three.js r128 loads from cdnjs.
+Open `index.html` in a browser, or serve the folder with any static host (GitHub Pages works as is). The game has no build step. three.js r187 and its post-processing add-ons are bundled into `vendor/three.min.js`, so it also runs straight from disk with no network.
 
 - **Touch:** drag anywhere to steer. The ship fires on its own.
 - **Mouse:** the ship follows the cursor.
 - **Keyboard:** ← → or A D to steer, 1 2 3 to pick a booster, P to pause, M to mute.
+- **Graphics:** the pause screen has a Graphics button: auto (turns effects down by itself on a slow device), high or low.
 
 "Restart run" on the pause screen ends the current run and launches a new one. "Start over" on the title screen erases all saved progress after a second tap.
 
@@ -42,14 +43,18 @@ All the numbers live in the "game data" section of the script in `index.html`:
 
 ## Development
 
-There is no build. Edit `index.html` and open it in a browser.
+There is no build for the game. Edit `index.html` and open it in a browser.
 
 ```
 cd tools && npm install
 node smoke.js [screenshot-dir]   # plays a full run in a headless phone browser; exits 1 on failure
+node shots.js <dir> "gfx=high"   # nine fixed pictures for judging the look by eye
 node artifact.js [out.html]      # the copy of the game published as a claude.ai artifact
 node portraits.js                # re-renders the enemy pictures for the guide
+node build-three.js              # rebuilds vendor/three.min.js (after changing three-entry.js or the three.js version)
 ```
+
+The picture is drawn with glow on chosen objects (bloom), glossy materials that mirror a small environment, a nebula backdrop, an energy-bubble shield and two moving lights, then tone-mapped. `CLAUDE.md` explains the drawing steps and the rules for adding to them.
 
 - `artifacts/enemy-guide/` is the source of the enemy guide page.
 - `CLAUDE.md` has the code map and conventions.

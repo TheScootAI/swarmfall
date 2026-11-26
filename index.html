@@ -196,6 +196,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
           <button id="btnResume" class="btn primary">Resume</button>
           <button id="btnSound2" class="btn">Turn sound off</button>
         </div>
+        <div class="row quietrow"><button id="btnGfx" class="btn quiet">Graphics: auto</button></div>
         <div class="row quietrow"><button id="btnRestart" class="btn quiet">Restart run</button><button id="btnQuit" class="btn quiet">End this run</button></div>
       </div>
     </section>
@@ -260,12 +261,13 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------- save ----------
 const SAVE_KEY = 'swarmfall.v1';
-const meta = { scrap: 0, best: 0, runs: 0, mute: false, up: {}, mods: null };
+const meta = { scrap: 0, best: 0, runs: 0, mute: false, up: {}, mods: null, gfx: 'auto', autoQ: 2 };
 try {
   const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
   if (s && typeof s === 'object') {
     meta.scrap = +s.scrap || 0; meta.best = +s.best || 0; meta.runs = +s.runs || 0;
     meta.mute = !!s.mute; meta.up = Object.assign({}, s.up); if (Array.isArray(s.mods)) meta.mods = s.mods.filter(m => typeof m === 'string');
+    if (s.gfx === 'high' || s.gfx === 'low') meta.gfx = s.gfx; if (s.autoQ === 0 || s.autoQ === 1) meta.autoQ = s.autoQ;
   }
 } catch (e) { /* storage unavailable: play without saving */ }
 const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch (e) {} };
@@ -348,17 +350,32 @@ let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 2, powerPreference: 'high-performance' }); }   // at 2x pixels and up, edges look fine without MSAA
 catch (e) { $('nogl').hidden = false; return; }
 renderer.setClearColor(0x080b1f);
+renderer.toneMapping = THREE.NeutralToneMapping;   // keeps hues true as things get bright: red stays red
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x080b1f, 1000, 2000);
 const FOV = 38;
 const camera = new THREE.PerspectiveCamera(FOV, 1, 10, 4000);
-const ambient = new THREE.AmbientLight(0x9aa4e0, 2.2); scene.add(ambient);
-const sun = new THREE.DirectionalLight(0xffffff, 3.2); sun.position.set(-0.5, 0.7, 1); scene.add(sun);
+// Things on the GLOW layer are drawn a second time into a small buffer, blurred, and added back as a halo.
+const GLOW = 1;
+const ambient = new THREE.AmbientLight(0x9aa4e0, 0.9);
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-0.5, 0.7, 1);
+// Two point lights that are always in the scene (adding or removing a light would recompile every material):
+// one rides with the ship, one flashes where something explodes.
+const shipLight = new THREE.PointLight(0x5fe8ff, 0, 190, 2), flashLight = new THREE.PointLight(0xffd0a0, 0, 420, 2);
+let flashPower = 0;
+function flash(x, y, power) { if (power > flashPower) { flashPower = power; flashLight.position.set(TX(x), TY(y), 45); } }
+for (const l of [ambient, sun, shipLight, flashLight]) { l.layers.enable(GLOW); scene.add(l); }   // on both layers, so both passes see the same lights
+// reflections: a small studio-like environment that every glossy surface mirrors
+try { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.5; pm.dispose(); }
+catch (e) { ambient.intensity = 2.2; }
 
 let unitsPerPx = 1, shakeAmt = 0, drewPaused = false;
-const phong = (c, e = 0) => new THREE.MeshPhongMaterial({ color: c, emissive: e, flatShading: true, shininess: 50 });
+// Faceted, glossy surfaces: physically based, so they catch the lights and mirror the environment.
+const pbr = (c, e = 0, metal = 0.3, rough = 0.45) => new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: 1.5, flatShading: true, metalness: metal, roughness: rough });
+const glowing = m => { m.userData.glow = true; return m; };   // part() puts meshes with such a material on the GLOW layer
 const basic = c => new THREE.MeshBasicMaterial({ color: c, fog: false });
-const glowMat = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+const addMat = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });   // adds its light to what is behind it
+const glowMat = (c, o = 1) => glowing(addMat(c, o));   // the same, with a halo
 // All enemy fire is this red, and nothing good is ever red: red means danger.
 const ENEMY_RED = 0xff2f45, ENEMY_RED_RGB = [1, 0.3, 0.38];
 // particle colours used every frame or on every hit, kept as constants so bursts do not allocate them
@@ -367,23 +384,37 @@ const geo = {
   oct: new THREE.OctahedronGeometry(1, 0), tet: new THREE.TetrahedronGeometry(1, 0), ico: new THREE.IcosahedronGeometry(1, 0),
   box: new THREE.BoxGeometry(1, 1, 1), cone: new THREE.ConeGeometry(1, 1, 6), torus: new THREE.TorusGeometry(1, 0.3, 6, 12),
   hoop: new THREE.TorusGeometry(1, 0.07, 6, 28), sph: new THREE.SphereGeometry(1, 10, 8), ring: new THREE.RingGeometry(0.84, 1, 36),
-  plane: new THREE.PlaneGeometry(1, 1),
+  plane: new THREE.PlaneGeometry(1, 1), ball: new THREE.SphereGeometry(1, 24, 16),
 };
 const M = {
-  hull: phong(0xe9ecff, 0x1a1f44), wing: phong(0x5fe8ff, 0x0b3d4a), canopy: basic(0x9ff3ff), flame: glowMat(0xffb36b, 0.9),
-  mite: phong(0xff4f8b, 0x4a0f25), miteFin: phong(0xffa3c2, 0x3a1020),
-  wasp: phong(0xffb02e, 0x4a2a00), waspWing: phong(0xfff1c0, 0x40381a),
-  weaver: phong(0xa56bff, 0x24104a), splitA: phong(0xff7a3c, 0x4a1c08), splitB: phong(0xffd23c, 0x4a3a08),
-  beetle: phong(0x2ed6b5, 0x06382f), shell: phong(0x127a6b, 0x03201b),
-  trip: phong(0x3d7bff, 0x0c1f66),
-  lancer: phong(0xff3355, 0x5a0a18), lancerShell: phong(0x3a1638, 0x12061a), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: glowMat(0xffffff, 0.95),
-  eye: basic(0xffffff), elite: basic(ENEMY_RED), flash: basic(0xffffff), coreRing: phong(0x2a2f66, 0x0a0c22),
-  scrap: phong(0xffd257, 0x9a6a00), heart: phong(0x35f06e, 0x0c6a2c), halo: glowMat(0x5fe8ff, 0.85), drone: phong(0xc7b0ff, 0x2a1a5a),
-  shield: new THREE.MeshBasicMaterial({ color: 0xc79bff, wireframe: true, transparent: true, opacity: 0.7, fog: false }),
+  hull: pbr(0xe9ecff, 0x1a1f44, 0.6, 0.3), wing: pbr(0x5fe8ff, 0x0b3d4a, 0.5, 0.35), canopy: glowing(basic(0x9ff3ff)), flame: glowMat(0xffb36b, 0.9),
+  mite: pbr(0xff4f8b, 0x4a0f25), miteFin: pbr(0xffa3c2, 0x3a1020),
+  wasp: pbr(0xffb02e, 0x4a2a00), waspWing: pbr(0xfff1c0, 0x40381a),
+  weaver: pbr(0xa56bff, 0x24104a), splitA: pbr(0xff7a3c, 0x4a1c08), splitB: pbr(0xffd23c, 0x4a3a08),
+  beetle: pbr(0x2ed6b5, 0x06382f, 0.7, 0.3), shell: pbr(0x127a6b, 0x03201b, 0.7, 0.35),
+  trip: pbr(0x3d7bff, 0x0c1f66),
+  lancer: pbr(0xff3355, 0x5a0a18), lancerShell: pbr(0x3a1638, 0x12061a, 0.7, 0.35), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: addMat(0xffffff, 0.95),   // no halo on the white core: blurred, it would turn the red beam pink
+ 
+  eye: basic(0xffffff), elite: glowing(basic(ENEMY_RED)), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
+  scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), drone: pbr(0xc7b0ff, 0x2a1a5a),
+  // the shield: an energy bubble that is bright at its rim, with bands rising through it
+  shield: glowing(new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: 'varying vec3 vN; varying vec3 vP; void main() { vN = normalize(normalMatrix * normal); vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float time; varying vec3 vN; varying vec3 vP;
+      void main() {
+        float rim = pow(1.0 - abs(vN.z), 2.2), band = 0.75 + 0.25 * sin(vP.y * 9.0 - time * 5.0);
+        gl_FragColor = vec4(vec3(0.56, 0.30, 1.0) * (0.10 + rim * 1.5) * band, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  })),
   wall: new THREE.MeshBasicMaterial({ color: 0x3a4391, transparent: true, opacity: 0.6, fog: false }),
 };
 function part(g, m, sx, sy, sz, x = 0, y = 0, z = 0, rz = 0) {
-  const mesh = new THREE.Mesh(g, m); mesh.scale.set(sx, sy, sz); mesh.position.set(x, y, z); mesh.rotation.z = rz; return mesh;
+  const mesh = new THREE.Mesh(g, m); mesh.scale.set(sx, sy, sz); mesh.position.set(x, y, z); mesh.rotation.z = rz;
+  if (m.userData.glow) mesh.layers.enable(GLOW);
+  return mesh;
 }
 const TX = x => x - W / 2, TY = y => H / 2 - y;   // game coords (y down) to three coords
 
@@ -416,16 +447,45 @@ for (let i = 0; i < STARS; i++) {
   starV[i] = rand(50, 90);
 }
 stars.g.attributes.color.needsUpdate = true;
-// far wireframe hulks drifting behind the field
+// Backdrop: a soft nebula painted once into a small texture that tiles and scrolls, far behind everything.
+// It stays in blues, violets and teals: red is reserved for danger.
+const nebula = (() => {
+  const w = 256, h = 512, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'), img = g.createImageData(w, h), d = img.data;
+  const hash = (x, y, sd) => { const n = Math.sin(x * 127.1 + y * 311.7 + sd * 74.7) * 43758.5453; return n - Math.floor(n); };
+  const vnoise = (x, y, px, py, sd) => {   // value noise that repeats every px by py cells, so the texture tiles
+    const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+    const at = (i, k) => hash(((x0 + i) % px + px) % px, ((y0 + k) % py + py) % py, sd);
+    return lerp(lerp(at(0, 0), at(1, 0), ux), lerp(at(0, 1), at(1, 1), ux), uy);
+  };
+  const fbm = (u, v, sd) => { let a = 0, amp = 0.5, fx = 3, fy = 6; for (let o = 0; o < 5; o++) { a += amp * vnoise(u * fx, v * fy, fx, fy, sd + o); amp *= 0.5; fx *= 2; fy *= 2; } return a; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const u0 = x / w, v0 = y / h, u = u0 + 0.22 * (fbm(u0, v0, 31) - 0.5), v = v0 + 0.11 * (fbm(u0, v0, 47) - 0.5);   // bend the pattern so it wisps instead of banding
+    const dens = smooth(clamp((fbm(u, v, 1) - 0.4) / 0.34, 0, 1)), hue = fbm(u * 0.999, v, 9), k = (y * w + x) * 4;
+    const t = clamp((hue - 0.35) / 0.3, 0, 1);   // indigo through violet to teal
+    d[k] = 255 * dens * 0.5 * lerp(lerp(0.16, 0.42, Math.min(1, t * 2)), 0.06, Math.max(0, t * 2 - 1));
+    d[k + 1] = 255 * dens * 0.5 * lerp(lerp(0.16, 0.14, Math.min(1, t * 2)), 0.40, Math.max(0, t * 2 - 1));
+    d[k + 2] = 255 * dens * 0.5 * lerp(lerp(0.52, 0.60, Math.min(1, t * 2)), 0.50, Math.max(0, t * 2 - 1));
+    d[k + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  const m = new THREE.Mesh(geo.plane, new THREE.MeshBasicMaterial({ map: tex, fog: false, depthWrite: false, depthTest: false }));
+  m.position.z = -1700; m.renderOrder = -10; m.frustumCulled = false; scene.add(m);
+  return { m, tex };
+})();
+// far rocks drifting behind the field, for depth
 const hulks = [];
 for (let i = 0; i < 3; i++) {
-  const m = new THREE.Mesh(geo.ico, new THREE.MeshBasicMaterial({ color: [0x2a3a9a, 0x6a2a7a, 0x1f5a7a][i], wireframe: true, transparent: true, opacity: 0.15, fog: false }));
-  const s = rand(110, 190); m.scale.set(s, s, s); m.position.set(rand(-420, 420), rand(-600, 600), -rand(900, 1500)); scene.add(m); hulks.push(m);
+  const mat = pbr([0x141a33, 0x1c1530, 0x10222e][i], 0, 0, 0.9); mat.fog = false; mat.envMapIntensity = 0.5;   // dim: far scenery, never mistaken for something in the playfield
+  const m = new THREE.Mesh(geo.ico, mat);
+  const sc = rand(26, 52); m.scale.set(sc, sc * rand(0.7, 1), sc * rand(0.7, 1)); m.position.set(rand(-420, 420), rand(-600, 600), -rand(900, 1500)); scene.add(m); hulks.push(m);
 }
 const wallL = part(geo.plane, M.wall, 1.5, 1, 1), wallR = wallL.clone(); scene.add(wallL, wallR);
 
 // particles
-const PMAX = 700, sparks = pointCloud(PMAX, 16), parts = [], spareParts = [];   // dead particles are reused, not left to the garbage collector
+const PMAX = 700, sparks = pointCloud(PMAX, 16), parts = [], spareParts = [];
+sparks.p.layers.enable(GLOW);   // every spark glows   // dead particles are reused, not left to the garbage collector
 function burst(x, y, c, n, sp, life = 0.6) {
   const cr = lin(c[0]), cg = lin(c[1]), cb = lin(c[2]);
   for (let i = 0; i < n && parts.length < PMAX; i++) {
@@ -437,16 +497,29 @@ function burst(x, y, c, n, sp, life = 0.6) {
 // expanding rings and lightning arcs, drawn from fixed pools: an effect reuses an idle slot (or the one closest
 // to finishing) instead of building a new mesh, material or geometry every time
 const rings = [], zaps = [];
-for (let i = 0; i < 24; i++) { const m = new THREE.Mesh(geo.ring, glowMat(0xffffff, 0)); m.visible = false; scene.add(m); rings.push({ m, t: 0 }); }
+// A shockwave is a soft-edged band drawn by a small shader. Its width stays about the same on screen however
+// far it has spread, so a boss-sized ring is a thin bright wave and not a slab of white.
+const ringMat = () => glowing(new THREE.ShaderMaterial({
+  uniforms: { color: { value: new THREE.Color(0xffffff) }, opacity: { value: 0 }, w: { value: 0.16 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform vec3 color; uniform float opacity; uniform float w; varying vec2 vUv;
+    void main() {
+      float r = length(vUv - 0.5) * 2.0, a = smoothstep(1.0 - w, 1.0 - w * 0.3, r) * (1.0 - smoothstep(1.0 - w * 0.3, 1.0, r));
+      gl_FragColor = vec4(color * a * opacity, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+}));
+for (let i = 0; i < 24; i++) { const m = part(geo.plane, ringMat(), 1, 1, 1); m.visible = false; scene.add(m); rings.push({ m, t: 0 }); }
 const idleOrOldest = pool => { let best = pool[0]; for (const q of pool) { if (q.t <= 0) return q; if (q.t < best.t) best = q; } return best; };
 function ringFx(x, y, r0, r1, color, ttl = 0.35) {
-  const r = idleOrOldest(rings); r.x = x; r.y = y; r.r0 = r0; r.r1 = r1; r.t = r.max = ttl; r.m.material.color.set(color); r.m.visible = true;
+  const r = idleOrOldest(rings); r.x = x; r.y = y; r.r0 = r0; r.r1 = r1; r.t = r.max = ttl; r.m.material.uniforms.color.value.set(color); r.m.visible = true;
 }
 const zapMat = new THREE.LineBasicMaterial({ color: 0xbfe9ff, transparent: true, blending: THREE.AdditiveBlending, fog: false });
 const ZAP_PTS = 11;   // an arc joins at most 3 enemies: 2 jagged spans of 5 points, plus the end
 for (let i = 0; i < 6; i++) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ZAP_PTS * 3), 3));
-  const line = new THREE.Line(g, zapMat); line.visible = false; line.frustumCulled = false; scene.add(line); zaps.push({ line, t: 0 });
+  const line = new THREE.Line(g, zapMat); line.visible = false; line.frustumCulled = false; line.layers.enable(GLOW); scene.add(line); zaps.push({ line, t: 0 });
 }
 function zapFx(pts) {
   const z = idleOrOldest(zaps), pos = z.line.geometry.attributes.position, v = pos.array; let n = 0;
@@ -465,7 +538,7 @@ const dummy = new THREE.Object3D(), tmpC = new THREE.Color();
 function instanced(g, max, color) {
   const im = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: color == null ? 0xffffff : color, fog: false }), max);
   if (color == null) for (let i = 0; i < max; i++) im.setColorAt(i, tmpC.set(0xffffff));
-  im.frustumCulled = false; im.count = 0; scene.add(im);
+  im.frustumCulled = false; im.count = 0; im.layers.enable(GLOW); scene.add(im);   // every shot glows
   return im;
 }
 // send only the first `count` values of a buffer to the graphics card
@@ -484,10 +557,10 @@ const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a;   // player 
 const ship = new THREE.Group();
 ship.add(part(geo.cone, M.hull, 7, 30, 6, 0, 2), part(geo.box, M.wing, 30, 5, 2.5, 0, -7), part(geo.box, M.wing, 3.5, 14, 3, -14, -3), part(geo.box, M.wing, 3.5, 14, 3, 14, -3), part(geo.oct, M.canopy, 3, 5, 3, 0, 3, 5));
 const flame = part(geo.cone, M.flame, 4, 12, 4, 0, -19, 0, Math.PI); ship.add(flame);
-const shieldMesh = part(geo.ico, M.shield, 23, 23, 23); ship.add(shieldMesh);
+const shieldMesh = part(geo.ball, M.shield, 23, 23, 23); ship.add(shieldMesh);
 scene.add(ship);
 // the space station: a hub with a docking port above and below, a slowly turning ring and two solar wings
-const stM = { hull: phong(0xcfd6ff, 0x1a2050), dark: phong(0x4a5490, 0x10143a), panel: phong(0x2a56d8, 0x0a1c70), port: phong(0xffc857, 0x6a4a00), light: basic(0x5fe8ff) };
+const stM = { hull: pbr(0xcfd6ff, 0x1a2050, 0.7, 0.3), dark: pbr(0x4a5490, 0x10143a, 0.7, 0.4), panel: pbr(0x2a56d8, 0x0a1c70, 0.9, 0.2), port: pbr(0xffc857, 0x6a4a00, 0.8, 0.3), light: glowing(basic(0x5fe8ff)) };
 geo.cyl = new THREE.CylinderGeometry(1, 1, 1, 8); geo.band = new THREE.TorusGeometry(1, 0.09, 6, 30);
 const station = new THREE.Group(), stRing = new THREE.Group();
 station.add(part(geo.ico, stM.hull, 30, 30, 26), part(geo.cyl, stM.dark, 9, 30, 9, 0, 40), part(geo.cyl, stM.dark, 9, 30, 9, 0, -40),
@@ -508,15 +581,75 @@ const DOCK_TOP = 71, DOCK_BOTTOM = 75;   // how far the ship's centre sits from 
 const ST = { on: false, y: 0 }, SH = { on: false, x: 0, y: 0, rot: 0, pod: true, leave: false, side: 1 };
 const droneMeshes = [0, 1, 2].map(() => { const m = part(geo.oct, M.drone, 5, 7, 5); m.visible = false; scene.add(m); return m; });
 
+// ---- post-processing ----
+// The picture is drawn into a high-range buffer. Glowing things are drawn again into a half-size buffer, blurred
+// by the bloom pass, and added back as halos. One last pass adds the halos, a slight colour fringe that
+// pulses with screen shake, and darkened corners, and tone-maps the result into screen colours.
+// Three quality levels: 2 = everything, 1 = the same at a lower resolution, 0 = no post-processing at all.
+const MIX_SHADER = {
+  uniforms: { tDiffuse: { value: null }, tGlow: { value: null }, glow: { value: 1.0 }, fringe: { value: 0 }, corners: { value: 0.42 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tGlow; uniform float glow; uniform float fringe; uniform float corners; varying vec2 vUv;
+    void main() {
+      vec2 d = vUv - 0.5; float r2 = dot(d, d); vec2 off = d * fringe * (0.3 + r2 * 3.0);
+      vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
+      c += texture2D(tGlow, vUv).rgb * glow;
+      c *= 1.0 - corners * smoothstep(0.12, 0.7, r2);
+      gl_FragColor = vec4(c, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+};
+const dpr = () => window.devicePixelRatio || 1;
+let composer = null, bloom = null, mixPass = null, glowRT = null;
+try {
+  if (!renderer.extensions.has('EXT_color_buffer_half_float') && !renderer.extensions.has('EXT_color_buffer_float')) throw 0;   // no high-range buffers on this device: plain drawing
+  composer = new THREE.EffectComposer(renderer);
+  composer.renderTarget1.samples = composer.renderTarget2.samples = dpr() < 2 ? 4 : 0;   // smooth edges where pixels are large
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  mixPass = new THREE.ShaderPass(MIX_SHADER); composer.addPass(mixPass);   // the last pass draws to the screen, where its two includes tone-map and convert to screen colours
+  glowRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: false });
+  bloom = new THREE.UnrealBloomPass(new THREE.Vector2(4, 4), 1, 0, 0);
+  bloom.compositeMaterial.uniforms.bloomFactors.value = [1, 0.7, 0.4, 0.18, 0.06];   // weight of each blur level, tight to wide: mostly tight, so a big light such as a laser does not tint the whole screen
+  mixPass.uniforms.tGlow.value = bloom.renderTargetsHorizontal[0].texture;   // the blurred halos alone, before the pass adds them to its input
+} catch (e) { composer = null; }
+// ?gfx=high or ?gfx=low in the address pins the level (the tests use it). Otherwise the saved setting decides:
+// 'auto' starts at the top and steps down for good if the game runs slowly on this device.
+const gfxPin = new URLSearchParams(location.search).get('gfx');
+const GFX = { mode: gfxPin === 'high' || gfxPin === 'low' ? gfxPin : meta.gfx, q: 2, slow: 0, ema: 16 };
+const gfxLevel = () => !composer || GFX.mode === 'low' ? 0 : GFX.mode === 'high' ? 2 : meta.autoQ;
+function gfxWatch(ms) {   // called with each frame's real duration while playing
+  if (GFX.mode !== 'auto' || GFX.q === 0) return;
+  GFX.ema += (Math.min(ms, 100) - GFX.ema) * 0.05;
+  GFX.slow = GFX.ema > 38 ? GFX.slow + ms : 0;        // under about 26 frames a second. A phone in low-power mode holds a steady 30, which must not count as slow
+  if (GFX.slow > 2500) { meta.autoQ = GFX.q - 1; save(); GFX.slow = 0; GFX.ema = 16; resize(); gfxLabels(); }
+}
+function draw(dt) {
+  if (GFX.q > 0) {
+    camera.layers.set(GLOW); renderer.setClearColor(0x000000); renderer.setRenderTarget(glowRT); renderer.render(scene, camera);
+    camera.layers.set(0); renderer.setClearColor(0x080b1f);
+    bloom.render(renderer, null, glowRT, dt, false);
+    mixPass.uniforms.fringe.value = 0.0012 + shakeAmt * 0.0011;
+    renderer.setRenderTarget(null); composer.render(dt);
+  } else { renderer.setRenderTarget(null); renderer.render(scene, camera); }
+}
+
 function resize() {
   const vw = window.innerWidth, vh = window.innerHeight; if (!vw || !vh) return;
   const asp = vw / vh;
   H = clamp(Math.round(W / asp), 560, 800);
   const visH = Math.max(H, W / asp), visW = visH * asp; unitsPerPx = visW / vw;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(vw, vh, false);
+  GFX.q = gfxLevel();
+  const pr = Math.min(dpr(), GFX.q === 1 ? 1.5 : 2);
+  renderer.setPixelRatio(pr); renderer.setSize(vw, vh, false);
+  if (composer) {
+    composer.setPixelRatio(pr); composer.setSize(vw, vh);
+    const gw = Math.max(2, Math.round(vw * pr / 2)), gh = Math.max(2, Math.round(vh * pr / 2)); glowRT.setSize(gw, gh); bloom.setSize(gw, gh);
+  }
   const camDist = (visH / 2) / Math.tan(FOV * Math.PI / 360);
   camera.aspect = asp; camera.position.set(0, 0, camDist); camera.updateProjectionMatrix();
   scene.fog.near = camDist + 80; scene.fog.far = camDist + 900;
+  const nd = camDist + 1700, nh = 2 * nd * Math.tan(FOV * Math.PI / 360) * 1.08; nebula.m.scale.set(nh * Math.max(asp, 0.5), nh, 1); nebula.tex.repeat.set(Math.max(1, asp * 2), 1);   // fill the view at its distance
   document.documentElement.style.setProperty('--colw', Math.min(vw, W / unitsPerPx) + 'px');
   const showWalls = visW > W + 10; wallL.visible = wallR.visible = showWalls;
   wallL.position.set(-W / 2 - 3, 0, 0); wallR.position.set(W / 2 + 3, 0, 0); wallL.scale.y = wallR.scale.y = visH;
@@ -657,7 +790,7 @@ function buildEnemy(type, tint) {
   else if (type === 'lancer') { add(geo.oct, M.lancer, 8, 16, 8); add(geo.box, M.lancerShell, 4, 18, 5, -9, -2); add(geo.box, M.lancerShell, 4, 18, 5, 9, -2); g.userData.eye = add(geo.sph, M.eye, 3, 3, 3, 0, -13, 4); }
   else if (type === 'beetle') { add(geo.ico, M.beetle, 15, 13, 11); add(geo.box, M.shell, 25, 5, 8, 0, 5, 5); add(geo.oct, M.eye, 2.4, 2.4, 2.4, -5, -5, 9); add(geo.oct, M.eye, 2.4, 2.4, 2.4, 5, -5, 9); }
   else {
-    const body = bossBody[tint] || (bossBody[tint] = phong(tint, 0x2a0a20)), dark = M.coreRing;
+    const body = bossBody[tint] || (bossBody[tint] = pbr(tint, 0x2a0a20, 0.6, 0.3)), dark = M.coreRing;
     g.userData.core = add(geo.ico, body, 30, 30, 26);
     const ring = new THREE.Group(); ring.add(part(geo.hoop, dark, 46, 46, 46));
     for (let i = 0; i < 4; i++) ring.add(part(geo.oct, body, 8, 8, 8, Math.cos(i * TAU / 4) * 46, Math.sin(i * TAU / 4) * 46));
@@ -904,6 +1037,7 @@ function spawnPick(kind, x, y) {
 function killEnemy(e) {
   despawn(e); G.run.kills++;
   const boss = e.type === 'boss';
+  flash(e.x, e.y, boss ? 600000 : e.elite ? 160000 : 70000);
   burst(e.x, e.y, e.def.col, boss ? 140 : e.elite ? 34 : 16, boss ? 380 : 210, boss ? 1.3 : 0.6); burst(e.x, e.y, [1, 1, 0.8], boss ? 60 : 5, 120, 0.4);
   if (boss) {
     SFX.big(); shake(16); vibrate(120); ringFx(e.x, e.y, 20, 240, 0xffffff, 0.7);
@@ -959,7 +1093,7 @@ function hitPlayer() {
   if (S.nova > 0) nova(45 * S.nova);
   if (P.hp <= 0) {
     if (G.revive > 0) { G.revive--; P.hp = 1; P.inv = 2.5; nova(80); toast('REBOOTED', 'Emergency Reboot kept you alive'); }
-    else { P.alive = false; ship.visible = false; burst(P.x, P.y, [0.4, 0.9, 1], 90, 330, 1.1); ringFx(P.x, P.y, 10, 160, 0x5fe8ff, 0.6); SFX.big(); vibrate(200); shake(18); G.state = 'dying'; G.dieT = 1.5; }
+    else { P.alive = false; ship.visible = false; flash(P.x, P.y, 500000); burst(P.x, P.y, [0.4, 0.9, 1], 90, 330, 1.1); ringFx(P.x, P.y, 10, 160, 0x5fe8ff, 0.6); SFX.big(); vibrate(200); shake(18); G.state = 'dying'; G.dieT = 1.5; }
   }
   drawHud();
 }
@@ -1210,7 +1344,11 @@ function syncScene(dt) {
   ship.rotation.y = clamp(P.vx / 420, -0.7, 0.7);
   if (P.alive) ship.visible = P.inv <= 0 || G.state === 'cut' || Math.floor(G.time * 14) % 2 === 0;   // no hit-blink during cutscenes
   flame.scale.y = 12 + Math.sin(G.time * 40) * 3;
-  shieldMesh.visible = P.shieldUp; shieldMesh.rotation.y = G.time * 1.5; shieldMesh.rotation.x = G.time;
+  shieldMesh.visible = P.shieldUp; M.shield.uniforms.time.value = G.time;
+  // lights: a cool glow that travels with the ship, and the fading flash of the last explosion
+  shipLight.position.set(TX(P.x), TY(P.y) + 6, 34); shipLight.intensity = P.alive && G.state !== 'title' && G.state !== 'browse' ? 9000 : 0;
+  flashPower *= Math.max(0, 1 - 9 * dt); flashLight.intensity = flashPower;
+  if (P.alive && G.state === 'play' && Math.random() < 0.5) burst(P.x + rand(-2, 2), P.y + 22, THRUST_RGB, 1, 26, 0.28);   // engine exhaust
   for (let i = 0; i < 3; i++) {
     const m = droneMeshes[i]; m.visible = P.alive && i < S.drones && G.state !== 'title';
     if (m.visible) { const a = G.time * 2.4 + i * TAU / S.drones; m.position.set(TX(P.x) + Math.cos(a) * 30, TY(P.y) + 6, Math.sin(a) * 30); m.rotation.y = a * 2; }
@@ -1259,13 +1397,14 @@ function syncScene(dt) {
   for (const r of rings) {
     if (r.t <= 0) continue;
     r.t -= dt; if (r.t <= 0) { r.m.visible = false; continue; }
-    const k = 1 - r.t / r.max, s = lerp(r.r0, r.r1, 1 - (1 - k) * (1 - k)); r.m.scale.set(s, s, 1); r.m.position.set(TX(r.x), TY(r.y), 1); r.m.material.opacity = 0.9 * (1 - k);
+    const k = 1 - r.t / r.max, s = lerp(r.r0, r.r1, 1 - (1 - k) * (1 - k)); r.m.scale.set(s * 2, s * 2, 1); r.m.position.set(TX(r.x), TY(r.y), 1); const u = r.m.material.uniforms; u.opacity.value = 0.9 * (1 - k); u.w.value = clamp(7 / s, 0.03, 0.3);
   }
   for (const z of zaps) if (z.t > 0) { z.t -= dt; if (z.t <= 0) z.line.visible = false; }
   // background
   const sp = G.state === 'play' || G.state === 'clear' ? 1 : G.state === 'cut' ? (G.cut.kind === 'launch' ? 0.35 + 1.5 * (G.cut.t / G.cut.dur) : 0.7) : 0.35;
   for (let i = 0; i < STARS; i++) { const j = i * 3 + 1, lim = 520 * (1 - stars.pos[j + 1] / 700); stars.pos[j] -= starV[i] * sp * dt; if (stars.pos[j] < -lim) stars.pos[j] = lim; }
   stars.g.attributes.position.needsUpdate = true;
+  nebula.tex.offset.y += 0.012 * sp * dt;
   for (const h of hulks) { h.position.y -= 14 * sp * dt; h.rotation.x += 0.05 * dt; h.rotation.y += 0.08 * dt; if (h.position.y < -1300) { h.position.y = 1300; h.position.x = rand(-500, 500); } }
 }
 
@@ -1299,6 +1438,7 @@ function loadoutHtml() {
   const ids = Object.keys(G.up);
   return ids.length ? ids.map(id => '<span>' + UPBY[id].n + ' <b>' + G.up[id] + '</b></span>').join('') : '<span>No boosters yet</span>';
 }
+function gfxLabels() { $('btnGfx').textContent = 'Graphics: ' + GFX.mode + (GFX.mode === 'auto' && GFX.q < 2 ? (GFX.q ? ' (reduced)' : ' (effects off)') : ''); }
 function soundLabels() { $('btnSound').textContent = $('btnSound2').textContent = meta.mute ? 'Turn sound on' : 'Turn sound off'; }
 function toggleMute() {
   meta.mute = !meta.mute; save(); soundLabels();
@@ -1417,6 +1557,11 @@ function openStation() { if (G.state !== 'title') { titleScene(); $('hud').hidde
 $('btnPlay').onclick = startRun; $('btnAgain').onclick = startRun; $('btnStationLaunch').onclick = startRun;
 $('btnStation').onclick = openStation; $('btnDeadStation').onclick = openStation; $('btnStationBack').onclick = showTitle;
 $('btnSound').onclick = $('btnSound2').onclick = toggleMute;
+// Graphics: auto (steps down by itself on a slow device), high (all effects, always) or low (no effects).
+$('btnGfx').onclick = () => {
+  GFX.mode = meta.gfx = { auto: 'high', high: 'low', low: 'auto' }[GFX.mode]; if (GFX.mode === 'auto') meta.autoQ = 2;   // choosing auto again gives the device a fresh try
+  save(); GFX.slow = 0; GFX.ema = 16; resize(); gfxLabels();
+};
 $('btnPause').onclick = $('btnResume').onclick = togglePause;
 $('btnUndock').onclick = () => { if (G.state === 'station') { $('hud').hidden = false; drawHud(); dockPose(); openDraft('boss'); } };
 $('btnQuit').onclick = () => { if (G.state === 'pause') { show(null); endRun(); } };
@@ -1480,15 +1625,15 @@ function issueUrl(text, info, shot) {
   return url;
 }
 function fbInfo() {
-  if (G.state === 'title' || G.state === 'browse') return 'at the menu · runs flown: ' + meta.runs + ' · deepest wave: ' + meta.best;
+  if (G.state === 'title' || G.state === 'browse') return 'at the menu · runs flown: ' + meta.runs + ' · deepest wave: ' + meta.best + ' · graphics ' + GFX.mode + ' ' + GFX.q;
   const ups = Object.keys(G.up).map(id => UPBY[id].n + ' ' + G.up[id]).join(', ');
-  return 'wave ' + G.wave + ' · hull ' + Math.max(0, P.hp) + '/' + S.maxHp + ' · destroyed ' + G.run.kills + ' · upgrades: ' + (ups || 'none');
+  return 'wave ' + G.wave + ' · hull ' + Math.max(0, P.hp) + '/' + S.maxHp + ' · destroyed ' + G.run.kills + ' · upgrades: ' + (ups || 'none') + ' · graphics ' + GFX.mode + ' ' + GFX.q;
 }
 // A reduced copy of the playfield as it is right now. A WebGL canvas is cleared after each frame,
 // so draw the scene and copy it in the same task.
 function fbSnapshot() {
   if (G.state === 'title' || G.state === 'browse') return null;
-  renderer.render(scene, camera);
+  draw(0);
   const k = Math.min(1, FB.shotMax / Math.max(canvas.width, canvas.height));
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(canvas.width * k)); c.height = Math.max(1, Math.round(canvas.height * k));
@@ -1602,7 +1747,7 @@ if (finePointer) $('howto').textContent = 'Steer with the mouse, or ← → / A 
 let last = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.034, (now - last) / 1000 || 0); last = now;
+  const real = now - last, dt = Math.min(0.034, real / 1000 || 0); last = now;
   const paused = G.state === 'pause';
   if (paused && drewPaused) return;   // a paused frame never changes: draw it once
   drewPaused = paused;
@@ -1612,11 +1757,12 @@ function frame(now) {
   else if (G.state === 'cut') updateCut(dt);
   else if (!frozen) { if (G.state === 'title' || G.state === 'browse') dockPose(); else P.y = shipY(); updateEnemies(dt); sweepDead(G.enemies); }
   syncScene(paused ? 0 : dt);
-  renderer.render(scene, camera);
+  draw(dt);
+  if (G.state === 'play') gfxWatch(real);
 }
-resize(); soundLabels(); showTitle();
+resize(); soundLabels(); gfxLabels(); showTitle();
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, UNLOCK, GFX, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

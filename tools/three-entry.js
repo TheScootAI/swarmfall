@@ -7,7 +7,7 @@ export {
   MeshBasicMaterial, MeshPhongMaterial, MeshStandardMaterial, PointsMaterial, LineBasicMaterial, ShaderMaterial,
   AmbientLight, DirectionalLight, PointLight, HemisphereLight, CanvasTexture, PMREMGenerator, WebGLRenderTarget,
   AdditiveBlending, NormalBlending, BackSide, FrontSide, DoubleSide, HalfFloatType, SRGBColorSpace, LinearSRGBColorSpace, ColorManagement,
-  NoToneMapping, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping, DynamicDrawUsage,
+  NoToneMapping, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping, DynamicDrawUsage, RepeatWrapping,
 } from 'three';
 export { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 export { RenderPass } from 'three/addons/postprocessing/RenderPass.js';

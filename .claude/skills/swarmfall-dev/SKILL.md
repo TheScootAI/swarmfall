@@ -13,7 +13,7 @@ Read `CLAUDE.md` first. It has the code map, the owner's standing preferences an
 cd tools && npm install
 ```
 
-This installs three.js r128 so the tests run offline; the sandbox often blocks cdnjs. Playwright and Chromium are already on the machine.
+This installs three.js and esbuild, which are only needed to rebuild `vendor/three.min.js`. The game and the tests load that bundled file, so nothing comes from a CDN. Playwright and Chromium are already on the machine.
 
 ## 2. Find the right place to change
 
@@ -22,6 +22,7 @@ This installs three.js r128 so the tests run offline; the sandbox often blocks c
 - **Boosters** (in-run picks): `UP`, plus `recalc()` for how they change stats. Any one-off effect at the moment of picking goes in `applyUpgrade()`.
 - **Station modules:** `SHOP` and `recalc()`. `UNLOCK_ORDER` sets which module each Hive Core earns, and `START_MODS` sets what a new save starts with. A module bought while docked applies at once in the `#shop` click handler.
 - **Cutscene timing:** `CUTS`. Choreography is in `updateCut()`.
+- **Anything drawn** (materials, glow, lights, backdrop, effects): read the Graphics section of `CLAUDE.md` first. A three.js name missing from the bundle goes in `tools/three-entry.js`, then `node tools/build-three.js`.
 - **Sounds:** the `SFX` table. Keep them short and quiet, and call them through `limited()` if they can fire many times a second.
 - **New enemy type:** it needs an entry in each of these, or it will throw every frame:
   - `ET`
@@ -38,7 +39,7 @@ These are in `CLAUDE.md`. The ones that bite most often:
 - Removing things mid-frame. Flag `dead` and let `sweepDead()` remove them; never splice a live array.
 - Allocating inside per-frame code.
 - Colour: all enemy fire is `ENEMY_RED`, and nothing good may be red.
-- The three.js r128 `setColorAt` buffer-size quirk.
+- Glow: only things meant to glow go on the `GLOW` layer, and big bright shapes never do.
 
 ## 4. Test
 
@@ -46,7 +47,8 @@ These are in `CLAUDE.md`. The ones that bite most often:
 cd tools && node smoke.js /tmp/shots   # every check must PASS; screenshots land in /tmp/shots
 ```
 
-- If you changed rendering, colours, HUD or any screen, open the screenshots and look at them; the checks cannot see colour.
+- If you changed rendering, colours, HUD or any screen, also run `node shots.js <dir> "gfx=high"` and look at the nine pictures; the checks cannot see colour. Compare with the pictures from before your change.
+- Frame rate on a phone cannot be measured in the sandbox. Tell the owner when a change could cost speed.
 - For a balance change, tell the owner it is untested by a person.
 - For a behaviour the smoke test does not cover, add a check to `smoke.js`, not a throwaway script. Use `window.__swarmfall` (see `CLAUDE.md`) to set up the situation.
 - `node --check tools/smoke.js` catches a broken test script before a 2-minute run. To check that the game's script parses without a browser:
@@ -67,7 +69,8 @@ node -e "const s=require('fs').readFileSync('index.html','utf8');new Function(s.
 ## 6. Ship
 
 1. Commit on `main` with a message that says what changed for the player and why, then push. That is the deploy to https://thescootai.github.io/swarmfall/.
-2. Run `node tools/artifact.js <scratchpad>/swarmfall.html`, then publish that file to https://claude.ai/artifact/WHbiJLyLcGYMiu2Bddz8s4.
+2. Run `node tools/artifact.js <scratchpad>/swarmfall.html`, then publish that file to https://claude.ai/artifact/WHbiJLyLcGYMiu2Bddz8s4 with `root` set to its folder and `files` mapping `vendor/three.min.js`.
+   - **A trial for the owner** goes on a branch and a separate artifact, never the live one: build to a different file with a title (`node tools/artifact.js <scratchpad>/staging/index.html "Swarmfall Staging"`) and publish it as its own artifact.
 3. If the guide changed, copy `artifacts/enemy-guide/` to the scratchpad and publish its `index.html` to https://claude.ai/artifact/18YkQbSpHhSxGimJ2GmKNq. Pass `root` set to that folder and `files` mapping each `img/*.png`. Publishing reads only from the working directory or the scratchpad.
 
 ## 7. Owner comments on an artifact

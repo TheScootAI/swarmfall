@@ -33,7 +33,9 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
     for (const e of s.G.enemies) { e.z = 0; s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); } });
   const playTo = async target => { for (let i = 0; i < 400; i++) { const s = await st(); if (target(s)) return s; if (s.state === 'play') await clearWave(); await page.waitForTimeout(120); } return st(); };
 
-  await page.goto('file://' + GAME); await page.waitForTimeout(600);
+  // The main run has the effects off (?gfx=low): software rendering is slow, and these checks are about the game's rules.
+  // The graphics checks at the end turn them on.
+  await page.goto('file://' + GAME + '?gfx=low'); await page.waitForTimeout(600);
   check(await page.evaluate(() => !!window.__swarmfall), 'game boots');
   let s = await st();
   check(s.state === 'title' && s.mods === 'dmg,hull', 'new save: title screen, two station modules', JSON.stringify(s));
@@ -125,6 +127,33 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   await page.tap('#btnPause').catch(() => {}); await page.waitForTimeout(300);
   check(await page.evaluate(() => window.__swarmfall.G.state) === 'pause', 'pause works');
   await shot('09-paused');
+
+  // ---- graphics ----
+  await page.tap('#btnGfx'); await page.waitForTimeout(200);
+  const gfxBtn = await page.evaluate(() => ({ label: document.getElementById('btnGfx').textContent, saved: JSON.parse(localStorage.getItem('swarmfall.v1')).gfx, mode: window.__swarmfall.GFX.mode }));
+  check(gfxBtn.mode === 'auto' && gfxBtn.saved === 'auto' && /^Graphics: auto/.test(gfxBtn.label), 'the Graphics button on the pause screen steps low to auto and saves it', JSON.stringify(gfxBtn));
+
+  // all effects on: the picture must actually arrive on screen (a broken post-processing chain shows black)
+  const fx = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
+  fx.on('pageerror', e => errors.push('[gfx] ' + e.message)); fx.on('console', m => { if (m.type() === 'error') errors.push('[gfx] ' + m.text()); });
+  await fx.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
+  const startRun = async () => { await fx.tap('#btnPlay'); await fx.waitForTimeout(400); await fx.touchscreen.tap(195, 400); await fx.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 60000 }); };
+  await fx.goto('file://' + GAME + '?gfx=high'); await fx.waitForTimeout(600); await startRun();
+  const pic = await fx.evaluate(() => new Promise(res => { const s = window.__swarmfall; let n = 0;
+    (function f() { s.P.inv = 9; if (++n < 12) return requestAnimationFrame(f);
+      const gl = document.querySelector('canvas'), c = document.createElement('canvas'); c.width = 97; c.height = 211; const g = c.getContext('2d'); g.drawImage(gl, 0, 0, c.width, c.height);
+      const d = g.getImageData(0, 0, c.width, c.height).data; let lit = 0, bright = 0; for (let i = 0; i < d.length; i += 4) { const m = Math.max(d[i], d[i + 1], d[i + 2]); if (m > 24) lit++; if (m > 180) bright++; }
+      res({ q: s.GFX.q, lit, bright, of: d.length / 4 }); })(); }));
+  check(pic.q === 2 && pic.lit > 200 && pic.bright > 3 && pic.lit < pic.of * 0.9, 'all effects on: level 2, and a picture reaches the screen', JSON.stringify(pic));
+  if (OUT) await fx.screenshot({ path: path.join(OUT, '10-effects-on.png') });
+
+  // auto: a device that cannot keep up (software rendering here) must step the effects down by itself
+  await fx.goto('file://' + GAME); await fx.waitForTimeout(600);
+  await fx.evaluate(() => { const s = window.__swarmfall; s.meta.gfx = 'auto'; s.meta.autoQ = 2; s.GFX.mode = 'auto'; window.dispatchEvent(new Event('resize')); });
+  await startRun();
+  const auto = await fx.evaluate(() => new Promise(res => { const s = window.__swarmfall, t0 = performance.now();
+    (function f() { s.P.inv = 9; if (s.GFX.q < 2 || performance.now() - t0 > 30000) res({ q: s.GFX.q, ms: Math.round(s.GFX.ema), saved: s.meta.autoQ }); else requestAnimationFrame(f); })(); }));
+  check(auto.q < 2 ? auto.saved === auto.q : auto.ms <= 38, 'auto: steps down when frames are slow, and remembers it', JSON.stringify(auto));
 
   check(errors.length === 0, 'no page errors', errors.slice(0, 5).join(' | '));
   await browser.close();
