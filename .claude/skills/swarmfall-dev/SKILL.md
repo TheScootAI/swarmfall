@@ -50,7 +50,7 @@ cd tools && node smoke.js /tmp/shots   # every check must PASS; screenshots land
 
 - If you changed rendering, colours, HUD or any screen, also run `node shots.js <dir> "gfx=high"` and look at the pictures; the checks cannot see colour. Compare with the pictures from before your change.
 - Frame rate on a phone cannot be measured in the sandbox. Tell the owner when a change could cost speed.
-- For a balance change, tell the owner it is untested by a person.
+- For a balance change, tell the owner it is untested by a person, and how to reach it on the test bench (five taps on the title: pick the wave and boosters, Launch test).
 - For a behaviour the smoke test does not cover, add a check to `smoke.js`, not a throwaway script. Use `window.__swarmfall` (see `CLAUDE.md`) to set up the situation.
 - `node --check tools/smoke.js` catches a broken test script before a 2-minute run. To check that the game's script parses without a browser:
 

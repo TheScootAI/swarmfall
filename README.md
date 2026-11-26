@@ -15,6 +15,10 @@ Open `index.html` in a browser, or serve the folder with any static host (GitHub
 
 "Restart run" on the pause screen ends the current run and launches a new one. "Start over" on the title screen erases all saved progress after a second tap.
 
+## Test bench
+
+A hidden screen for trying things out. On the title screen, tap the SWARMFALL name five times within three seconds (or press the backquote key, or add `?debug` to the address). Choose the wave to start on, any boosters, and whether the ship can be hit, then press Launch test. A test run saves nothing: no scrap, no records, no modules.
+
 ## Feedback
 
 The speech-bubble button in the top-right corner opens a box for a bug or an idea. "Open on GitHub" is a link to this repository's new-issue page with the note filled in, plus one line about the run. Nothing is sent from the game; the note is posted only when the player presses GitHub's own button. During a run the box also offers a screenshot of the playfield to copy and paste into the issue.

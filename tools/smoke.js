@@ -310,6 +310,40 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
     (function f() { s.P.inv = 9; if (s.GFX.q < 2 || performance.now() - t0 > 30000) res({ q: s.GFX.q, ms: Math.round(s.GFX.ema), saved: s.meta.autoQ }); else requestAnimationFrame(f); })(); }));
   check(auto.q < 2 ? auto.saved === auto.q : auto.ms <= 38, 'auto: steps down when frames are slow, and remembers it', JSON.stringify(auto));
 
+  // ---- the hidden test bench ----
+  await page.reload(); await page.waitForTimeout(600);
+  const saved = () => page.evaluate(() => { const m = window.__swarmfall.meta; return JSON.stringify({ scrap: m.scrap, best: m.best, runs: m.runs, mods: m.mods, stored: localStorage.getItem('swarmfall.v1') }); });
+  const before = await saved();
+  const lg = await page.locator('#logo').boundingBox(), tapLogo = () => page.touchscreen.tap(lg.x + lg.width / 2, lg.y + lg.height / 2);
+  await tapLogo(); await tapLogo(); await tapLogo(); await page.waitForTimeout(3200); await tapLogo(); await tapLogo();   // three taps, a pause, two more: not five together
+  check(await page.isHidden('#scrDebug'), 'test bench: stays hidden from ordinary taps on the title');
+  await page.waitForTimeout(3200); for (let i = 0; i < 5; i++) await tapLogo();
+  check(await page.isVisible('#scrDebug'), 'test bench: five taps on the title within three seconds open it');
+  await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="12"]'); await page.tap('#dbgUps [data-id="gas"]'); await page.tap('#dbgUps [data-id="flame"]'); await page.tap('#dbgUps [data-id="flame"]');
+  if ((await page.textContent('#dbgGod')).endsWith('off')) await page.tap('#dbgGod');
+  const bench = await page.evaluate(() => ({ wave: document.getElementById('dbgWave').textContent, god: document.getElementById('dbgGod').textContent, on: [...document.querySelectorAll('#dbgUps .chip.on')].map(c => c.textContent) }));
+  check(bench.wave === 'Wave 12 · Fracture Cube' && bench.on.join() === 'Flame Cloud2,Confusion Gas1' && bench.god.endsWith('on'), 'test bench: a wave, boosters with levels and "cannot be hit" can be chosen', JSON.stringify(bench));
+  if (OUT) await page.screenshot({ path: path.join(OUT, '16-test-bench.png') });
+  await page.tap('#dbgGo'); await waitFor(x => x.state === 'play', 15000);
+  await page.waitForFunction(() => window.__swarmfall.G.boss, null, { timeout: 20000 });
+  const run = await page.evaluate(() => { const s = window.__swarmfall; s.P.inv = 0; s.G.eb.push({ x: s.P.x, y: s.P.y - 3, vx: 0, vy: 5, r: 6, kind: 0, turn: 0, dead: false });
+    return { wave: s.G.wave, boss: s.G.boss.type, up: JSON.stringify(s.G.up), gas: s.S.gas, flame: s.S.flame, test: s.G.test }; });
+  await page.waitForTimeout(500);
+  const hitless = await page.evaluate(() => { const s = window.__swarmfall; return s.P.alive && s.P.hp === s.S.maxHp && s.G.state === 'play'; });
+  check(run.wave === 12 && run.boss === 'cube' && run.gas === 1 && run.flame === 2 && run.test && hitless, 'test run: starts on the chosen wave with the chosen boosters, and the ship cannot be hit', JSON.stringify(run) + ' unhurt ' + hitless);
+  await page.evaluate(() => { window.__swarmfall.G.run.scrap += 80; });
+  for (let i = 0; i < 40 && (await st()).state !== 'station'; i++) { await page.evaluate(() => { const s = window.__swarmfall; s.G.eb.length = 0; s.G.em.length = 0; for (const e of s.G.enemies) if (e.def.boss) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); }); await page.waitForTimeout(700); }
+  s = await st(); const note = await page.textContent('#stNote');
+  await page.locator('#shop .item button').first().tap(); await page.waitForTimeout(200);
+  check(s.state === 'station' && /saves nothing/.test(note) && await saved() === before, 'test run: destroying the boss docks, but fits no module, banks no scrap and sells nothing', s.state + ' · ' + note.split('\n')[0]);
+  await page.tap('#btnUndock'); await page.tap('.card'); await waitFor(x => x.state === 'play', 15000);
+  await page.tap('#btnPause'); await page.waitForTimeout(200); await page.tap('#btnQuit'); await waitFor(x => x.state === 'dead', 5000);
+  const over = await page.evaluate(() => ({ eyebrow: document.getElementById('deadEyebrow').textContent, again: document.getElementById('btnAgain').textContent }));
+  check(await saved() === before && /nothing saved/.test(over.eyebrow) && over.again === 'Test again', 'test run: ending it leaves scrap, records and modules as they were', JSON.stringify(over));
+  await page.tap('#btnAgain'); s = await waitFor(x => x.state === 'play', 15000); check(s.wave === 12, '"Test again" repeats the same test', 'wave ' + s.wave);
+  await page.goto('file://' + GAME + '?gfx=low&debug'); await page.waitForTimeout(600);
+  check(await page.isVisible('#scrDebug') && (await page.textContent('#dbgWave')).startsWith('Wave 12'), 'test bench: ?debug in the address opens it, with the last set-up remembered');
+
   // ---- a short phone: every screen keeps its main buttons on screen and says when there is more below ----
   const sm = await (await browser.newContext({ ...devices['iPhone SE'] })).newPage();
   sm.on('pageerror', e => errors.push('[small] ' + e.message));

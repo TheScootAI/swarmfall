@@ -47,10 +47,21 @@ The script is split into sections, each marked with a `// ---------- name ------
 | cutscenes | `CUTS` (durations), `startCut`, `updateCut`, docking at the station. A boss's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, next to `shake()`. |
 | drawing | `syncScene()`: copies game state into the three.js scene once a frame. |
 | UI | HUD, screens, booster choice (draft), the station shop, buttons. |
+| test bench | The hidden screen for trying things out (`DBG`, `drawDebug`, `openDebug`), and what makes a test run different (`G.test`, `G.god`). |
 | feedback | The speech-bubble button that opens a prefilled GitHub issue. |
 | input, loop | Keyboard, touch and mouse, then `frame()`. |
 
 `G.state` is one of `title`, `browse` (the station between runs), `cut`, `play`, `clear` (the gap after a wave), `draft`, `station` (docked after a boss), `pause`, `dying` or `dead`.
+
+## The test bench
+
+A hidden screen the owner uses to try things on their phone. Open it from the title: tap SWARMFALL five times within three seconds, press the backquote key, or add `?debug` to the address.
+
+- It sets the wave to start on (with one-tap choices for each boss), any boosters at any level, and "ship cannot be hit".
+- A run launched from it is a **test run** (`G.test`): nothing it earns is saved. No scrap is banked, no records change, a destroyed boss fits no module, and nothing can be bought while docked. "Test again" and "Restart run" repeat the same test.
+- Two buttons on it do change the real save, and say so: add 1000 scrap, and fit every module.
+- What was chosen is remembered in localStorage under `swarmfall.debug`, apart from the save.
+- **When you add something the owner will want to try** (a booster, a boss, an enemy), make sure the bench can reach it. Boosters and bosses appear on it by themselves, from `UP` and `BOSSES`.
 
 ## Conventions
 
@@ -114,6 +125,7 @@ node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by
 - The four bosses after the Hive Core: each arrives on its wave, every attack happens, and destroying each leads to docking and a new module. Also: the cube breaks 1 to 2 to 4 with the bar following; a gap between the Warden's beams is safe and a beam is not; the Siege Beetle's shell lets 40% of a hit through shut and all of it open; losing a Triad core does not end the fight.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
 - The cloud boosters: a Flame Cloud weakens an enemy and never destroys it; Confusion Gas confuses for 5 seconds, once, and one cloud does not clear the swarm; the ship lobs clouds by itself. A dart bends a little toward the ship and a sidestep still clears it. A boss's scrap arrives over time and is all in before docking.
+- The test bench: the secret gesture, choosing a wave and boosters, that a test run starts as set up and leaves the save untouched, and `?debug`.
 - A stress run with every booster on, and pause.
 - The station: Undock stays on screen while the list scrolls, and "More below" shows until its end. On a short phone (iPhone SE size), the same for the title, pause and booster screens.
 - A boss's death scene: slow motion happens and the camera stays put, the ship cannot be hit during it, and speed is normal again before docking.

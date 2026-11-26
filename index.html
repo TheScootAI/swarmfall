@@ -107,6 +107,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 .card .lv{grid-column:1/-1;font:500 .8rem/1 var(--display);letter-spacing:.1em;color:var(--dim)}
 .card.r1 .nm,.card.r1 .rar{color:var(--arc)}
 .card.r2 .nm,.card.r2 .rar{color:var(--gold)}
+/* test bench */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{min-height:40px;padding:0 12px;border:0;background:var(--panel);color:var(--dim);font:500 .85rem/1.1 var(--display);letter-spacing:.04em;cursor:pointer}
+.chip.on{background:var(--panel-hi);color:var(--ink);box-shadow:0 0 0 1.5px var(--arc) inset}
+.chip b{color:var(--arc);margin-left:4px}
+.wavepick{flex-wrap:nowrap;align-items:center;gap:6px}
+.wavepick>.btn{flex:0 0 52px;min-width:0;padding:0;letter-spacing:0}
+.wavepick>output{flex:1;text-align:center;font:700 1.15rem/1.1 var(--display);letter-spacing:.06em}
 .loadout{display:flex;flex-wrap:wrap;gap:6px}
 .loadout span{padding:4px 8px;background:var(--panel);font:500 .8rem/1.2 var(--display);letter-spacing:.04em;color:var(--dim)}
 .loadout span b{color:var(--ink)}
@@ -174,7 +182,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
     <section id="scrTitle" class="screen">
       <div class="inner">
         <p class="eyebrow">Roguelite swarm shooter</p>
-        <h1>SWARM<b>FALL</b></h1>
+        <h1 id="logo">SWARM<b>FALL</b></h1>
         <p class="lede">One hit destroys a new ship. A booster shuttle arrives after every third wave. Destroy a boss to dock at the station for a new module, upgraded with the scrap you salvage.</p>
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Anything red is enemy fire.</p>
@@ -244,6 +252,33 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
           <button id="btnUndock" class="btn primary" hidden>Undock</button>
           <button id="btnStationLaunch" class="btn primary">Launch</button>
           <button id="btnStationBack" class="btn">Back</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="scrDebug" class="screen" hidden>
+      <div class="inner">
+        <p class="eyebrow">Test bench</p>
+        <h2>Set up a test run</h2>
+        <p class="fine">A test run saves nothing: no scrap, no records, no modules.</p>
+        <h3 class="grp">Start at wave</h3>
+        <div class="row wavepick">
+          <button class="btn" data-d="-6" aria-label="6 waves earlier">−6</button><button class="btn" data-d="-1" aria-label="1 wave earlier">−1</button>
+          <output id="dbgWave">1</output>
+          <button class="btn" data-d="1" aria-label="1 wave later">+1</button><button class="btn" data-d="6" aria-label="6 waves later">+6</button>
+        </div>
+        <div class="chips" id="dbgBoss"></div>
+        <h3 class="grp">Boosters <span>Tap to raise a level</span></h3>
+        <div class="chips" id="dbgUps"></div>
+        <div class="row quietrow"><button id="dbgClear" class="btn quiet">Clear boosters</button><button id="dbgAll" class="btn quiet">One of each</button></div>
+        <h3 class="grp">Ship</h3>
+        <div class="row quietrow"><button id="dbgGod" class="btn quiet">Ship cannot be hit: off</button></div>
+        <h3 class="grp">Your save <span>These two change your real save</span></h3>
+        <div class="row quietrow"><button id="dbgScrap" class="btn quiet">Add ◆ 1000</button><button id="dbgMods" class="btn quiet">Fit every module</button></div>
+        <div class="row dockbar">
+          <button class="more" type="button" hidden>More below</button>
+          <button id="dbgGo" class="btn primary">Launch test</button>
+          <button id="dbgBack" class="btn">Back</button>
         </div>
       </div>
     </section>
@@ -858,7 +893,7 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
 // ---------- game state ----------
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
-  form: { cols: 6, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
+  form: { cols: 6, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
@@ -1445,6 +1480,7 @@ function shipHit(x, y, r) {
   const wx = clamp(dx, -12, 12); return (dx - wx) ** 2 + (dy - 5) ** 2 < (r + 4.5) ** 2;     // wings and their tip fins
 }
 function hitPlayer() {
+  if (G.god) return;   // the test bench's "ship cannot be hit"
   if (P.inv > 0 || !P.alive || FIN.on) return;   // nothing can hit the ship during a boss's death scene: time is slow, so the ship is too slow to dodge
   if (P.shieldUp) {   // the shield takes the hit and is gone until it recharges
     P.shieldUp = false; P.shieldT = S.shieldCD; P.inv = 0.7; ringFx(P.x, P.y, SHIELD_R, 70, 0xc79bff); burst(P.x, P.y, [0.78, 0.6, 1], 26, 190, 0.5);
@@ -1800,9 +1836,13 @@ function updateCut(dt) {
 const unbanked = () => Math.floor(G.run.scrap) - G.run.banked;   // scrap collected this run and not yet added to the station's total
 // Docked after a boss: the next module is fitted, the run's scrap is banked, and the station shop opens.
 function arriveStation() {
-  const id = nextMod(); G.newMod = id || null; if (id) meta.mods.push(id);
-  const add = unbanked(); if (add > 0) { meta.scrap += add; G.run.banked += add; }
-  save(); G.state = 'station'; SFX.card(); $('hud').hidden = true; drawShop(); show('scrStation', 'btnUndock');
+  if (G.test) G.newMod = null;   // a test run fits no module and banks no scrap
+  else {
+    const id = nextMod(); G.newMod = id || null; if (id) meta.mods.push(id);
+    const add = unbanked(); if (add > 0) { meta.scrap += add; G.run.banked += add; }
+    save();
+  }
+  G.state = 'station'; SFX.card(); $('hud').hidden = true; drawShop(); show('scrStation', 'btnUndock');
 }
 
 // ---------- drawing ----------
@@ -1882,7 +1922,7 @@ function syncScene(dt) {
 }
 
 // ---------- UI ----------
-const screens = ['scrTitle', 'scrDraft', 'scrPause', 'scrDead', 'scrStation'];
+const screens = ['scrTitle', 'scrDraft', 'scrPause', 'scrDead', 'scrStation', 'scrDebug'];
 // A screen taller than the phone keeps its main buttons in view and says there is more to scroll to (see .dockbar).
 // fitScreens() decides whether the screen on show is taller than the phone; call it whenever what a screen holds
 // may have changed height. moreHint() shows "More below" until that screen has been scrolled to its end.
@@ -1946,14 +1986,20 @@ function showTitle() {
   $('bestLine').textContent = meta.best ? 'Deepest run: wave ' + meta.best + '. Runs flown: ' + meta.runs + '.' : '';
   show('scrTitle', 'btnPlay');
 }
-function startRun() {
+// test: a run set up on the test bench. It starts on the wave and with the boosters chosen there, and nothing it
+// earns is saved. Only the test bench passes true (a button's click would pass its event, which is not true).
+function startRun(test) {
+  test = test === true;
   audioInit(); resetField();
-  G.up = {}; G.run = { scrap: 0, kills: 0, banked: 0 }; G.hint = {}; G.wave = 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
+  G.test = test; G.god = test && DBG.god;
+  G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
+  G.run = { scrap: 0, kills: 0, banked: 0 }; G.hint = {}; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
   Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
   dockPose();   // every run begins docked at the station
-  if (mlv('head')) openDraft('head'); else startCut('launch', nextWave);
+  if (mlv('head') && !test) openDraft('head');
+  else { startCut('launch', nextWave); if (test) G.cut.t = G.cut.dur * 0.7; }   // a test run cuts most of the launch: it is run again and again
 }
 function nextWave() {
   G.wave++; buildWave(G.wave); G.state = 'play'; show(null); drawHud();
@@ -2008,10 +2054,11 @@ function togglePause() {
   } else if (G.state === 'pause') { G.state = G.prev; show(null); }
 }
 function endRun() {
-  const bonus = Math.max(0, G.wave - 1) * 3, got = unbanked() + bonus, best = G.wave > meta.best;
-  meta.scrap += got; meta.runs++; if (best) meta.best = G.wave; save();
+  const test = G.test, bonus = test ? 0 : Math.max(0, G.wave - 1) * 3, got = test ? 0 : unbanked() + bonus, best = !test && G.wave > meta.best;
+  if (!test) { meta.scrap += got; meta.runs++; if (best) meta.best = G.wave; save(); }   // a test run leaves the save alone
   G.state = 'dead';
-  $('deadEyebrow').textContent = best && meta.runs > 1 ? 'Ship lost · new record' : 'Ship lost';
+  $('deadEyebrow').textContent = test ? 'Test run over · nothing saved' : best && meta.runs > 1 ? 'Ship lost · new record' : 'Ship lost';
+  $('btnAgain').textContent = test ? 'Test again' : 'Fly again';
   $('deadTitle').textContent = 'Reached wave ' + G.wave;
   $('deadStats').innerHTML = '<dt>Enemies destroyed</dt><dd>' + G.run.kills + '</dd><dt>Scrap collected</dt><dd>' + Math.floor(G.run.scrap) + '</dd>' + (G.run.banked ? '<dt>Already banked at the station</dt><dd>' + G.run.banked + '</dd>' : '') + '<dt>Depth bonus</dt><dd>' + bonus +
     '</dd><dt>Banked now</dt><dd class="gold">◆ ' + got + '</dd><dt>Station total</dt><dd class="gold">◆ ' + meta.scrap + '</dd>';
@@ -2020,8 +2067,9 @@ function endRun() {
 function drawShop() {
   const docked = G.state === 'station', next = nextMod(), nm = G.newMod && SHOPBY[G.newMod];
   $('stEyebrow').textContent = docked ? 'Docked · ' + bossFor(G.wave).name + ' down' : 'Space station';   // short enough to clear the feedback button at phone width
-  $('stTitle').textContent = docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
-  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach boss you destroy earns a new module.';
+  const test = docked && G.test;
+  $('stTitle').textContent = test ? 'Docked on a test run' : docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
+  $('stNote').textContent = test ? 'A test run saves nothing: no module is fitted, no scrap is banked, and nothing can be bought.\nUndock for a rare booster.' : docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach boss you destroy earns a new module.';
   $('btnUndock').hidden = !docked; $('btnStationLaunch').hidden = $('btnStationBack').hidden = docked;
   $('bank').textContent = '◆ ' + meta.scrap + ' scrap';
   $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => {
@@ -2039,7 +2087,7 @@ function drawShop() {
 // The station between runs: browsing and upgrading modules ('browse'), as opposed to docking mid-run ('station').
 function openStation() { if (G.state !== 'title') { titleScene(); $('hud').hidden = true; } G.state = 'browse'; drawShop(); show('scrStation', 'btnStationLaunch'); }
 
-$('btnPlay').onclick = startRun; $('btnAgain').onclick = startRun; $('btnStationLaunch').onclick = startRun;
+$('btnPlay').onclick = () => startRun(); $('btnAgain').onclick = () => startRun(G.test); $('btnStationLaunch').onclick = () => startRun();
 $('btnStation').onclick = openStation; $('btnDeadStation').onclick = openStation; $('btnStationBack').onclick = showTitle;
 $('btnSound').onclick = $('btnSound2').onclick = toggleMute;
 // Graphics: auto (steps down by itself on a slow device), high (all effects, always) or low (no effects).
@@ -2056,7 +2104,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitScreens
 $('btnUndock').onclick = () => { if (G.state === 'station') { $('hud').hidden = false; drawHud(); dockPose(); openDraft('boss'); } };
 $('btnQuit').onclick = () => { if (G.state === 'pause') { show(null); endRun(); } };
 // Restart: the run ends as usual (its scrap is banked) and a new one launches straight away.
-$('btnRestart').onclick = () => { if (G.state === 'pause') { endRun(); startRun(); } };
+$('btnRestart').onclick = () => { if (G.state === 'pause') { endRun(); startRun(G.test); } };
 // Start over: wipes scrap, modules and records. Asks for a second tap, since page dialogs are not available everywhere.
 let resetArmed = 0;
 const resetLabel = () => { const b = $('btnReset'); b.textContent = resetArmed ? 'Erase all progress? Tap again' : 'Start over'; b.classList.toggle('warn', !!resetArmed); };
@@ -2073,13 +2121,48 @@ $('cards').onclick = e => { const b = e.target.closest('.card'); if (b) choose(+
 $('shop').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   const s = SHOP[+b.dataset.i], lv = mlv(s.id), cost = s.cost[lv];
-  if (cost == null || cost > meta.scrap) { SFX.deny(); return; }
+  if (cost == null || cost > meta.scrap || (G.test && G.state === 'station')) { SFX.deny(); return; }   // nothing is bought on a test run
   meta.scrap -= cost; meta.up[s.id] = lv + 1; save(); SFX.buy();
   if (G.state === 'station') {   // bought mid-run while docked: the ship gets it straight away
     recalc(); if (s.id === 'hull') repair(1); if (s.id === 'reroll') G.rerolls++; if (s.id === 'revive') G.revive++; drawHud();
   }
   drawShop();
 };
+
+// ---------- test bench ----------
+// A hidden screen for trying things out: start on any wave, with any boosters, and with the ship unable to be hit
+// if wanted. Nothing a test run earns is saved. Open it from the title: tap SWARMFALL five times within three seconds, press
+// the ` key, or add ?debug to the address. What was chosen is remembered for next time.
+const DBG = { wave: 1, up: {}, god: false };
+try {
+  const d = JSON.parse(localStorage.getItem('swarmfall.debug') || 'null');
+  if (d) { DBG.wave = clamp(d.wave | 0, 1, 99); DBG.god = !!d.god; for (const u of UP) if (d.up && d.up[u.id] > 0) DBG.up[u.id] = Math.min(u.max, d.up[u.id] | 0); }
+} catch (e) {}
+function drawDebug() {
+  try { localStorage.setItem('swarmfall.debug', JSON.stringify(DBG)); } catch (e) {}
+  $('dbgWave').textContent = 'Wave ' + DBG.wave + (isBossWave(DBG.wave) ? ' · ' + bossFor(DBG.wave).name : '');
+  $('dbgBoss').innerHTML = BOSSES.map((b, i) => { const w = (i + 1) * BOSS_EVERY; return '<button class="chip' + (DBG.wave === w ? ' on' : '') + '" data-w="' + w + '">' + w + ' · ' + b.name + '</button>'; }).join('');
+  $('dbgUps').innerHTML = UP.filter(u => u.id !== 'patch').map(u => { const lv = DBG.up[u.id] | 0; return '<button class="chip' + (lv ? ' on' : '') + '" data-id="' + u.id + '">' + u.n + (lv ? '<b>' + lv + '</b>' : '') + '</button>'; }).join('');
+  $('dbgGod').textContent = 'Ship cannot be hit: ' + (DBG.god ? 'on' : 'off');
+  $('dbgScrap').textContent = 'Add ◆ 1000 (you have ' + meta.scrap + ')';
+  $('dbgMods').textContent = meta.mods.length < SHOP.length ? 'Fit every module' : 'Every module is fitted'; $('dbgMods').disabled = meta.mods.length >= SHOP.length;
+  fitScreens();
+}
+function openDebug() { if (G.state !== 'title') return; drawDebug(); show('scrDebug', 'dbgGo'); }
+document.querySelector('.wavepick').onclick = e => { const b = e.target.closest('button'); if (b) { DBG.wave = clamp(DBG.wave + +b.dataset.d, 1, 99); drawDebug(); } };
+$('dbgBoss').onclick = e => { const b = e.target.closest('button'); if (b) { DBG.wave = +b.dataset.w; drawDebug(); } };
+$('dbgUps').onclick = e => {   // each tap raises the booster a level; past its top level it goes back to none
+  const b = e.target.closest('button'); if (!b) return;
+  const u = UPBY[b.dataset.id], lv = (DBG.up[u.id] | 0) + 1; if (lv > u.max) delete DBG.up[u.id]; else DBG.up[u.id] = lv; drawDebug();
+};
+$('dbgClear').onclick = () => { DBG.up = {}; drawDebug(); };
+$('dbgAll').onclick = () => { for (const u of UP) if (u.id !== 'patch' && !DBG.up[u.id]) DBG.up[u.id] = 1; drawDebug(); };
+$('dbgGod').onclick = () => { DBG.god = !DBG.god; drawDebug(); };
+$('dbgScrap').onclick = () => { meta.scrap += 1000; save(); SFX.buy(); drawDebug(); };
+$('dbgMods').onclick = () => { for (const m of SHOP) if (!meta.mods.includes(m.id)) meta.mods.push(m.id); save(); SFX.buy(); drawDebug(); };
+$('dbgGo').onclick = () => startRun(true);
+$('dbgBack').onclick = showTitle;
+{ let taps = 0, first = 0; $('logo').addEventListener('click', () => { const now = performance.now(); if (!taps || now - first > 3000) { taps = 0; first = now; } if (++taps >= 5) { taps = 0; openDebug(); } }); }   // five taps within three seconds
 
 // ---------- feedback ----------
 // A note the player types becomes a link to GitHub's new-issue page with the note filled in.
@@ -2202,6 +2285,7 @@ addEventListener('keydown', e => {
   audioInit(); const k = e.key.toLowerCase();
   if (k === 'arrowleft' || k === 'arrowright' || k === 'a' || k === 'd') { keys[k] = true; if (inPlay()) e.preventDefault(); }
   else if (G.state === 'cut') { /* a cutscene always plays out */ }
+  else if (k === '`' && G.state === 'title') openDebug();
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'm') toggleMute();
   else if (G.state === 'draft' && (k === '1' || k === '2' || k === '3')) choose(+k - 1);
@@ -2254,6 +2338,7 @@ function frame(now) {
   if (G.state === 'play') gfxWatch(ms);
 }
 resize(); soundLabels(); gfxLabels(); showTitle();
+if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
 window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, SIEGE, DART, CLOUD, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
