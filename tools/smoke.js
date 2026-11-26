@@ -110,6 +110,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
     for (let w = 1; w <= 31; w++) for (let k = 0; k < 30; k++) {
       for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0;
       for (const e of s.G.enemies) for (const t of [e.type, e.elite && 'elite']) if (t && !(t in first)) first[t] = w;
+      if (k === 0) (first.flight || (first.flight = {}))[w] = +(s.G.enemies.find(e => e.type === 'mite') || { dur: 0 }).dur.toFixed(3);   // seconds a mite takes to fly into its place
     }
     return first; });
   // the game's UNLOCK table says when each enemy arrives; check the waves it builds agree
@@ -118,6 +119,8 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   for (const [t, w] of Object.entries(expected)) check(first[t] === w, t + ' first appears on wave ' + w + ' (UNLOCK)', 'seen first on ' + first[t]);
   const lancersAt = await page.evaluate(L => L.map(w => { const s = window.__swarmfall; for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0; return s.G.enemies.filter(e => e.type === 'lancer').length; }), U.lancer);
   check(lancersAt.join() === '1,2,3', 'lancers: 1, 2 and 3 from waves ' + U.lancer.join(', '), 'got ' + lancersAt.join(','));
+  // enemies fly into the formation 5% faster each wave: wave 1 takes 2.3 seconds, wave 11 two thirds of that, and it levels off at 2.5 times the pace
+  const fl = first.flight; check(fl[1] === 2.3 && Math.abs(fl[11] - 2.3 / 1.5) < 0.002 && Math.abs(fl[2] - 2.3 / 1.05) < 0.002 && Math.abs(fl[31] - 0.92) < 0.002 && fl[29] > fl[31], 'enemies fly into the formation 5% faster each wave, up to 2.5 times', 'wave 1: ' + fl[1] + ' s, 2: ' + fl[2] + ', 11: ' + fl[11] + ', 31: ' + fl[31]);
   // the bosses take turns, in the order of the BOSSES table: one every 6th wave
   const order = await page.evaluate(() => window.__swarmfall.BOSSES.map(b => b.type));
   check(order.every((type, i) => first[type] === 6 * (i + 1)) && order.length === 5, 'bosses arrive in turn on waves 6, 12, 18, 24 and 30', order.map(type => type + ' ' + first[type]).join(', '));

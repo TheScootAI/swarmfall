@@ -760,6 +760,11 @@ const UNLOCK = {
   lancer: [15, 20, 25] // the first, second and third lancer
 };
 const SKIP_SCRAP = 10;   // scrap for passing up a booster
+// How fast enemies fly into their places in the formation, and back to them after a dive. faster: the share
+// quicker each wave (the owner asked for 5%). max: it never gets quicker than this many times the wave-1 pace,
+// which it reaches on wave 31; past that the flight would be too quick to follow.
+const ENTER = { faster: 0.05, max: 2.5 };
+const enterPace = () => Math.min(ENTER.max, 1 + ENTER.faster * (Math.max(1, G.wave) - 1));
 // A boss's death scene (the Hive Core, the last piece of the Fracture Cube, the Beam Warden): time slows and
 // smaller blasts follow the first, then time eases back. The camera does not move: the owner tried a push-in
 // and found the slow motion enough.
@@ -926,11 +931,11 @@ const PATHS = [
 function startEnter(e, tpl, mirror) {
   const p = PATHS[tpl].map(([x, y]) => ({ x: Math.abs(x) > 2 ? x : x * W, y: y * H }));
   if (mirror) p.forEach(q => q.x = W - q.x);
-  e.p0 = p[0]; e.p1 = p[1]; e.p2 = p[2]; e.state = 'enter'; e.u = 0; e.dur = 2.3; e.z0 = -380; e.x = p[0].x; e.y = p[0].y; e.z = e.z0;
+  e.p0 = p[0]; e.p1 = p[1]; e.p2 = p[2]; e.state = 'enter'; e.u = 0; e.dur = 2.3 / enterPace(); e.z0 = -380; e.x = p[0].x; e.y = p[0].y; e.z = e.z0;
 }
 function startReturn(e) {
   const s = slotPos(e), x0 = clamp(s.x + rand(-70, 70), 20, W - 20);
-  e.p0 = { x: x0, y: -40 }; e.p1 = { x: x0, y: 20 }; e.p2 = { x: s.x, y: s.y - 50 }; e.state = 'enter'; e.u = 0; e.dur = 1.5; e.z0 = -240;
+  e.p0 = { x: x0, y: -40 }; e.p1 = { x: x0, y: 20 }; e.p2 = { x: s.x, y: s.y - 50 }; e.state = 'enter'; e.u = 0; e.dur = 1.5 / enterPace(); e.z0 = -240;
 }
 // An enemy leaves its place in the formation. A triplet does not dive itself: it breaks into three smaller
 // copies that fan out into the left, middle and right thirds of the field.
@@ -1312,6 +1317,7 @@ function buildWave(n) {
   // lancers (the laser enemy) ride a rail above the top row, where the swarm shields them; they have no slot
   const lancers = UNLOCK.lancer.filter(w => n >= w).length;
   for (let i = 0; i < lancers; i++) G.queue.push({ t: 0.6 + i * 0.5, fn: () => { const e = spawnEnemy('lancer', null, null); e.ph = i * 2.1 + rand(0.6); startEnter(e, 2, i % 2 === 1); } });
+  const pace = enterPace(); for (const q of G.queue) q.t /= pace;   // they also set off closer together, so the whole formation gathers sooner
   G.queue.sort((a, b) => a.t - b.t);
 }
 

@@ -20,6 +20,7 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **One hit ends a new ship's run.** Hull, shields and everything else are bought with scrap (station modules) or picked as boosters.
 - **Colours carry meaning.** All enemy fire is the same red (`ENEMY_RED`), and nothing good is red. Anything good to grab sits in a pulsing blue halo: gold rings are scrap, green crosses repair hull.
 - **Mites are the pawns.** They are the largest group in every wave and hold the front two rows. Stronger enemies sit behind them.
+- **Waves gather faster as they go.** Enemies fly into the formation 5% faster each wave (`ENTER`), levelling off at 2.5 times the first wave's pace.
 - **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
 - **Five bosses take turns** (`BOSSES`): the Hive Core on wave 6, the Fracture Cube on 12, the Beam Warden on 18, the Siege Beetle on 24, the Triad on 30, then round again, tougher. Each is built on an enemy the player has already met (splitter, lancer, beetle, triplet). The laser boss comes third because the owner set lancers to arrive at wave 15, so players have met lasers first.
 - **Cutscenes always play out.** A touch or a key never skips the launch, the shuttle or the docking scene, because a player steering by touch has a finger on the screen as each one starts. (The launch could be skipped at first; the owner asked for that to stop.)
@@ -36,7 +37,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 | save | `meta`: scrap, records, mute, the graphics setting (`meta.gfx`, `meta.autoQ`), bought modules (`meta.up`) and fitted modules (`meta.mods`), all in localStorage. |
 | audio | Web Audio synth: `tone()`, `noise()` and the `SFX` table. Phone unlock tricks are in `audioInit()`. |
 | three.js stage | Renderer, lights and the reflection environment, `geo` and `M` (shared geometries and materials), the nebula backdrop, stars, particles (`burst`), effect pools (`ringFx`, `zapFx`), instanced shots, the player ship, station and shuttle models, post-processing (`draw()`, `GFX`), `resize()`. |
-| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`. |
+| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`, `ENTER` (how fast enemies fly into formation), `BOSSES` and each boss's table, `FINALE`. |
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
 | enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the five bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`, `updateSiege`, `updateTriad`), and `buildWave()`. |
 | player | Ship hit shape (`shipHit`), shields, shots, seekers, picking up scrap. |
