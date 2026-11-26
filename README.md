@@ -18,7 +18,8 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 
 ## How a run works
 
-- **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else hurts, and enemy shots are red dots.
+- **One hit ends the run.** A new ship has a single hull point. Hull Plate upgrades during a run and Reinforced Hull in the hangar let you take more hits, but armour is heavy: every hull point past the first cuts fire rate by 10% (`HULL_DRAG`). Stay light and kill fast, or build a tank that kills slower. Reinforced Hull can be sold back in the hangar for what it cost.
+- **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else is a hit, and enemy shots are red dots.
 - **Waves** grow in size and add enemy types: mites, wasps (shoot while diving), weavers (zigzag), splitters (break into two mites), beetles (armoured, fire spreads), and red-ringed elites (three times the health, extra scrap).
 - **Upgrades** come in three rarities and stack: fire rate, damage, extra barrels, piercing, ricochet, shields, drones, homing missiles, chain lightning, and more.
 - **Hangar** upgrades are permanent and saved in the browser's local storage: hull, damage, fire rate, scrap gain, pickup range, rerolls, a free starting upgrade, and a once-per-run revive.
