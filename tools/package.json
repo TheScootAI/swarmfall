@@ -1,0 +1,12 @@
+{
+  "name": "swarmfall-tools",
+  "private": true,
+  "description": "Test and publishing helpers for Swarmfall. The game itself needs no build.",
+  "scripts": {
+    "smoke": "node smoke.js",
+    "artifact": "node artifact.js"
+  },
+  "devDependencies": {
+    "three": "0.128.0"
+  }
+}
