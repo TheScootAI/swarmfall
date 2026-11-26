@@ -132,6 +132,8 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
       (function f() {
         const e = G.boss, B = e && e.bm;
         if (e) { w.type = e.type; w.hud = document.getElementById('wave').textContent; }
+        if (B && G.time - g0 > 16 && !w.hurtIt) { w.hurtIt = true; e.hp = e.maxHp * 0.3; }   // badly hurt: each fan must now be followed at once by the other
+        if (B && B.again) { w.followUp = true; w.fans['again' + B.n] = true; }
         w.balls = Math.max(w.balls, G.eb.filter(x => !x.kind).length); if (G.eb.some(x => x.kind === 1)) w.darts = true; if (G.em.length) w.missiles = true;
         for (const o of G.enemies) if (!o.def.boss) w.helpers[o.type] = true;
         if (B && B.phase === 'fire') {   // stand in a gap between two beams, then on a beam, with the ship's protection off
@@ -143,12 +145,13 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
           if (test === 1 || test === 2) { P.target = P.x; P.vx = 0; }
         } else { P.inv = 9; P.hp = Math.max(P.hp, 5); }
         G.revive = 1;
-        if (G.time - g0 > 21 || performance.now() - t0 > 90000) res(w); else requestAnimationFrame(f); })(); }), b.wave);
+        if (G.time - g0 > (wave === 18 ? 30 : 21) || performance.now() - t0 > 120000) res(w); else requestAnimationFrame(f); })(); }), b.wave);
     check(seen.type === b.type && seen.hud === b.name, 'wave ' + b.wave + ' is the ' + b.name + ', named on the HUD', seen.type + ' / ' + seen.hud);
     if (b.type === 'cube') check(seen.balls >= 10 && seen.helpers.splitter, b.name + ': fans, rings and splitters all happen', JSON.stringify(seen));
     else {
       check(seen.beamFrames > 20 && seen.fans[3] && seen.fans[2] && seen.darts && seen.missiles, b.name + ': both beam fans, darts and missiles all happen', JSON.stringify(seen));
       check(seen.gapSafe === true && seen.beamHurts === true, b.name + ': the gap between two beams is safe and a beam is not', 'gap safe ' + seen.gapSafe + ', beam hurts ' + seen.beamHurts);
+      check(seen.followUp === true, b.name + ': badly hurt, it follows a fan at once with the other one', JSON.stringify(seen.fans));
     }
     const bodies = () => page.evaluate(() => { const s = window.__swarmfall; return { n: s.G.enemies.filter(e => !e.dead && e.def.boss).length, bar: +(document.querySelector('#bossbar i').style.transform.match(/[\d.]+/) || [1])[0], down: s.G.bossDown }; });
     const smash = () => page.evaluate(() => { const s = window.__swarmfall; s.P.inv = 9; s.G.eb.length = 0; s.G.em.length = 0; for (const e of s.G.enemies) if (e.def.boss) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); });

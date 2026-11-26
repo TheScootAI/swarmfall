@@ -42,6 +42,7 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 #hull i.sh{width:9px;border-radius:50%;transform:none;background:transparent;box-shadow:inset 0 0 0 2px var(--violet)}
 #hull i.sh.off{box-shadow:inset 0 0 0 1.5px var(--line)}
 #wave{color:var(--dim);white-space:nowrap}
+#wave.long{font-size:.8rem;letter-spacing:.03em}   /* a long boss name, set smaller so it stays clear of the scrap count */
 .hud-r{display:flex;justify-content:flex-end;align-items:center;gap:10px;min-width:0}
 #scrap{color:var(--gold);white-space:nowrap;display:inline-block}
 #scrap.pop{animation:pop .25s ease-out}
@@ -688,11 +689,12 @@ const CATEGORY = { w: 'Weapons', a: 'Armor', h: 'Shields', s: 'Specials' };
 const DRAFT_EVERY = 3, BOSS_EVERY = 6;   // a booster after every 3rd wave; every 6th wave is a boss, so its booster is the rare one
 // The bosses, in the order they are met: one on every BOSS_EVERY-th wave, round and round, tougher each time
 // (waves 6, 12, 18, then the Hive Core again on 24). tip is the line under the name when it arrives: a first-time
-// hint() would never show, since nobody reaches these waves in their first few runs.
+// hint() would never show, since nobody reaches these waves in their first few runs. short is the name on the HUD
+// of a narrow phone, where the full one would run into the scrap count.
 const BOSSES = [
-  { type: 'boss', name: 'Hive Core', down: 'CORE DESTROYED', tip: '' },
-  { type: 'cube', name: 'Fracture Cube', down: 'CUBE DESTROYED', tip: 'It breaks in two. So do the halves.' },
-  { type: 'warden', name: 'Beam Warden', down: 'WARDEN DESTROYED', tip: 'Thin red lines show where its beams will fire' },
+  { type: 'boss', name: 'Hive Core', short: 'Core', down: 'CORE DESTROYED', tip: '' },
+  { type: 'cube', name: 'Fracture Cube', short: 'Cube', down: 'CUBE DESTROYED', tip: 'It breaks in two. So do the halves.' },
+  { type: 'warden', name: 'Beam Warden', short: 'Warden', down: 'WARDEN DESTROYED', tip: 'Thin red lines show where its beams will fire' },
 ];
 const bossFor = n => BOSSES[(Math.round(n / BOSS_EVERY) - 1) % BOSSES.length];
 // Fracture Cube. share: the part of the whole fight's health each body has, by generation (1 whole, 2 halves,
@@ -702,8 +704,9 @@ const bossFor = n => BOSSES[(Math.round(n / BOSS_EVERY) - 1) % BOSSES.length];
 const CUBE = { share: [0.4, 0.15, 0.075], size: [1, 0.68, 0.46], r: [36, 25, 17], speed: [0, 62, 104], floor: 0.42, born: 0.35 };
 // Beam Warden. charge and fire: seconds its beams are aimed (thin lines) and then on. spread: the angle between
 // neighbouring beams, in radians. At the ship's rows that is about 170 apart, so every gap is far wider than
-// the ship and its shield. max: the most beams it ever fires at once.
-const WARDEN = { charge: 1.2, fire: 1.3, spread: 0.3, max: 5 };
+// the ship and its shield. max: the most beams it ever fires at once. afterMissiles: seconds it waits after
+// launching missiles before its next attack.
+const WARDEN = { charge: 1.2, fire: 1.3, spread: 0.3, max: 5, afterMissiles: 3.6 };
 const isBossWave = n => n > 0 && n % BOSS_EVERY === 0;
 // The wave each enemy, and each change to the formation, first appears. Tune arrivals here: buildWave() and
 // the formation-fire code read this table, and tools/smoke.js checks that the game follows it.
@@ -1054,7 +1057,7 @@ function wardenFan(e, n, charge) {
 function updateWarden(e, dt) {
   const B = e.bm, lv = bossLv(e), rage = e.hp < e.maxHp * 0.35;
   e.pv += ((B.phase === 'idle' ? 1 : 0) - e.pv) * Math.min(1, 5 * dt); e.t += dt * e.pv;
-  e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y = 120 + Math.sin(e.t * 1.2) * 10;
+  e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y = 130 + Math.sin(e.t * 1.2) * 10;   // 130 is where the entrance ends, so it does not jump
   if (B.phase !== 'idle') {   // nothing else happens while beams are aimed or on: one thing to read at a time
     B.t -= dt;
     if (B.phase === 'charge') { if (B.t <= 0) { B.phase = 'fire'; B.t = WARDEN.fire; SFX.beam(); shake(4); } }
@@ -1081,6 +1084,7 @@ function updateWarden(e, dt) {
     fireMissile(e.x - 34, e.y + 6); fireMissile(e.x + 34, e.y + 6);
     const n = Math.max(0, Math.min(2 * lv, 18 - G.enemies.length));   // from its second visit it also sends wasps
     for (let i = 0; i < n; i++) diveToLane(spawnEnemy('wasp', null, null, { x: e.x, y: e.y + 20 }), W * (i + 0.5) / n, -50);
+    e.atkT = WARDEN.afterMissiles;   // time to shoot the missiles down or slip them before beams hold the ship in a lane
   }
 }
 
@@ -1625,7 +1629,7 @@ function drawHud() {
     hudEl.hull.innerHTML = h; hudEl.hull.setAttribute('aria-label', 'Hull ' + P.hp + ' of ' + S.maxHp);
   }
   if (sc !== hudWas.scrap) { hudWas.scrap = sc; hudEl.scrap.textContent = '◆ ' + sc; }
-  if (G.wave !== hudWas.wave) { hudWas.wave = G.wave; hudEl.wave.textContent = isBossWave(G.wave) ? bossFor(G.wave).name.toUpperCase() : 'WAVE ' + Math.max(1, G.wave); }
+  if (G.wave !== hudWas.wave) { hudWas.wave = G.wave; const b = isBossWave(G.wave) && bossFor(G.wave), label = b ? (window.innerWidth < 360 ? b.short : b.name).toUpperCase() : 'WAVE ' + Math.max(1, G.wave); hudEl.wave.textContent = label; hudEl.wave.classList.toggle('long', label.length > 10); }
 }
 function popScrap() { const el = hudEl.scrap; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
 function loadoutHtml() {
@@ -1730,7 +1734,7 @@ function endRun() {
 }
 function drawShop() {
   const docked = G.state === 'station', next = nextMod(), nm = G.newMod && SHOPBY[G.newMod];
-  $('stEyebrow').textContent = docked ? 'Docked · ' + bossFor(G.wave).name + ' destroyed' : 'Space station';
+  $('stEyebrow').textContent = docked ? 'Docked · ' + bossFor(G.wave).name + ' down' : 'Space station';   // short enough to clear the feedback button at phone width
   $('stTitle').textContent = docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
   $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach boss you destroy earns a new module.';
   $('btnUndock').hidden = !docked; $('btnStationLaunch').hidden = $('btnStationBack').hidden = docked;
