@@ -210,8 +210,8 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
     const left = await page.evaluate(() => window.__swarmfall.G.enemies.length);
     check(s.state === 'station' && s.mods.split(',').length === mods0 + 1 && left === 0, b.name + ': a new module is fitted and nothing is left on the field', s.mods + ', enemies left ' + left);
     if (b.type === 'triad') {   // by now the list of modules is far longer than the screen
-      const bar = () => page.evaluate(() => { const el = document.getElementById('scrStation'), u = document.getElementById('btnUndock').getBoundingClientRect(); return { undockInView: u.top >= 0 && u.bottom <= innerHeight, more: !document.getElementById('stMore').hidden, toGo: el.scrollHeight - el.clientHeight - el.scrollTop }; });
-      const top = await bar(); await page.tap('#stMore'); await page.waitForTimeout(900); const mid = await bar();
+      const bar = () => page.evaluate(() => { const el = document.getElementById('scrStation'), u = document.getElementById('btnUndock').getBoundingClientRect(); return { undockInView: u.top >= 0 && u.bottom <= innerHeight, more: !document.querySelector('#scrStation .more').hidden, toGo: el.scrollHeight - el.clientHeight - el.scrollTop }; });
+      const top = await bar(); await page.tap('#scrStation .more'); await page.waitForTimeout(900); const mid = await bar();
       await page.evaluate(() => { const el = document.getElementById('scrStation'); el.scrollTop = el.scrollHeight; }); await page.waitForTimeout(300); const end = await bar();
       check(top.undockInView && top.more && top.toGo > 100 && mid.toGo < top.toGo && mid.undockInView && end.undockInView && !end.more, 'station: Undock stays on screen while the list scrolls, and "More below" shows until its end', JSON.stringify([top, mid, end]));
     }
@@ -269,6 +269,25 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   const auto = await fx.evaluate(() => new Promise(res => { const s = window.__swarmfall, t0 = performance.now();
     (function f() { s.P.inv = 9; if (s.GFX.q < 2 || performance.now() - t0 > 30000) res({ q: s.GFX.q, ms: Math.round(s.GFX.ema), saved: s.meta.autoQ }); else requestAnimationFrame(f); })(); }));
   check(auto.q < 2 ? auto.saved === auto.q : auto.ms <= 38, 'auto: steps down when frames are slow, and remembers it', JSON.stringify(auto));
+
+  // ---- a short phone: every screen keeps its main buttons on screen and says when there is more below ----
+  const sm = await (await browser.newContext({ ...devices['iPhone SE'] })).newPage();
+  sm.on('pageerror', e => errors.push('[small] ' + e.message));
+  await sm.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
+  await sm.goto('file://' + GAME + '?gfx=low'); await sm.waitForTimeout(600);
+  const barOf = id => sm.evaluate(id => { const el = document.getElementById(id), inView = [...el.querySelectorAll('.dockbar .btn')].filter(b => !b.hidden).every(b => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
+    return { scrolls: el.scrollHeight > el.clientHeight + 2, more: !el.querySelector('.more').hidden, inView }; }, id);
+  const okBar = b => b.inView && b.more === b.scrolls;   // buttons on screen; the tab shows exactly when there is something to scroll to
+  const small = { title: await barOf('scrTitle') };
+  await sm.tap('#btnStation'); await sm.waitForTimeout(400); small.station = await barOf('scrStation');
+  await sm.evaluate(() => { const el = document.getElementById('scrStation'); el.scrollTop = el.scrollHeight; }); await sm.waitForTimeout(300); const stEnd = await barOf('scrStation');
+  await sm.tap('#btnStationLaunch'); await sm.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 60000 });
+  await sm.evaluate(() => { const s = window.__swarmfall; for (const k of ['rapid', 'heavy', 'twin', 'pierce', 'shield', 'drone', 'crit', 'blast', 'missile', 'chain']) s.G.up[k] = 1; s.recalc(); s.P.inv = 99; });
+  await sm.tap('#btnPause'); await sm.waitForTimeout(300); small.pause = await barOf('scrPause'); await sm.tap('#btnResume');
+  await sm.evaluate(() => { const s = window.__swarmfall; s.G.wave = 2; s.nextWave(); s.G.queue.length = 0; for (const e of s.G.enemies) e.hp = 0; });
+  await sm.waitForFunction(() => window.__swarmfall.G.state === 'draft', null, { timeout: 60000 }); await sm.waitForTimeout(300); small.booster = await barOf('scrDraft');
+  check(Object.values(small).every(okBar) && small.station.scrolls && stEnd.inView && !stEnd.more, 'short phone: every screen keeps its main buttons on screen, with "More below" whenever there is more', JSON.stringify(small));
+  if (OUT) await sm.screenshot({ path: path.join(OUT, '15-short-phone-booster.png') });
 
   check(errors.length === 0, 'no page errors', errors.slice(0, 5).join(' | '));
   await browser.close();

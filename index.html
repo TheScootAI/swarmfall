@@ -73,13 +73,15 @@ h2{font:700 1.5rem/1.1 var(--display);letter-spacing:.08em;text-transform:upperc
 .lede.lines{white-space:pre-line;max-width:none;font-size:.95rem}   /* one point per line */
 .fine{color:var(--dim);font-size:.9rem}
 .row{display:flex;flex-wrap:wrap;gap:10px}
-/* Station: the Undock (or Launch) row stays at the bottom of the screen while the list of modules scrolls under
-   it, behind a fade. The "More below" tab sits on its top edge until the list has been scrolled to its end. */
-.dockbar{position:sticky;bottom:-24px;z-index:2;flex-wrap:nowrap;margin:0 calc(-1 * var(--gut-r)) -24px calc(-1 * var(--gut-l));
+/* Every screen ends in a bar holding its main buttons (.dockbar). When a screen is taller than the phone
+   (.scrolls, set by fitScreens), the bar stays at the bottom while the rest scrolls under it behind a fade, and a
+   "More below" tab sits on it until the screen has been scrolled to its end. When everything fits it is a plain row. */
+.dockbar{position:relative;flex-wrap:nowrap}
+.dockbar > .btn{flex:1 1 0;min-width:0;padding-inline:8px;letter-spacing:.06em}   /* its buttons share one row even on a narrow phone, so the bar stays short */
+.screen.scrolls .dockbar{position:sticky;bottom:-24px;z-index:2;margin:0 calc(-1 * var(--gut-r)) -24px calc(-1 * var(--gut-l));
   padding:46px var(--gut-r) calc(16px + env(safe-area-inset-bottom, 0px)) var(--gut-l);pointer-events:none;
   background:linear-gradient(rgba(8,11,31,0),var(--void) 38px)}
-.dockbar > *{pointer-events:auto}
-.dockbar > .btn{flex:1 1 0;min-width:0}   /* Launch and Back share one row even on a narrow phone, so the bar stays short */
+.screen.scrolls .dockbar > *{pointer-events:auto}
 .more{position:absolute;left:50%;top:4px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;min-height:34px;padding:0 16px;border:0;   /* in the faded strip, so it never covers a price */
   background:var(--panel);box-shadow:0 0 0 1.5px var(--arc) inset;color:var(--arc);font:700 .78rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
 .more::after{content:"";width:8px;height:8px;margin-top:-5px;border-right:2px solid;border-bottom:2px solid;transform:rotate(45deg);animation:nudge 1.1s ease-in-out infinite}
@@ -174,14 +176,15 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <p class="eyebrow">Roguelite swarm shooter</p>
         <h1>SWARM<b>FALL</b></h1>
         <p class="lede">One hit destroys a new ship. A booster shuttle arrives after every third wave. Destroy a boss to dock at the station for a new module, upgraded with the scrap you salvage.</p>
-        <div class="row">
-          <button id="btnPlay" class="btn primary">Launch</button>
-          <button id="btnStation" class="btn">Station</button>
-        </div>
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Anything red is enemy fire.</p>
         <p class="fine" id="bestLine"></p>
         <div class="row quietrow"><button id="btnSound" class="btn quiet">Turn sound off</button><button id="btnReset" class="btn quiet">Start over</button></div>
+        <div class="row dockbar">
+          <button class="more" type="button" hidden>More below</button>
+          <button id="btnPlay" class="btn primary">Launch</button>
+          <button id="btnStation" class="btn">Station</button>
+        </div>
       </div>
     </section>
 
@@ -190,11 +193,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <p class="eyebrow" id="draftEyebrow">Wave cleared</p>
         <h2>Choose a booster</h2>
         <div class="cards" id="cards"></div>
-        <div class="row">
+        <div class="loadout" id="draftLoadout"></div>
+        <div class="row dockbar">
+          <button class="more" type="button" hidden>More below</button>
           <button id="btnReroll" class="btn">Reroll</button>
           <button id="btnSkip" class="btn">Skip for ◆ 10</button>
         </div>
-        <div class="loadout" id="draftLoadout"></div>
       </div>
     </section>
 
@@ -204,12 +208,13 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <h2 id="pauseWave">Wave 1</h2>
         <div class="loadout" id="pauseLoadout"></div>
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Anything red is enemy fire.</p>
-        <div class="row">
+        <div class="row quietrow"><button id="btnGfx" class="btn quiet">Graphics: auto</button></div>
+        <div class="row quietrow"><button id="btnRestart" class="btn quiet">Restart run</button><button id="btnQuit" class="btn quiet">End this run</button></div>
+        <div class="row dockbar">
+          <button class="more" type="button" hidden>More below</button>
           <button id="btnResume" class="btn primary">Resume</button>
           <button id="btnSound2" class="btn">Turn sound off</button>
         </div>
-        <div class="row quietrow"><button id="btnGfx" class="btn quiet">Graphics: auto</button></div>
-        <div class="row quietrow"><button id="btnRestart" class="btn quiet">Restart run</button><button id="btnQuit" class="btn quiet">End this run</button></div>
       </div>
     </section>
 
@@ -219,7 +224,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <h2 id="deadTitle">Wave 1</h2>
         <dl class="stats" id="deadStats"></dl>
         <p class="lede">Scrap carries over. Spend it at the station on your ship's modules before the next launch.</p>
-        <div class="row">
+        <div class="row dockbar">
+          <button class="more" type="button" hidden>More below</button>
           <button id="btnDeadStation" class="btn primary">Return to station</button>
           <button id="btnAgain" class="btn">Fly again</button>
         </div>
@@ -234,7 +240,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <p class="bank" id="bank">◆ 0</p>
         <div class="shop" id="shop"></div>
         <div class="row dockbar">
-          <button id="stMore" class="more" type="button" hidden>More below</button>
+          <button class="more" type="button" hidden>More below</button>
           <button id="btnUndock" class="btn primary" hidden>Undock</button>
           <button id="btnStationLaunch" class="btn primary">Launch</button>
           <button id="btnStationBack" class="btn">Back</button>
@@ -679,7 +685,7 @@ function resize() {
   const showWalls = visW > W + 10; wallL.visible = wallR.visible = showWalls;
   wallL.position.set(-W / 2 - 3, 0, 0); wallR.position.set(W / 2 + 3, 0, 0); wallL.scale.y = wallR.scale.y = visH;
   drewPaused = false;   // resizing clears the canvas, so a paused frame must be drawn again
-  moreHint();
+  fitScreens();
 }
 addEventListener('resize', resize);
 
@@ -1766,12 +1772,18 @@ function syncScene(dt) {
 
 // ---------- UI ----------
 const screens = ['scrTitle', 'scrDraft', 'scrPause', 'scrDead', 'scrStation'];
-// The station's list of modules is longer than a phone screen. "More below" shows until it has been scrolled to its end.
-function moreHint() { const el = $('scrStation'); $('stMore').hidden = el.hidden || el.scrollHeight - el.scrollTop - el.clientHeight < 40; }
+// A screen taller than the phone keeps its main buttons in view and says there is more to scroll to (see .dockbar).
+// fitScreens() decides whether the screen on show is taller than the phone; call it whenever what a screen holds
+// may have changed height. moreHint() shows "More below" until that screen has been scrolled to its end.
+function moreHint() { for (const id of screens) { const el = $(id); el.querySelector('.more').hidden = el.hidden || !el.classList.contains('scrolls') || el.scrollHeight - el.scrollTop - el.clientHeight < 40; } }
+function fitScreens() {
+  for (const id of screens) { const el = $(id); if (el.hidden) continue; el.classList.remove('scrolls'); if (el.scrollHeight > el.clientHeight + 2) el.classList.add('scrolls'); }   // measured as a plain row, so the answer cannot flip back and forth
+  moreHint();
+}
 function show(id, focus) {
   for (const s of screens) $(s).hidden = s !== id;
   if (id) $(id).scrollTop = 0;
-  moreHint();
+  fitScreens();
   if (focus) $(focus).focus({ preventScroll: true }); else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }
 function toast(big, small) {
@@ -1819,7 +1831,7 @@ function titleScene() {
 }
 function showTitle() {
   G.state = 'title'; titleScene(); $('hud').hidden = true;
-  $('btnStation').textContent = 'Station · ◆ ' + meta.scrap;
+  $('btnStation').textContent = 'Station ◆ ' + meta.scrap;   // short, to stay on one line beside Launch
   $('bestLine').textContent = meta.best ? 'Deepest run: wave ' + meta.best + '. Runs flown: ' + meta.runs + '.' : '';
   show('scrTitle', 'btnPlay');
 }
@@ -1855,6 +1867,7 @@ function drawDraft() {
   }).join('');
   $('btnReroll').textContent = 'Reroll · ' + G.rerolls + ' left'; $('btnReroll').disabled = G.rerolls <= 0; $('btnReroll').hidden = !mlv('reroll');
   $('draftLoadout').innerHTML = loadoutHtml();
+  fitScreens();
 }
 function openDraft(kind) {
   G.state = 'draft'; G.draftKind = kind; clearEnemyFire(); G.cards = rollCards(kind);
@@ -1910,7 +1923,7 @@ function drawShop() {
     }).join('');
     return rows ? '<h3 class="grp">' + name + ' <span>' + blurb + '</span></h3>' + rows : '';
   }).join('') + '<p class="fine locked">' + (next ? 'Next module: ' + SHOPBY[next].n + '. Destroy a boss and the station will fit it. ' + (SHOP.length - meta.mods.length) + ' still to earn.' : 'Every module is fitted.') + '</p>';
-  moreHint();
+  fitScreens();
 }
 // The station between runs: browsing and upgrading modules ('browse'), as opposed to docking mid-run ('station').
 function openStation() { if (G.state !== 'title') { titleScene(); $('hud').hidden = true; } G.state = 'browse'; drawShop(); show('scrStation', 'btnStationLaunch'); }
@@ -1924,8 +1937,11 @@ $('btnGfx').onclick = () => {
   save(); GFX.slow = 0; GFX.ema = 16; resize(); gfxLabels();
 };
 $('btnPause').onclick = $('btnResume').onclick = togglePause;
-$('scrStation').addEventListener('scroll', moreHint, { passive: true });
-$('stMore').onclick = () => { const el = $('scrStation'); el.scrollBy({ top: el.clientHeight * 0.6, behavior: reduceMotion ? 'auto' : 'smooth' }); };
+for (const id of screens) {
+  const el = $(id); el.addEventListener('scroll', moreHint, { passive: true });
+  el.querySelector('.more').onclick = () => el.scrollBy({ top: el.clientHeight * 0.6, behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitScreens);   // the real fonts change how tall the text is
 $('btnUndock').onclick = () => { if (G.state === 'station') { $('hud').hidden = false; drawHud(); dockPose(); openDraft('boss'); } };
 $('btnQuit').onclick = () => { if (G.state === 'pause') { show(null); endRun(); } };
 // Restart: the run ends as usual (its scrap is banked) and a new one launches straight away.
