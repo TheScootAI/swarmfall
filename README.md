@@ -2,7 +2,7 @@
 
 A roguelite swarm shooter for phones and desktops, built with three.js in a single `index.html`.
 
-Enemy formations fly in, hold, and dive at you. Clear a wave and you pick one of three upgrades. Every fifth wave is a Hive Core boss. When your ship is destroyed, the scrap you collected carries over, and you spend it in the hangar on permanent upgrades for the next run.
+Enemy formations fly in, hold, and dive at you. After every third wave you pick one of three upgrades. Every sixth wave is a Hive Core boss, and beating it gives a pick from the rarer upgrades. When your ship is destroyed, the scrap you collected carries over, and you spend it in the hangar on permanent upgrades for the next run.
 
 ## Play
 
@@ -20,4 +20,4 @@ Open `index.html` in a browser, or serve the folder with any static host (GitHub
 
 ## Tuning
 
-All the numbers live near the top of the script in `index.html`: `ET` (enemy stats), `UP` (run upgrades), `SHOP` (hangar upgrades and costs), `recalc()` (how upgrades turn into ship stats), and `buildWave()` (wave size and enemy mix).
+All the numbers live near the top of the script in `index.html`: `ET` (enemy stats), `UP` (run upgrades), `SHOP` (hangar upgrades and costs), `recalc()` (how upgrades turn into ship stats), `buildWave()` (wave size and enemy mix), and `DRAFT_EVERY` / `BOSS_EVERY` (how often upgrades and bosses come).

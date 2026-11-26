@@ -128,7 +128,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
       <div class="inner">
         <p class="eyebrow">Roguelite swarm shooter</p>
         <h1>SWARM<b>FALL</b></h1>
-        <p class="lede">Break each wave, pick an upgrade, go deeper. When the swarm takes your ship, spend the scrap you salvaged on a stronger one.</p>
+        <p class="lede">Every third wave you clear earns an upgrade. When the swarm takes your ship, spend the scrap you salvaged on a stronger one.</p>
         <div class="row">
           <button id="btnPlay" class="btn primary">Launch</button>
           <button id="btnHangar" class="btn">Hangar</button>
@@ -146,7 +146,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
         <div class="cards" id="cards"></div>
         <div class="row">
           <button id="btnReroll" class="btn">Reroll</button>
-          <button id="btnSkip" class="btn">Skip for ◆ 4</button>
+          <button id="btnSkip" class="btn">Skip for ◆ 10</button>
         </div>
         <div class="loadout" id="draftLoadout"></div>
       </div>
@@ -403,10 +403,11 @@ const ET = {
   weaver: { hp: 16, r: 11, speed: 135, scrap: 0.4, col: [0.65, 0.42, 1] },
   splitter: { hp: 28, r: 12, speed: 230, scrap: 0.5, col: [1, 0.48, 0.24] },
   beetle: { hp: 70, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71] },
-  boss: { hp: 1300, r: 34, speed: 0, scrap: 0, col: [1, 0.31, 0.55] },
+  boss: { hp: 950, r: 34, speed: 0, scrap: 0, col: [1, 0.31, 0.55] },
 };
 const BOSS_TINT = [0xff4f8b, 0xffb02e, 0x5fe8ff, 0xa56bff];
 const RARITY = ['Common', 'Rare', 'Prototype'];
+const DRAFT_EVERY = 3, BOSS_EVERY = 6;   // an upgrade pick after every 3rd wave; every 6th wave is a boss, so its pick is the rare one
 const UP = [
   { id: 'rapid', n: 'Rapid Feed', r: 0, max: 8, d: '+20% fire rate.' },
   { id: 'heavy', n: 'Heavy Rounds', r: 0, max: 8, d: '+25% damage.' },
@@ -481,7 +482,7 @@ function buildEnemy(type, tint) {
 }
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
-  const hpMul = (1 + 0.13 * (n - 1)) * Math.pow(1.45, Math.floor(n / 10));
+  const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
   const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0 };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? 3 : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
@@ -541,7 +542,7 @@ function updateDive(e, dt) {
   }
 }
 function spawnBoss(tier) {
-  const e = spawnEnemy('boss', null, null, { tint: BOSS_TINT[(tier - 1) % 4], hpMul: (1 + 0.55 * (tier - 1)) / (1 + 0.13 * (G.wave - 1)) * Math.pow(1.2, tier - 1) });
+  const e = spawnEnemy('boss', null, null, { tint: BOSS_TINT[(tier - 1) % 4], boss: true, hpMul: (1 + 0.55 * (tier - 1)) * Math.pow(1.2, tier - 1) });
   e.state = 'boss'; e.tier = tier; e.intro = 2.6; e.atkT = 1.2; e.atk = 0; e.burst = 0; e.burstT = 0; e.x = W / 2; e.y = -90; e.z = -420;
   G.boss = e; $('bossbar').hidden = false; SFX.warn();
 }
@@ -565,7 +566,7 @@ function updateBoss(e, dt) {
 
 function buildWave(n) {
   G.queue = []; G.waveT = 0; G.diveT = 2.6; G.shootT = 3; G.boss = null; G.bossDown = false; $('bossbar').hidden = true;
-  if (n % 5 === 0) { G.form = { cols: 1, rows: 1, dx: 38, dy: 34, top: 96 }; G.queue.push({ t: 0.9, fn: () => spawnBoss(n / 5) }); return; }
+  if (n % BOSS_EVERY === 0) { G.form = { cols: 1, rows: 1, dx: 38, dy: 34, top: 96 }; G.queue.push({ t: 0.9, fn: () => spawnBoss(n / BOSS_EVERY) }); return; }
   const cols = Math.min(8, 4 + Math.ceil(n / 2)), rows = Math.min(5, 2 + Math.floor(n / 3)), mid = (cols - 1) / 2;
   G.form = { cols, rows, dx: 38, dy: 34, top: 96 };
   const shapes = [() => true];
@@ -793,8 +794,8 @@ function updateGame(dt) {
   updatePlayer(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt);
   if (G.enemies.some(e => e.dead)) G.enemies = G.enemies.filter(e => !e.dead);
   if (G.boss) $('bossbar').firstElementChild.style.transform = 'scaleX(' + clamp(G.boss.hp / G.boss.maxHp, 0, 1) + ')';
-  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; toast(G.bossDown ? 'CORE DESTROYED' : 'WAVE CLEARED'); }
-  else if (G.state === 'clear') { G.clearT -= dt; if (G.clearT <= 0 && P.alive) openDraft(G.bossDown ? 'boss' : 'wave'); }
+  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; const left = DRAFT_EVERY - G.wave % DRAFT_EVERY; toast(G.bossDown ? 'CORE DESTROYED' : 'WAVE CLEARED', left === DRAFT_EVERY ? 'Upgrade earned' : left === 1 ? 'Upgrade after the next wave' : 'Upgrade in ' + left + ' waves'); }
+  else if (G.state === 'clear') { G.clearT -= dt; if (G.clearT <= 0 && P.alive) { if (G.wave % DRAFT_EVERY === 0) openDraft(G.bossDown ? 'boss' : 'wave'); else nextWave(); } }
   else if (G.state === 'dying') { G.dieT -= dt / 0.45; if (G.dieT <= 0) endRun(); }
 }
 
@@ -872,7 +873,7 @@ function drawHud() {
   let h = ''; for (let i = 0; i < S.maxHp; i++) h += i < P.hp ? '<i></i>' : '<i class="off"></i>';
   if (S.shield > 0) h += '<i class="sh' + (P.shieldUp ? '' : ' off') + '"></i>';
   $('hull').innerHTML = h; $('hull').setAttribute('aria-label', 'Hull ' + P.hp + ' of ' + S.maxHp);
-  $('scrap').textContent = '◆ ' + sc; $('wave').textContent = G.wave % 5 === 0 && G.wave ? 'HIVE CORE' : 'WAVE ' + Math.max(1, G.wave);
+  $('scrap').textContent = '◆ ' + sc; $('wave').textContent = G.wave % BOSS_EVERY === 0 && G.wave ? 'HIVE CORE' : 'WAVE ' + Math.max(1, G.wave);
 }
 function loadoutHtml() {
   const ids = Object.keys(G.up).filter(id => id !== 'patch');
@@ -907,11 +908,11 @@ function startRun() {
 }
 function nextWave() {
   G.wave++; buildWave(G.wave); G.state = 'play'; show(null); drawHud();
-  if (G.wave % 5 === 0) toast('HIVE CORE', 'Wave ' + G.wave);
+  if (G.wave % BOSS_EVERY === 0) toast('HIVE CORE', 'Wave ' + G.wave);
   else toast('WAVE ' + G.wave, G.wave === 1 && !meta.runs ? (finePointer ? 'Move the mouse to steer' : 'Drag to steer') : '');
 }
 function rollCards(kind) {
-  const w = kind === 'boss' ? [0, 60, 40] : kind === 'head' ? [70, 30, 0] : [62, 30, 6 + Math.min(10, G.wave)];
+  const w = kind === 'boss' ? [0, 60, 40] : kind === 'head' ? [70, 30, 0] : [55, 35, 8 + Math.min(10, G.wave)];
   const avail = UP.filter(u => ulv(u.id) < u.max && (!u.ok || u.ok())), out = [];
   for (let i = 0; i < 3; i++) {
     let roll = Math.random() * (w[0] + w[1] + w[2]), rar = roll < w[0] ? 0 : roll < w[0] + w[1] ? 1 : 2;
@@ -978,7 +979,7 @@ $('btnSound').onclick = $('btnSound2').onclick = () => { audioInit(); toggleMute
 $('btnPause').onclick = $('btnResume').onclick = togglePause;
 $('btnQuit').onclick = () => { if (G.state === 'pause') { show(null); endRun(); } };
 $('btnReroll').onclick = () => { if (G.state === 'draft' && G.rerolls > 0) { G.rerolls--; G.cards = rollCards('wave'); drawDraft(); SFX.pick(); } };
-$('btnSkip').onclick = () => { if (G.state === 'draft') { G.run.scrap += 4; hudKey = ''; nextWave(); } };
+$('btnSkip').onclick = () => { if (G.state === 'draft') { G.run.scrap += 10; hudKey = ''; nextWave(); } };
 $('cards').onclick = e => { const b = e.target.closest('.card'); if (b) choose(+b.dataset.i); };
 $('shop').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
