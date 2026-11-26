@@ -43,7 +43,9 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 #hull i.sh.off{box-shadow:inset 0 0 0 1.5px var(--line)}
 #wave{color:var(--dim);white-space:nowrap}
 .hud-r{display:flex;justify-content:flex-end;align-items:center;gap:10px;min-width:0}
-#scrap{color:var(--gold);white-space:nowrap}
+#scrap{color:var(--gold);white-space:nowrap;display:inline-block}
+#scrap.pop{animation:pop .25s ease-out}
+@keyframes pop{0%{transform:scale(1.35)}100%{transform:none}}
 #btnPause{pointer-events:auto;width:44px;height:44px;margin:-8px -8px -8px 0;border:0;background:transparent;color:var(--ink);
   font:700 .9rem/1 var(--display);cursor:pointer}
 #bossbar{grid-column:1/-1;height:6px;background:var(--panel)}
@@ -135,7 +137,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
 #fbSend[aria-disabled="true"]{opacity:.45;cursor:default}
 a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;background:var(--void)}
-@media (prefers-reduced-motion:reduce){#toast.go{animation-duration:.01s;opacity:1}}
+@media (prefers-reduced-motion:reduce){#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}}
 </style>
 </head>
 <body>
@@ -160,6 +162,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
           <button id="btnHangar" class="btn">Hangar</button>
         </div>
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
+        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair your hull. Everything else hurts, and enemy shots are the red dots.</p>
         <p class="fine" id="bestLine"></p>
         <div><button id="btnSound" class="btn quiet">Sound on</button></div>
       </div>
@@ -183,6 +186,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
         <p class="eyebrow">Paused</p>
         <h2 id="pauseWave">Wave 1</h2>
         <div class="loadout" id="pauseLoadout"></div>
+        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair your hull. Everything else hurts, and enemy shots are the red dots.</p>
         <div class="row">
           <button id="btnResume" class="btn primary">Resume</button>
           <button id="btnSound2" class="btn">Sound on</button>
@@ -333,7 +337,7 @@ const M = {
   weaver: phong(0xa56bff, 0x24104a), splitA: phong(0xff7a3c, 0x4a1c08), splitB: phong(0xffd23c, 0x4a3a08),
   beetle: phong(0x2ed6b5, 0x06382f), shell: phong(0x127a6b, 0x03201b),
   eye: basic(0xffffff), elite: basic(0xffc857), flash: basic(0xffffff),
-  scrap: phong(0xffc857, 0x7a5200), heart: phong(0x7dffb0, 0x146a3a), drone: phong(0xc7b0ff, 0x2a1a5a),
+  scrap: phong(0xffd257, 0x9a6a00), heart: phong(0x35f06e, 0x0c6a2c), halo: glowMat(0x5fe8ff, 0.85), drone: phong(0xc7b0ff, 0x2a1a5a),
   shield: new THREE.MeshBasicMaterial({ color: 0xc79bff, wireframe: true, transparent: true, opacity: 0.7, fog: false }),
   wall: new THREE.MeshBasicMaterial({ color: 0x3a4391, transparent: true, opacity: 0.6, fog: false }),
 };
@@ -407,8 +411,8 @@ function instanced(g, max) {
   im.frustumCulled = false; for (let i = 0; i < max; i++) im.setColorAt(i, tmpC.set(0xffffff)); im.count = 0; scene.add(im); return im;
 }
 const PB_MAX = 180, EB_MAX = 240;
-const pbMesh = instanced(new THREE.BoxGeometry(3.6, 14, 3.6), PB_MAX), ebMesh = instanced(geo.oct, EB_MAX);
-const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a, EB_COL = 0xff6a3d;
+const pbMesh = instanced(new THREE.BoxGeometry(3.6, 14, 3.6), PB_MAX), ebMesh = instanced(geo.sph, EB_MAX);
+const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a, EB_COL = 0xff2f45;
 
 // player ship
 const ship = new THREE.Group();
@@ -481,7 +485,7 @@ const SHOP = [
 
 // ---------- game state ----------
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0 },
-  form: { cols: 6, rows: 3, dx: 38, dy: 34, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, boss: null, bossDown: false, cards: [] };
+  form: { cols: 6, rows: 3, dx: 38, dy: 34, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, boss: null, bossDown: false, cards: [], hint: {} };
 const P = { x: W / 2, y: H - 70, vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
 const ulv = id => G.up[id] || 0;
@@ -639,8 +643,16 @@ function damageEnemy(e, d) {
   if (e.hp <= 0) killEnemy(e);
 }
 function spawnPick(kind, x, y) {
-  const mesh = kind === 'heart' ? part(geo.oct, M.heart, 6, 8, 6) : part(geo.box, M.scrap, 6, 6, 6);
-  scene.add(mesh); G.picks.push({ kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh });
+  // everything worth grabbing sits inside a pulsing halo in the ship's own colour
+  const mesh = new THREE.Group(), core = new THREE.Group(), halo = part(geo.ring, M.halo, 13, 13, 1);
+  if (kind === 'heart') core.add(part(geo.box, M.heart, 13, 5, 5), part(geo.box, M.heart, 5, 13, 5));
+  else core.add(part(geo.torus, M.scrap, 6.5, 6.5, 6.5));
+  mesh.add(core, halo); scene.add(mesh);
+  G.picks.push({ kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU) });
+  if (meta.runs < 3 && !G.hint[kind] && G.state === 'play' && !G.bossDown) {   // teach it the first time one appears
+    G.hint[kind] = true;
+    if (kind === 'heart') toast('REPAIR', 'Fly into the green cross to restore 1 hull'); else toast('SCRAP', 'Fly into the gold rings to collect them');
+  }
 }
 function killEnemy(e) {
   e.dead = true; restoreMats(e); scene.remove(e.g); G.run.kills++;
@@ -773,12 +785,17 @@ function updatePicks(dt) {
     let gone = p.y > H + 20;
     if (P.alive && d < 20) {
       gone = true;
-      if (p.kind === 'heart') { if (P.hp < S.maxHp) P.hp++; SFX.heal(); burst(p.x, p.y, [0.5, 1, 0.7], 10, 120); }
-      else { G.run.scrap += S.scrapMul; SFX.pick(); }
+      if (p.kind === 'heart') { if (P.hp < S.maxHp) P.hp++; SFX.heal(); }
+      else { G.run.scrap += S.scrapMul; SFX.pick(); const sc = $('scrap'); sc.classList.remove('pop'); void sc.offsetWidth; sc.classList.add('pop'); }
+      burst(p.x, p.y, p.kind === 'heart' ? [0.5, 1, 0.7] : [1, 0.85, 0.35], 6, 90, 0.3);
       drawHud();
     }
     if (gone) { scene.remove(p.mesh); G.picks.splice(i, 1); }
-    else { p.mesh.position.set(TX(p.x), TY(p.y), 0); p.mesh.rotation.x += 3 * dt; p.mesh.rotation.y += 4 * dt; }
+    else {
+      p.mesh.position.set(TX(p.x), TY(p.y), 0);
+      if (p.kind === 'heart') p.core.rotation.y = Math.sin(G.time * 3 + p.ph) * 0.7; else p.core.rotation.y += 5 * dt;
+      const hs = 13 * (1 + Math.sin(G.time * 7 + p.ph) * 0.16); p.halo.scale.set(hs, hs, 1);
+    }
   }
 }
 function updateEnemies(dt) {
@@ -862,7 +879,7 @@ function syncScene(dt) {
   pbMesh.count = n; pbMesh.instanceMatrix.needsUpdate = true; pbMesh.instanceColor.needsUpdate = true;
   n = 0;
   for (const b of G.eb) {
-    dummy.position.set(TX(b.x), TY(b.y), 0); dummy.rotation.set(G.time * 5, G.time * 4, 0); dummy.scale.set(b.r, b.r, b.r); dummy.updateMatrix();
+    dummy.position.set(TX(b.x), TY(b.y), 0); dummy.rotation.set(0, 0, 0); const er = b.r * (0.95 + Math.sin(G.time * 14 + b.x) * 0.12); dummy.scale.set(er, er, er); dummy.updateMatrix();
     ebMesh.setMatrixAt(n, dummy.matrix); ebMesh.setColorAt(n, tmpC.set(EB_COL)); n++;
   }
   ebMesh.count = n; ebMesh.instanceMatrix.needsUpdate = true; ebMesh.instanceColor.needsUpdate = true;
@@ -937,7 +954,7 @@ function showTitle() {
 }
 function startRun() {
   audioInit(); resetField();
-  G.up = {}; G.run = { scrap: 0, kills: 0 }; G.wave = 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
+  G.up = {}; G.run = { scrap: 0, kills: 0 }; G.hint = {}; G.wave = 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
   Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; hudKey = ''; drawHud();
@@ -1185,7 +1202,7 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 resize(); soundLabels(); showTitle();
-window.__swarmfall = { G, P, S, UP, meta, recalc, startRun, nextWave, choose, openDraft, issueUrl };
+window.__swarmfall = { G, P, S, UP, meta, recalc, startRun, nextWave, choose, openDraft, issueUrl, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
