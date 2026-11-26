@@ -618,8 +618,8 @@ function updateBoss(e, dt) {
   if (k === 0) { const n = 5 + 2 * t; for (let i = 0; i < n; i++) fireE(e.x, e.y + 20, Math.PI / 2 + (i - (n - 1) / 2) * 0.17, ebSpeed() * 0.85); SFX.eshoot(); }
   else if (k === 1) { e.burst = 3 + t; e.burstT = 0; }
   else if (k === 2) {
-    const n = Math.min(1 + t, 12 - G.enemies.length);
-    for (let i = 0; i < n; i++) { const m = spawnEnemy(i % 3 === 2 && t > 1 ? 'weaver' : 'mite', null, null, { x: e.x + rand(-30, 30), y: e.y + 20 }); startDive(m); m.vy = 40; }
+    const n = Math.min(4 + t, 18 - G.enemies.length);   // 5 ships from the first core, one more per later core
+    for (let i = 0; i < n; i++) { const m = spawnEnemy(i % 3 === 2 && t > 1 ? 'weaver' : 'mite', null, null, { x: clamp(e.x + (i - (n - 1) / 2) * 22 + rand(-8, 8), 16, W - 16), y: e.y + 20 }); startDive(m); m.vy = 40; }
   } else { const n = 12 + 2 * t, o = rand(TAU); for (let i = 0; i < n; i++) fireE(e.x, e.y, o + i * TAU / n, ebSpeed() * 0.7); SFX.eshoot(); }
 }
 
