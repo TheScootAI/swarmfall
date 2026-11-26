@@ -326,7 +326,7 @@ const SFX = {
   big() { noise(0.9, 0.9, 2600); tone('sawtooth', 330, 60, 0.8, 0.5); },
   hurt() { tone('sawtooth', 520, 110, 0.4, 0.5); noise(0.3, 0.5, 2000); },
   pick() { if (limited('p', 40)) tone('sine', 880, 1500, 0.08, 0.25); },
-  dive() { if (limited('d', 170)) tone('sine', 760, 360, 0.17, 0.07); },
+  dive() { if (limited('d', 170)) tone('sine', 860, 520, 0.16, 0.1); },
   split() { if (limited('d', 170)) { tone('triangle', 520, 980, 0.09, 0.1); tone('triangle', 660, 1240, 0.1, 0.08, 0.06); } },
   heal() { tone('sine', 520, 1040, 0.2, 0.3); },
   card() { tone('triangle', 520, 520, 0.1, 0.3); tone('triangle', 660, 660, 0.1, 0.3, 0.08); tone('triangle', 880, 880, 0.18, 0.3, 0.16); },
@@ -649,7 +649,7 @@ function launchDive(e) {
   SFX.split(); ringFx(e.x, e.y, 6, 34, 0x3d7bff, 0.3); burst(e.x, e.y, e.def.col, 12, 140, 0.4);
   for (let i = 0; i < 3; i++) {
     const m = spawnEnemy('triplet', null, null, { x: e.x + (i - 1) * 12, y: e.y, hpMul: 0.45 });
-    m.g.scale.setScalar(0.62); m.rad = e.def.r * 0.62; startDive(m);
+    m.g.scale.setScalar(0.74); m.rad = e.def.r * 0.74; startDive(m);
     m.lane = W * (i + 0.5) / 3; m.vx = clamp((m.lane - m.x) * 2, -320, 320); m.vy = -40;
   }
   if (meta.runs < 6 && !G.hint.triplet) { G.hint.triplet = true; toast('TRIPLET', 'Splits into three when it attacks. Shoot it while it sits'); }
