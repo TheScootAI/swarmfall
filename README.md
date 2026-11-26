@@ -19,7 +19,7 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 ## How a run works
 
 - **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else hurts, and enemy shots are red dots.
-- **Waves** grow in size and add enemy types: mites, wasps (shoot while diving), weavers (zigzag), splitters (break into two mites), beetles (armoured, fire spreads), and gold-ringed elites.
+- **Waves** grow in size and add enemy types: mites, wasps (shoot while diving), weavers (zigzag), splitters (break into two mites), beetles (armoured, fire spreads), and red-ringed elites (three times the health, extra scrap).
 - **Upgrades** come in three rarities and stack: fire rate, damage, extra barrels, piercing, ricochet, shields, drones, homing missiles, chain lightning, and more.
 - **Hangar** upgrades are permanent and saved in the browser's local storage: hull, damage, fire rate, scrap gain, pickup range, rerolls, a free starting upgrade, and a once-per-run revive.
 

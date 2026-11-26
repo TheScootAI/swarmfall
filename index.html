@@ -336,7 +336,7 @@ const M = {
   wasp: phong(0xffb02e, 0x4a2a00), waspWing: phong(0xfff1c0, 0x40381a),
   weaver: phong(0xa56bff, 0x24104a), splitA: phong(0xff7a3c, 0x4a1c08), splitB: phong(0xffd23c, 0x4a3a08),
   beetle: phong(0x2ed6b5, 0x06382f), shell: phong(0x127a6b, 0x03201b),
-  eye: basic(0xffffff), elite: basic(0xffc857), flash: basic(0xffffff),
+  eye: basic(0xffffff), elite: basic(0xff2f45), flash: basic(0xffffff),
   scrap: phong(0xffd257, 0x9a6a00), heart: phong(0x35f06e, 0x0c6a2c), halo: glowMat(0x5fe8ff, 0.85), drone: phong(0xc7b0ff, 0x2a1a5a),
   shield: new THREE.MeshBasicMaterial({ color: 0xc79bff, wireframe: true, transparent: true, opacity: 0.7, fog: false }),
   wall: new THREE.MeshBasicMaterial({ color: 0x3a4391, transparent: true, opacity: 0.6, fog: false }),
@@ -527,7 +527,8 @@ function spawnEnemy(type, c, r, o = {}) {
   const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0 };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? 3 : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
-  if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo); }
+  if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo);
+    if (meta.runs < 3 && !G.hint.elite && G.state === 'play') { G.hint.elite = true; toast('ELITE', 'Red-ringed enemies are tougher and drop extra scrap'); } }
   e.meshes = []; e.g.traverse(m => { if (m.isMesh) { m.userData.base = m.material; e.meshes.push(m); } });
   scene.add(e.g); G.enemies.push(e); return e;
 }
