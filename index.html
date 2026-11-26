@@ -605,8 +605,9 @@ function spawnBoss(tier) {
   G.boss = e; $('bossbar').hidden = false; SFX.warn();
 }
 function updateBoss(e, dt) {
+  // the sway clock starts only once the entrance is over, so the core glides out from the centre instead of jumping sideways
+  if (e.intro > 0) { e.intro -= dt; const k = smooth(clamp(1 - e.intro / 2.6, 0, 1)); e.x = W / 2; e.y = lerp(-90, 130, k); e.z = lerp(-420, 0, k); e.t = 0; return; }
   e.t += dt;
-  if (e.intro > 0) { e.intro -= dt; const k = smooth(clamp(1 - e.intro / 2.6, 0, 1)); e.y = lerp(-90, 130, k); e.z = lerp(-420, 0, k); return; }
   e.x = W / 2 + Math.sin(e.t * 0.55) * (W / 2 - 64); e.y = 130 + Math.sin(e.t * 1.3) * 12;
   const rage = e.hp < e.maxHp * 0.35, t = Math.min(e.tier, 5);
   if (e.burst > 0) { e.burstT -= dt; if (e.burstT <= 0) { fireE(e.x, e.y + 24, aimAt(e.x, e.y + 24), ebSpeed() * 1.25, 5.5); e.burst--; e.burstT = 0.15; SFX.eshoot(); } }
@@ -677,7 +678,7 @@ function killEnemy(e) {
   burst(e.x, e.y, e.def.col, boss ? 140 : e.elite ? 34 : 16, boss ? 380 : 210, boss ? 1.3 : 0.6); burst(e.x, e.y, [1, 1, 0.8], boss ? 60 : 5, 120, 0.4);
   if (boss) {
     SFX.big(); shake(16); vibrate(120); ringFx(e.x, e.y, 20, 240, 0xffffff, 0.7);
-    G.eb.length = 0; G.bossDown = true; G.boss = null; $('bossbar').hidden = true;
+    G.bossDown = true; G.boss = null; $('bossbar').hidden = true;   // its shots already in flight finish their course
     for (const o of G.enemies) if (!o.dead && o !== e) killEnemy(o);
     for (let i = 0; i < 10 + 4 * e.tier; i++) spawnPick('scrap', e.x + rand(-40, 40), e.y + rand(-30, 30));
     spawnPick('heart', e.x, e.y);
@@ -866,7 +867,11 @@ function updateGame(dt) {
   if (G.enemies.some(e => e.dead)) G.enemies = G.enemies.filter(e => !e.dead);
   if (G.boss) $('bossbar').firstElementChild.style.transform = 'scaleX(' + clamp(G.boss.hp / G.boss.maxHp, 0, 1) + ')';
   if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; const left = DRAFT_EVERY - G.wave % DRAFT_EVERY; toast(G.bossDown ? 'CORE DESTROYED' : 'WAVE CLEARED', left === DRAFT_EVERY ? 'Upgrade earned' : left === 1 ? 'Upgrade after the next wave' : 'Upgrade in ' + left + ' waves'); }
-  else if (G.state === 'clear') { G.clearT -= dt; if (G.clearT <= 0 && P.alive) { if (G.wave % DRAFT_EVERY === 0) openDraft(G.bossDown ? 'boss' : 'wave'); else nextWave(); } }
+  else if (G.state === 'clear') {
+    G.clearT -= dt;
+    // the upgrade screen waits until the last enemy shots have left the field, so nothing vanishes mid-flight
+    if (G.clearT <= 0 && P.alive) { if (G.wave % DRAFT_EVERY !== 0) nextWave(); else if (!G.eb.length) openDraft(G.bossDown ? 'boss' : 'wave'); }
+  }
   else if (G.state === 'dying') { G.dieT -= dt / 0.45; if (G.dieT <= 0) endRun(); }
 }
 
