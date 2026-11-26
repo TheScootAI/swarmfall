@@ -790,8 +790,8 @@ function buildWave(n) {
       if (any) group++;
     }
   }
-  // lancers (the laser enemy) join from wave 15: one, a second at 19 and a third at 23, always above the top row where the swarm shields them
-  const lancers = n >= 15 ? Math.min(3, 1 + Math.floor((n - 15) / 4)) : 0;
+  // lancers (the laser enemy): one from wave 15, two from 20, three from 25, always above the top row where the swarm shields them
+  const lancers = n >= 25 ? 3 : n >= 20 ? 2 : n >= 15 ? 1 : 0;
   for (const q of specs) G.queue.push({ t: q.t, fn: () => startEnter(spawnEnemy(q.type, q.c, q.r, { elite: q.elite }), q.tpl, !!q.side) });
   for (let i = 0; i < lancers; i++) G.queue.push({ t: 0.6 + i * 0.5, fn: () => { const e = spawnEnemy('lancer', 0, 0); e.ph = i * 2.1 + rand(0.6); startEnter(e, 2, i % 2 === 1); } });
   G.queue.sort((a, b) => a.t - b.t);
