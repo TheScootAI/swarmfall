@@ -170,7 +170,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
           <button id="btnHangar" class="btn">Station</button>
         </div>
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
-        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Red dots are enemy shots.</p>
+        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Red and orange things are enemy fire.</p>
         <p class="fine" id="bestLine"></p>
         <div class="row quietrow"><button id="btnSound" class="btn quiet">Turn sound off</button><button id="btnReset" class="btn quiet">Start over</button></div>
       </div>
@@ -194,7 +194,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
         <p class="eyebrow">Paused</p>
         <h2 id="pauseWave">Wave 1</h2>
         <div class="loadout" id="pauseLoadout"></div>
-        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Red dots are enemy shots.</p>
+        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Red and orange things are enemy fire.</p>
         <div class="row">
           <button id="btnResume" class="btn primary">Resume</button>
           <button id="btnSound2" class="btn">Turn sound off</button>
@@ -331,6 +331,9 @@ const SFX = {
   shield() { tone('sine', 1200, 300, 0.25, 0.35); },
   warn() { for (let i = 0; i < 3; i++) tone('square', 150, 140, 0.22, 0.3, i * 0.32); },
   eshoot() { if (limited('e', 90)) tone('square', 300, 200, 0.06, 0.08); },
+  missile() { if (limited('m', 150)) { noise(0.35, 0.22, 1800, 0.02); tone('sawtooth', 240, 520, 0.3, 0.12); } },
+  charge() { tone('sine', 220, 1100, 1.25, 0.16); },
+  beam() { tone('sawtooth', 150, 130, 1.7, 0.2); noise(1.7, 0.16, 2400, 0.03); },
   buy() { tone('triangle', 660, 990, 0.12, 0.3); tone('triangle', 990, 1320, 0.14, 0.3, 0.1); },
   deny() { tone('square', 160, 120, 0.12, 0.2); },
   launch() { noise(1.3, 0.45, 500); tone('sawtooth', 70, 240, 1.2, 0.25); },
@@ -367,6 +370,7 @@ const M = {
   wasp: phong(0xffb02e, 0x4a2a00), waspWing: phong(0xfff1c0, 0x40381a),
   weaver: phong(0xa56bff, 0x24104a), splitA: phong(0xff7a3c, 0x4a1c08), splitB: phong(0xffd23c, 0x4a3a08),
   beetle: phong(0x2ed6b5, 0x06382f), shell: phong(0x127a6b, 0x03201b),
+  lancer: phong(0xff3355, 0x5a0a18), lancerShell: phong(0x3a1638, 0x12061a), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(0xff2f45, 0.85), beamCore: glowMat(0xffffff, 0.95),
   eye: basic(0xffffff), elite: basic(0xff2f45), flash: basic(0xffffff),
   scrap: phong(0xffd257, 0x9a6a00), heart: phong(0x35f06e, 0x0c6a2c), halo: glowMat(0x5fe8ff, 0.85), drone: phong(0xc7b0ff, 0x2a1a5a),
   shield: new THREE.MeshBasicMaterial({ color: 0xc79bff, wireframe: true, transparent: true, opacity: 0.7, fog: false }),
@@ -441,9 +445,10 @@ function instanced(g, max) {
   const im = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }), max);
   im.frustumCulled = false; for (let i = 0; i < max; i++) im.setColorAt(i, tmpC.set(0xffffff)); im.count = 0; scene.add(im); return im;
 }
-const PB_MAX = 180, EB_MAX = 240;
-const pbMesh = instanced(new THREE.BoxGeometry(3.6, 14, 3.6), PB_MAX), ebMesh = instanced(geo.sph, EB_MAX);
-const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a, EB_COL = 0xff2f45;
+const PB_MAX = 180, EB_MAX = 240, EM_MAX = 24;
+const pbMesh = instanced(new THREE.BoxGeometry(3.6, 14, 3.6), PB_MAX), ebMesh = instanced(geo.sph, EB_MAX), emMesh = instanced(geo.cone, EM_MAX);
+const beamGeo = new THREE.PlaneGeometry(1, 1);
+const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a, EB_COL = 0xff2f45, DART_COL = 0xff7a3a, EM_COL = 0xff5a2a;
 
 // player ship
 const ship = new THREE.Group();
@@ -494,6 +499,7 @@ const ET = {
   weaver: { hp: 16, r: 11, speed: 135, scrap: 0.4, col: [0.65, 0.42, 1] },
   splitter: { hp: 28, r: 12, speed: 230, scrap: 0.5, col: [1, 0.48, 0.24] },
   beetle: { hp: 70, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71] },
+  lancer: { hp: 34, r: 12, speed: 0, scrap: 0.7, col: [1, 0.25, 0.35] },
   boss: { hp: 950, r: 34, speed: 0, scrap: 0, col: [1, 0.31, 0.55] },
 };
 const BOSS_TINT = [0xff4f8b, 0xffb02e, 0x5fe8ff, 0xa56bff];
@@ -556,7 +562,7 @@ const SHOPBY = {}; SHOP.forEach(m => SHOPBY[m.id] = m);
 const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
 // ---------- game state ----------
-const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
+const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
   form: { cols: 6, rows: 3, dx: 38, dy: 34, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, boss: null, bossDown: false, cards: [], hint: {}, cut: null, draftKind: 'wave', docked: false, newMod: null };
 const P = { x: W / 2, y: H - 70, vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
@@ -583,6 +589,7 @@ function buildEnemy(type, tint) {
   else if (type === 'wasp') { add(geo.cone, M.wasp, 7, 22, 7, 0, 0, 0, Math.PI); add(geo.box, M.waspWing, 13, 3, 2, -9, 6, 0, 0.45); add(geo.box, M.waspWing, 13, 3, 2, 9, 6, 0, -0.45); add(geo.oct, M.eye, 2.5, 2.5, 2.5, 0, 3, 6); }
   else if (type === 'weaver') { add(geo.torus, M.weaver, 9, 9, 9); add(geo.ico, M.eye, 3.4, 3.4, 3.4); }
   else if (type === 'splitter') { add(geo.box, M.splitA, 10, 10, 10, -5, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 10, 10, 10, 5, 0, 0, Math.PI / 4); }
+  else if (type === 'lancer') { add(geo.oct, M.lancer, 8, 16, 8); add(geo.box, M.lancerShell, 4, 18, 5, -9, -2); add(geo.box, M.lancerShell, 4, 18, 5, 9, -2); g.userData.eye = add(geo.sph, M.eye, 3, 3, 3, 0, -13, 4); }
   else if (type === 'beetle') { add(geo.ico, M.beetle, 15, 13, 11); add(geo.box, M.shell, 25, 5, 8, 0, 5, 5); add(geo.oct, M.eye, 2.4, 2.4, 2.4, -5, -5, 9); add(geo.oct, M.eye, 2.4, 2.4, 2.4, 5, -5, 9); }
   else {
     const body = phong(tint, 0x2a0a20), dark = phong(0x2a2f66, 0x0a0c22);
@@ -602,6 +609,10 @@ function spawnEnemy(type, c, r, o = {}) {
   if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo);
     if (meta.runs < 3 && !G.hint.elite && G.state === 'play') { G.hint.elite = true; toast('ELITE', 'Red-ringed enemies are tougher and drop extra scrap'); } }
   e.meshes = []; e.g.traverse(m => { if (m.isMesh) { m.userData.base = m.material; e.meshes.push(m); } });
+  if (type === 'lancer') {   // its beam: added after the list above so the hit-flash leaves it alone
+    e.laser = { phase: 'idle', t: rand(1.5, 4) }; e.beam = part(beamGeo, M.beamAim, 1, 1, 1); e.core = part(beamGeo, M.beamCore, 1, 1, 1, 0, 0, 0.5);
+    e.beam.visible = e.core.visible = false; e.g.add(e.beam, e.core);
+  }
   scene.add(e.g); G.enemies.push(e); return e;
 }
 function slotPos(e) {
@@ -625,18 +636,53 @@ function startReturn(e) {
 function startDive(e) {
   e.state = 'dive'; e.t = 0; e.z = 0;
   e.vx = (e.x < W / 2 ? -1 : 1) * rand(40, 110) * (Math.random() < 0.7 ? 1 : -1); e.vy = -rand(60, 110);
-  e.shots = e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.type === 'beetle' ? 3 : 0; e.shootT = rand(0.3, 0.6);
+  e.shots = e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.type === 'beetle' ? 2 : 0; e.shootT = rand(0.3, 0.6);
 }
 const ebSpeed = () => Math.min(230, 130 + G.wave * 5) * S.ebMul;
 const aimAt = (x, y) => Math.atan2(P.y - y, P.x - x);
-function fireE(x, y, ang, sp, r = 4.5) { if (G.eb.length < EB_MAX) G.eb.push({ x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r }); }
+function fireE(x, y, ang, sp, r = 4.5, kind = 0) { if (G.eb.length < EB_MAX) G.eb.push({ x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r, kind }); }
+// a dart: thinner than a ball and 40% faster
+const fireDart = (x, y, ang) => fireE(x, y, ang, ebSpeed() * 1.4, 3.4, 1);
+// a missile: starts slow, speeds up and turns toward the ship until it has gone past. Player shots destroy it.
+function fireMissile(x, y) {
+  if (G.em.length >= EM_MAX) return;
+  G.em.push({ x, y, vx: rand(-25, 25), vy: 55, t: 0, dead: false }); SFX.missile();
+  if (meta.runs < 6 && !G.hint.missile) { G.hint.missile = true; toast('MISSILE', 'It follows you. Shoot it down or slip past it'); }
+}
+function updateMissiles(dt) {
+  for (let i = G.em.length - 1; i >= 0; i--) {
+    const m = G.em[i]; if (!m) continue; m.t += dt;   // a hit can clear other missiles mid-loop
+    const sp = Math.min(205, 60 + 120 * m.t) * S.ebMul, cur = Math.atan2(m.vy, m.vx); let a = cur;
+    if (P.alive && m.y < P.y - 8) { const d = Math.atan2(P.y - m.y, P.x - m.x) - cur; a = cur + clamp(Math.atan2(Math.sin(d), Math.cos(d)), -1.8 * dt, 1.8 * dt); }
+    m.vx = Math.cos(a) * sp; m.vy = Math.sin(a) * sp; m.x += m.vx * dt; m.y += m.vy * dt;
+    if (Math.random() < 0.7) burst(m.x - m.vx * 0.04, m.y - m.vy * 0.04, [1, 0.5, 0.2], 1, 18, 0.3);
+    if (!m.dead && P.alive && shipHit(m.x, m.y, 4)) { m.dead = true; burst(m.x, m.y, [1, 0.6, 0.3], 12, 150, 0.4); hitPlayer(); }
+    if (m.t > 7 && !m.dead) { m.dead = true; burst(m.x, m.y, [1, 0.6, 0.3], 8, 90, 0.35); }
+    if (m.dead || m.y > H + 30 || m.x < -40 || m.x > W + 40) { const k = G.em.indexOf(m); if (k >= 0) G.em.splice(k, 1); }
+  }
+}
+// The lancer: sits in formation, charges (a thin red line shows where), fires a beam down the screen, then cools off.
+const BEAM_HALF = 6;
+function updateLancer(e, dt) {
+  const L = e.laser; L.t -= dt;
+  if (L.phase === 'idle') {
+    if (L.t <= 0 && G.state === 'play' && P.alive && G.enemies.filter(o => o.laser && o.laser.phase !== 'idle').length < 2) {
+      L.phase = 'charge'; L.t = 1.3; SFX.charge();
+      if (meta.runs < 6 && !G.hint.lancer) { G.hint.lancer = true; toast('LASER', 'The thin red line shows where the beam will fire'); }
+    }
+  } else if (L.phase === 'charge') { if (L.t <= 0) { L.phase = 'fire'; L.t = 1.7; SFX.beam(); shake(3); } }
+  else {
+    if (P.alive && P.y > e.y && Math.abs(P.x - e.x) < BEAM_HALF + (P.shieldUp ? SHIELD_R : 16)) hitPlayer();
+    if (L.t <= 0) { L.phase = 'idle'; L.t = rand(3.2, 5); }   // cooling down
+  }
+}
 function updateDive(e, dt) {
   e.t += dt;
   const sp = e.def.speed * (1 + Math.min(0.5, G.wave * 0.02)), steer = e.y < H * 0.58;
   if (e.type === 'beetle') {
     if (e.shots > 0 && e.y >= H * 0.38) {
       e.vy += (6 - e.vy) * Math.min(1, 4 * dt); e.vx += -e.vx * Math.min(1, 3 * dt); e.shootT -= dt;
-      if (e.shootT <= 0) { const a = aimAt(e.x, e.y); for (let i = -1; i <= 1; i++) fireE(e.x, e.y + 12, a + i * 0.28, ebSpeed()); e.shots--; e.shootT = 1.1; SFX.eshoot(); }
+      if (e.shootT <= 0) { fireMissile(e.x, e.y + 12); e.shots--; e.shootT = 1.5; }
     } else {
       e.vy = Math.min(e.shots > 0 ? sp : sp * 2.4, e.vy + 260 * dt);
       if (steer) e.vx += (clamp((P.x - e.x) * 0.8, -70, 70) - e.vx) * Math.min(1, 2 * dt);
@@ -647,7 +693,7 @@ function updateDive(e, dt) {
     if (e.lane != null) e.vx += (clamp((e.lane + clamp(P.x - e.lane, -28, 28) - e.x) * 3.5, -320, 320) - e.vx) * Math.min(1, 5 * dt);   // hold the lane, lean a little toward the player
     else if (steer && k) e.vx += (clamp((P.x - e.x) * k, -170, 170) - e.vx) * Math.min(1, 2.6 * dt);
     if (e.type === 'weaver') e.x += Math.cos(e.t * 4.6 + e.ph) * 150 * dt;
-    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6) { e.shootT -= dt; if (e.shootT <= 0) { fireE(e.x, e.y + 8, aimAt(e.x, e.y), ebSpeed()); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
+    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6) { e.shootT -= dt; if (e.shootT <= 0) { fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
   if (e.x < 12) { e.x = 12; e.vx = Math.abs(e.vx); } else if (e.x > W - 12) { e.x = W - 12; e.vx = -Math.abs(e.vx); }
@@ -682,7 +728,7 @@ function updateBoss(e, dt) {
   e.atkT = 2.5 - t * 0.14;
   const k = e.atk++ % 4;
   if (k === 0) { const n = 5 + 2 * t; for (let i = 0; i < n; i++) fireE(e.x, e.y + 20, Math.PI / 2 + (i - (n - 1) / 2) * 0.17, ebSpeed() * 0.85); SFX.eshoot(); }
-  else if (k === 1) { e.burst = 3 + t; e.burstT = 0; }
+  else if (k === 1) { e.burst = 3 + t; e.burstT = 0; fireMissile(e.x - 40, e.y + 10); fireMissile(e.x + 40, e.y + 10); }
   else if (k === 2) {
     e.sumN = e.sum = Math.max(0, Math.min(4 + t, 18 - G.enemies.length)); e.sumT = 0;   // 5 ships from the first core, one more per later core
   } else { const n = 12 + 2 * t, o = rand(TAU); for (let i = 0; i < n; i++) fireE(e.x, e.y, o + i * TAU / n, ebSpeed() * 0.7); SFX.eshoot(); }
@@ -698,21 +744,27 @@ function buildWave(n) {
   if (rows >= 3) shapes.push((c, r) => (c + r) % 2 === 0 || r === 0);
   const shape = shapes[(Math.random() * shapes.length) | 0];
   const pWeaver = n >= 3 ? Math.min(0.3, 0.1 + n * 0.012) : 0, pSplit = n >= 4 ? Math.min(0.2, 0.06 + n * 0.01) : 0, pElite = n >= 4 ? Math.min(0.09, 0.02 + n * 0.005) : 0;
-  let elites = 0, group = 0;
+  let elites = 0, group = 0; const specs = [];
   for (let r = 0; r < rows; r++) {
     for (const side of [0, 1]) {
       const tpl = (r + side + n) % 3, t0 = 0.4 + group * 0.75; let i = 0, any = false;
       for (let k = 0; k < cols; k++) {
         const c = side ? cols - 1 - k : k;
         if ((side ? c < cols / 2 : c >= cols / 2) || !shape(c, r)) continue;
-        let type = r === 0 ? (n >= 6 ? 'beetle' : n >= 2 ? 'wasp' : 'mite') : r === 1 && n >= 3 ? 'wasp' : 'mite';
+        let type = r === 0 ? (n >= 7 || (n >= 4 && Math.random() < 0.3) ? 'beetle' : n >= 2 ? 'wasp' : 'mite') : r === 1 && n >= 3 ? 'wasp' : 'mite';
         const roll = Math.random(); if (roll < pWeaver) type = 'weaver'; else if (roll < pWeaver + pSplit) type = 'splitter';
         const elite = elites < 3 && Math.random() < pElite; if (elite) elites++;
-        G.queue.push({ t: t0 + i++ * 0.15, fn: () => startEnter(spawnEnemy(type, c, r, { elite }), tpl, !!side) }); any = true;
+        specs.push({ t: t0 + i++ * 0.15, type, c, r, elite, tpl, side }); any = true;
       }
       if (any) group++;
     }
   }
+  // lancers (the laser enemy) join from wave 4: at least one, more in later waves, always in the top two rows
+  if (n >= 4) {
+    const want = Math.min(3, 1 + Math.floor((n - 4) / 4)), spots = specs.filter(q => q.r <= 1 && q.type !== 'beetle').sort(() => Math.random() - 0.5);
+    for (const q of spots.slice(0, want)) q.type = 'lancer';
+  }
+  for (const q of specs) G.queue.push({ t: q.t, fn: () => startEnter(spawnEnemy(q.type, q.c, q.r, { elite: q.elite }), q.tpl, !!q.side) });
   G.queue.sort((a, b) => a.t - b.t);
 }
 
@@ -769,10 +821,10 @@ function areaDamage(x, y, r, d, skip) {
 
 // ---------- player ----------
 function shake(a) { if (!reduceMotion) shakeAmt = Math.max(shakeAmt, a); }
-function clearShotsNear(x, y, r) { G.eb = G.eb.filter(b => (b.x - x) ** 2 + (b.y - y) ** 2 > r * r); }
+function clearShotsNear(x, y, r) { const far = b => (b.x - x) ** 2 + (b.y - y) ** 2 > r * r; G.eb = G.eb.filter(far); G.em = G.em.filter(far); }
 function nova(d) {
   for (const b of G.eb) burst(b.x, b.y, [1, 0.5, 0.3], 2, 80, 0.3);
-  G.eb.length = 0; ringFx(P.x, P.y, 20, 420, 0xc79bff, 0.6); areaDamage(P.x, P.y, 2000, d);
+  G.eb.length = 0; G.em.length = 0; ringFx(P.x, P.y, 20, 420, 0xc79bff, 0.6); areaDamage(P.x, P.y, 2000, d);
 }
 // Does a circle at (x, y) with radius r touch the ship? The shape follows the outline: the fuselage and the
 // wing bar. While a shield is up, the whole bubble is the target, so anything that touches it pops it.
@@ -855,6 +907,10 @@ function updateShots(dt) {
       const dx = e.x - b.x, dy = e.y - b.y, rr = e.rad + 5;
       if (dx * dx + dy * dy < rr * rr) { onHit(b, e); if (b.dead) break; }
     }
+    if (!b.dead) for (const m of G.em) {   // enemy missiles can be shot down
+      if (m.dead || (m.x - b.x) ** 2 + (m.y - b.y) ** 2 > 110) continue;
+      m.dead = true; burst(m.x, m.y, [1, 0.6, 0.3], 12, 150, 0.4); SFX.boom(); if (b.kind === 1 || b.pierce <= 0) b.dead = true; else b.pierce--; break;
+    }
     if (b.dead) { G.pb[i] = G.pb[G.pb.length - 1]; G.pb.pop(); }
   }
   for (let guard = 0; G.blastQ.length && guard < 40; guard++) {
@@ -868,6 +924,7 @@ function updateShots(dt) {
     if (!gone && P.alive && shipHit(b.x, b.y, b.r - 1)) { gone = true; hitPlayer(); if (i >= G.eb.length) continue; }
     if (gone && G.eb[i] === b) { G.eb[i] = G.eb[G.eb.length - 1]; G.eb.pop(); }
   }
+  updateMissiles(dt);
 }
 function updatePicks(dt) {
   const sweep = G.state === 'clear';
@@ -904,7 +961,7 @@ function updateEnemies(dt) {
       const nx = w0 * e.p0.x + w1 * e.p1.x + w2 * e.p2.x + w3 * s.x; e.vx = (nx - e.x) / Math.max(dt, 0.001); e.x = nx;
       e.y = w0 * e.p0.y + w1 * e.p1.y + w2 * e.p2.y + w3 * s.y; e.z = e.z0 * (1 - smooth(Math.min(1, u / 0.55)));
       if (u >= 1) { e.state = 'form'; e.vx = 0; }
-    } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; formed.push(e); }
+    } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; if (e.laser) updateLancer(e, dt); else formed.push(e); }
     else if (e.state === 'dive') { updateDive(e, dt); diving++; }
     else updateBoss(e, dt);
     if (P.alive && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) { hitPlayer(); if (e.type !== 'boss') damageEnemy(e, 40); }
@@ -912,7 +969,18 @@ function updateEnemies(dt) {
     // model
     const g = e.g; g.position.set(TX(e.x), TY(e.y), e.z);
     const tilt = clamp(-e.vx / 320, -0.6, 0.6), t = G.time + e.ph;
-    if (e.type === 'mite') { g.rotation.y = t * 2.2; g.rotation.z = tilt; }
+    if (e.laser) {
+      const L = e.laser, len = (H + 60 - e.y) / g.scale.y, eye = g.userData.eye, on = e.state === 'form' && L.phase !== 'idle';
+      g.rotation.set(0, Math.sin(t * 1.3) * 0.25, 0); e.beam.visible = on; e.core.visible = on && L.phase === 'fire';
+      if (on) {
+        const k = L.phase === 'charge' ? 1 - L.t / 1.3 : 1, w = L.phase === 'charge' ? 1 + k * 2.5 + (Math.random() < 0.4 ? 1.5 : 0) : BEAM_HALF * 2 + 2 + Math.sin(G.time * 45) * 2;
+        e.beam.material = L.phase === 'charge' ? M.beamAim : M.beamOn; e.beam.scale.set(w / g.scale.x, len, 1); e.beam.position.set(0, -14 - len / 2, 0);
+        e.core.scale.set(4.5 / g.scale.x, len, 1); e.core.position.set(0, -14 - len / 2, 0.5); e.beam.rotation.y = e.core.rotation.y = -g.rotation.y;
+        const es = L.phase === 'charge' ? 3 + k * 5 : 8 + Math.sin(G.time * 45); eye.scale.set(es, es, es);
+        if (L.phase === 'fire' && Math.random() < 0.5) burst(e.x + rand(-5, 5), rand(e.y + 20, H), [1, 0.35, 0.4], 1, 60, 0.25);
+      } else eye.scale.set(3, 3, 3);
+    }
+    else if (e.type === 'mite') { g.rotation.y = t * 2.2; g.rotation.z = tilt; }
     else if (e.type === 'wasp') { g.rotation.y = Math.sin(t * 3) * 0.5; g.rotation.z = tilt; }
     else if (e.type === 'weaver') { g.rotation.x = t * 1.7; g.rotation.y = t * 2.3; }
     else if (e.type === 'splitter') { g.rotation.z = t * 2.5; g.rotation.y = Math.sin(t * 2) * 0.6; }
@@ -924,14 +992,14 @@ function updateEnemies(dt) {
   const alive = G.enemies.length, maxDive = Math.min(6, 2 + Math.floor(G.wave / 3));
   G.diveT -= dt * (alive <= 4 ? 4 : 1);
   if (G.diveT <= 0 && formed.length && diving < maxDive) {
-    startDive(formed[(Math.random() * formed.length) | 0]);
+    startDive(formed[(Math.random() * formed.length) | 0]);   // lancers are not in this list: they hold their place
     G.diveT = Math.max(0.45, 2.3 - G.wave * 0.12) * rand(0.6, 1.3);
   }
   if (G.wave >= 2 && !G.boss) {
     G.shootT -= dt;
     if (G.shootT <= 0 && formed.length) {
       const pool = formed.filter(e => e.type === 'wasp' || e.type === 'beetle' || G.wave >= 7), e = pool[(Math.random() * pool.length) | 0];
-      if (e) { fireE(e.x, e.y + 10, lerp(Math.PI / 2, aimAt(e.x, e.y), 0.6), ebSpeed() * 0.9); SFX.eshoot(); }
+      if (e) { const a = lerp(Math.PI / 2, aimAt(e.x, e.y), 0.6); if (e.type === 'wasp') fireDart(e.x, e.y + 10, a); else fireE(e.x, e.y + 10, a, ebSpeed() * 0.8, 5); SFX.eshoot(); }
       G.shootT = Math.max(0.6, 3.2 - G.wave * 0.16) * rand(0.7, 1.3);
     }
   }
@@ -946,7 +1014,7 @@ function updateGame(dt) {
   else if (G.state === 'clear') {
     G.clearT -= dt;
     // the upgrade screen waits until the last enemy shots have left the field, so nothing vanishes mid-flight
-    if (G.clearT <= 0 && P.alive) { if (G.wave % DRAFT_EVERY !== 0) nextWave(); else if (!G.eb.length) { if (G.bossDown) startCut('dock', 2.8, arriveStation); else startCut('shuttle', 2.3, () => openDraft('wave')); } }
+    if (G.clearT <= 0 && P.alive) { if (G.wave % DRAFT_EVERY !== 0) nextWave(); else if (!G.eb.length && !G.em.length) { if (G.bossDown) startCut('dock', 2.8, arriveStation); else startCut('shuttle', 2.3, () => openDraft('wave')); } }
   }
   else if (G.state === 'dying') { G.dieT -= dt / 0.45; if (G.dieT <= 0) endRun(); }
 }
@@ -1032,10 +1100,18 @@ function syncScene(dt) {
   pbMesh.count = n; pbMesh.instanceMatrix.needsUpdate = true; pbMesh.instanceColor.needsUpdate = true;
   n = 0;
   for (const b of G.eb) {
-    dummy.position.set(TX(b.x), TY(b.y), 0); dummy.rotation.set(0, 0, 0); const er = b.r * (0.95 + Math.sin(G.time * 14 + b.x) * 0.12); dummy.scale.set(er, er, er); dummy.updateMatrix();
-    ebMesh.setMatrixAt(n, dummy.matrix); ebMesh.setColorAt(n, tmpC.set(EB_COL)); n++;
+    dummy.position.set(TX(b.x), TY(b.y), 0);
+    if (b.kind === 1) { dummy.rotation.set(0, 0, Math.atan2(-b.vy, b.vx) - Math.PI / 2); dummy.scale.set(b.r * 0.8, b.r * 2.6, b.r * 0.8); }   // dart: a streak along its path
+    else { dummy.rotation.set(0, 0, 0); const er = b.r * (0.95 + Math.sin(G.time * 14 + b.x) * 0.12); dummy.scale.set(er, er, er); }
+    dummy.updateMatrix(); ebMesh.setMatrixAt(n, dummy.matrix); ebMesh.setColorAt(n, tmpC.set(b.kind === 1 ? DART_COL : EB_COL)); n++;
   }
   ebMesh.count = n; ebMesh.instanceMatrix.needsUpdate = true; ebMesh.instanceColor.needsUpdate = true;
+  n = 0;
+  for (const m of G.em) {
+    dummy.position.set(TX(m.x), TY(m.y), 0); dummy.rotation.set(0, 0, Math.atan2(-m.vy, m.vx) - Math.PI / 2); dummy.scale.set(4, 15, 4); dummy.updateMatrix();
+    emMesh.setMatrixAt(n, dummy.matrix); emMesh.setColorAt(n, tmpC.set(EM_COL)); n++;
+  }
+  emMesh.count = n; emMesh.instanceMatrix.needsUpdate = true; emMesh.instanceColor.needsUpdate = true;
   // particles
   n = 0;
   for (let i = parts.length - 1; i >= 0; i--) {
@@ -1096,7 +1172,7 @@ function toggleMute() {
 function resetField() {
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
-  G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.queue = []; G.blastQ = []; G.boss = null; $('bossbar').hidden = true;
+  G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; G.boss = null; $('bossbar').hidden = true;
   G.cut = null; G.docked = false; ST.on = false; SH.on = false; SH.leave = false;
 }
 function titleScene() {
@@ -1144,7 +1220,7 @@ function drawDraft() {
   $('draftLoadout').innerHTML = loadoutHtml();
 }
 function openDraft(kind) {
-  G.state = 'draft'; G.draftKind = kind; G.eb.length = 0; G.cards = rollCards(kind);
+  G.state = 'draft'; G.draftKind = kind; G.eb.length = 0; G.em.length = 0; G.cards = rollCards(kind);
   $('draftEyebrow').textContent = kind === 'head' ? 'Station workshop · head start' : kind === 'boss' ? 'Station workshop · rare booster' : 'Supply shuttle · wave ' + G.wave + ' cleared';
   drawDraft(); show('scrDraft');
 }
@@ -1398,7 +1474,7 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 resize(); soundLabels(); showTitle();
-window.__swarmfall = { G, P, S, ST, SH, UP, meta, recalc, startRun, nextWave, choose, openDraft, issueUrl, spawnPick };
+window.__swarmfall = { G, P, S, ST, SH, UP, meta, spawnEnemy, fireMissile, startEnter, recalc, startRun, nextWave, choose, openDraft, issueUrl, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
