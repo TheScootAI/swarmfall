@@ -7,7 +7,7 @@ A roguelite swarm shooter played mostly on phones. The whole game is `index.html
 - **Enemy guide artifact:** https://claude.ai/artifact/18YkQbSpHhSxGimJ2GmKNq (source in `artifacts/enemy-guide/`).
 - **Upgrade guide artifact:** https://claude.ai/artifact/EALugShxKLeMhoE6pxT3TC (every booster and station module; written by `node tools/upgrade-guide.js` into `artifacts/upgrade-guide/`).
 - **Repo:** `TheScootAI/swarmfall`. `main` is the live game.
-- **Branch `graphics-upgrade`:** the three.js r187 port and the new graphics (glow, reflections, nebula, energy shield, lights), for the owner to try before it goes live. It is staged at STAGING_URL (built with `node tools/artifact.js <out.html> "Swarmfall Staging"`). Do not publish this branch to the live game artifact or merge it into `main` until the owner says so.
+- **Branch `graphics-upgrade`:** the three.js r187 port and the new graphics (glow, reflections, nebula, energy shield, lights), for the owner to try before it goes live. It is staged at https://claude.ai/artifact/TDjavC3eeknZRiZyJmQsWR (built with `node tools/artifact.js <out.html> "Swarmfall Staging"`). Do not publish this branch to the live game artifact or merge it into `main` until the owner says so.
 
 The `swarmfall-dev` skill (`.claude/skills/swarmfall-dev/`) has the step-by-step workflow for a change. Use it.
 
