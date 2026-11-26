@@ -5,7 +5,7 @@
 const { chromium, devices } = require('playwright');
 const fs = require('fs'), path = require('path');
 const OUT = process.argv[2] || path.join(__dirname, 'out', 'shots'), QUERY = process.argv[3] ? '?' + process.argv[3] : '';
-const BOSSES_ONLY = process.argv[4] === 'bosses';   // only the last five pictures, of the Fracture Cube and the Beam Warden
+const BOSSES_ONLY = process.argv[4] === 'bosses';   // only the pictures of the four bosses after the Hive Core
 const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
 
 (async () => {
@@ -79,6 +79,23 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   await phase('fire', 0.9); await snap(page, '13-warden-beams');
   await phase('idle', 9); await phase('charge', 9); await phase('fire', 0.9); await snap(page, '14-warden-second-fan');
 
-  console.log('wrote 14 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
+  // the Siege Beetle: shell shut with missiles out, its lane marked, mid-charge, and open at the top
+  page = await open(); await start(page); await safe(page);
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 23; s.nextWave(); });
+  const mode = (m, extra) => page.waitForFunction(([m, extra]) => { const b = window.__swarmfall.G.boss; return b && b.mode === m && (!extra || extra === 'missiles' && window.__swarmfall.G.em.length >= 2 || extra === 'low' && b.y > 380 || extra === 'late' && b.pt < 0.45 || extra === 'wide' && b.open > 0.95 && b.pt < 1.8); }, [m, extra], { timeout: 180000 });
+  await mode('guard', 'missiles'); await snap(page, '15-siege-missiles');
+  await mode('aim', 'late'); await snap(page, '16-siege-lane');
+  await mode('charge', 'low'); await snap(page, '17-siege-charge');
+  await mode('open', 'wide'); await snap(page, '18-siege-open');
+
+  // the Triad: its pinwheel of shots, then with one core left
+  page = await open(); await start(page); await safe(page);
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 29; s.nextWave(); });
+  await page.waitForFunction(() => { const b = window.__swarmfall.G.boss; return b && b.hub && b.hub.wheel > 0 && b.hub.wheel < 0.5; }, null, { timeout: 180000 }); await snap(page, '19-triad-pinwheel');
+  await page.evaluate(() => { const s = window.__swarmfall, o = s.G.enemies.filter(e => e.def.boss).slice(0, 2); for (const e of o) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); });
+  await bodies(page, 1);
+  await page.waitForFunction(() => { const b = window.__swarmfall.G.boss; return b && b.hub && b.hub.wheel > 0 && b.hub.wheel < 0.5; }, null, { timeout: 180000 }); await snap(page, '20-triad-last-core');
+
+  console.log('wrote 20 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
   await browser.close();
 })();

@@ -408,7 +408,7 @@ const M = {
   trip: pbr(0x3d7bff, 0x0c1f66),
   lancer: pbr(0xff3355, 0x5a0a18), lancerShell: pbr(0x3a1638, 0x12061a, 0.7, 0.35), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: addMat(0xffffff, 0.95),   // no halo on the white core: blurred, it would turn the red beam pink
  
-  eye: basic(0xffffff), elite: glowing(basic(ENEMY_RED)), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
+  siegeCore: glowing(basic(0xfff1c0)), eye: basic(0xffffff), elite: glowing(basic(ENEMY_RED)), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
   scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), drone: pbr(0xc7b0ff, 0x2a1a5a),
   // the shield: an energy bubble that is bright at its rim, with bands rising through it
   shield: glowing(new THREE.ShaderMaterial({
@@ -682,19 +682,23 @@ const ET = {
   boss: { hp: 950, r: 34, col: [1, 0.31, 0.55], boss: true },      // the Hive Core
   cube: { hp: 1000, r: 36, col: [1, 0.6, 0.2], boss: true },        // the Fracture Cube: hp is all of its pieces together
   warden: { hp: 1050, r: 34, col: [1, 0.25, 0.4], boss: true },     // the Beam Warden
+  siege: { hp: 700, r: 34, col: [0.18, 0.84, 0.71], boss: true },     // the Siege Beetle: its shell stops most damage, so it needs less health
+  triad: { hp: 1000, r: 20, col: [0.24, 0.48, 1], boss: true },       // the Triad: hp is its three cores together
 };
 const BOSS_TINT = [0xff4f8b, 0xffb02e, 0x5fe8ff, 0xa56bff];
 const RARITY = ['Common', 'Rare', 'Prototype'];
 const CATEGORY = { w: 'Weapons', a: 'Armor', h: 'Shields', s: 'Specials' };
 const DRAFT_EVERY = 3, BOSS_EVERY = 6;   // a booster after every 3rd wave; every 6th wave is a boss, so its booster is the rare one
 // The bosses, in the order they are met: one on every BOSS_EVERY-th wave, round and round, tougher each time
-// (waves 6, 12, 18, then the Hive Core again on 24). tip is the line under the name when it arrives: a first-time
+// (waves 6, 12, 18, 24, 30, then the Hive Core again on 36). tip is the line under the name when it arrives: a first-time
 // hint() would never show, since nobody reaches these waves in their first few runs. short is the name on the HUD
 // of a narrow phone, where the full one would run into the scrap count.
 const BOSSES = [
   { type: 'boss', name: 'Hive Core', short: 'Core', down: 'CORE DESTROYED', tip: '' },
   { type: 'cube', name: 'Fracture Cube', short: 'Cube', down: 'CUBE DESTROYED', tip: 'It breaks in two. So do the halves.' },
   { type: 'warden', name: 'Beam Warden', short: 'Warden', down: 'WARDEN DESTROYED', tip: 'Thin red lines show where its beams will fire' },
+  { type: 'siege', name: 'Siege Beetle', short: 'Beetle', down: 'BEETLE DESTROYED', tip: 'Its shell stops most shots. It opens after it charges.' },
+  { type: 'triad', name: 'Triad', short: 'Triad', down: 'TRIAD DESTROYED', tip: 'Three cores. The fewer are left, the faster they spin.' },
 ];
 const bossFor = n => BOSSES[(Math.round(n / BOSS_EVERY) - 1) % BOSSES.length];
 // Fracture Cube. share: the part of the whole fight's health each body has, by generation (1 whole, 2 halves,
@@ -713,6 +717,18 @@ const CUBE = { share: [0.4, 0.15, 0.075], size: [1, 0.68, 0.46], r: [36, 25, 17]
 // mitesMore: how many more on each later visit (the owner asked for mites during the beams, and for more next
 // time). helpers: it releases no more while this many of its mites and wasps are still flying.
 const WARDEN = { charge: 1.2, fire: 1.3, spread: 0.3, max: 5, afterMissiles: 3.6, gap: 1.3, darts: 3, mites: 3, mitesMore: 2, helpers: 8 };
+// Siege Beetle. armour: the share of a hit that gets through while its shell is shut. salvo: missiles in a
+// salvo the first time it is met, salvoGap seconds apart, and afterSalvo: seconds it waits afterwards so they can
+// be shot down. fan: balls in its fan. aim: seconds it marks its lane before a charge (it slides over the ship
+// for the first part, then stops). speed and back: how fast it charges down and climbs back; backFast is the
+// climb while it is still level with the ship's rows, so a shield hit there cannot be followed by a second hit.
+// open: seconds it hangs open at the top after a charge. gap: seconds between its attacks.
+const SIEGE = { armour: 0.4, salvo: 4, salvoGap: 0.4, afterSalvo: 2.3, fan: 7, aim: 1.1, speed: 640, back: 210, backFast: 430, open: 2.6, gap: 1.3 };
+// Triad. orbit: how far its cores circle from the centre. spin: how fast, in radians a second, and spinMore: how
+// much faster for each core destroyed. gap: seconds between attacks. volleys and fan: aimed fans fired by the
+// cores in turn, and balls in each. wheel: seconds every core fires straight outward as they spin, one ball each
+// every wheelGap seconds. triplets: triplets it releases. All are for the first time it is met.
+const TRIAD = { orbit: 46, spin: 0.9, spinMore: 0.45, gap: 1.5, volleys: 4, fan: 3, wheel: 3, wheelGap: 0.18, triplets: 2 };
 const isBossWave = n => n > 0 && n % BOSS_EVERY === 0;
 // The wave each enemy, and each change to the formation, first appears. Tune arrivals here: buildWave() and
 // the formation-fire code read this table, and tools/smoke.js checks that the game follows it.
@@ -840,6 +856,14 @@ function buildEnemy(type, tint) {
   else if (type === 'splitter') { add(geo.box, M.splitA, 10, 10, 10, -5, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 10, 10, 10, 5, 0, 0, Math.PI / 4); }
   else if (type === 'lancer') { add(geo.oct, M.lancer, 8, 16, 8); add(geo.box, M.lancerShell, 4, 18, 5, -9, -2); add(geo.box, M.lancerShell, 4, 18, 5, 9, -2); g.userData.eye = add(geo.sph, M.eye, 3, 3, 3, 0, -13, 4); }
   else if (type === 'beetle') { add(geo.ico, M.beetle, 15, 13, 11); add(geo.box, M.shell, 25, 5, 8, 0, 5, 5); add(geo.oct, M.eye, 2.4, 2.4, 2.4, -5, -5, 9); add(geo.oct, M.eye, 2.4, 2.4, 2.4, 5, -5, 9); }
+  else if (type === 'siege') {   // the Siege Beetle: a great beetle. Its two shell halves slide apart to show the bright core it hides
+    const body = new THREE.Group(); body.add(part(geo.ico, M.beetle, 30, 26, 22), part(geo.oct, M.eye, 4, 4, 4, -11, -12, 18), part(geo.oct, M.eye, 4, 4, 4, 11, -12, 18));
+    const core = part(geo.sph, M.siegeCore, 11, 11, 8, 0, 9, 12), shL = part(geo.box, M.shell, 27, 13, 18, -13.5, 9, 10), shR = part(geo.box, M.shell, 27, 13, 18, 13.5, 9, 10);
+    body.add(core, shL, shR); g.add(body); Object.assign(g.userData, { body, core, shL, shR });
+  } else if (type === 'triad') {   // one core of the Triad: a large triplet on a spoke that reaches back to the centre they share
+    const spin = new THREE.Group(); for (let k = 0; k < 3; k++) { const a = Math.PI / 2 + k * TAU / 3; spin.add(part(geo.cone, M.trip, 9, 16, 9, Math.cos(a) * 10, Math.sin(a) * 10, 0, a - Math.PI / 2)); }
+    spin.add(part(geo.ico, M.eye, 5.5, 5.5, 5.5)); g.add(spin, part(geo.box, M.coreRing, TRIAD.orbit, 3, 3, -TRIAD.orbit / 2, 0, -3)); g.userData.spin = spin;
+  }
   else if (type === 'cube') {   // the Fracture Cube: a giant splitter. Halves and quarters are the same model, scaled down
     add(geo.box, M.splitA, 34, 34, 34, -15, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 34, 34, 34, 15, 0, 0, Math.PI / 4);
     add(geo.box, M.coreRing, 35.5, 7, 35.5, -15, 0, 0, Math.PI / 4); add(geo.box, M.coreRing, 7, 35.5, 35.5, 15, 0, 0, Math.PI / 4);   // dark bands: the lines it will break along
@@ -992,6 +1016,8 @@ function updateDive(e, dt) {
 const bossLv = e => Math.min(4, Math.floor((e.tier - 1) / BOSSES.length));
 function spawnBoss(tier) {
   const B = bossFor(G.wave), mul = (1 + 0.55 * (tier - 1)) * Math.pow(1.2, tier - 1), cube = B.type === 'cube';
+  G.bossMax = ET[B.type].hp * mul; $('bossbar').hidden = false; SFX.warn();
+  if (B.type === 'triad') { spawnTriad(tier, mul); return; }
   const e = spawnEnemy(B.type, null, null, { tint: BOSS_TINT[(tier - 1) % 4], boss: true, hpMul: mul * (cube ? CUBE.share[0] : 1) });
   e.state = 'boss'; e.tier = tier; e.intro = 2.6; e.atkT = 1.2; e.atk = 0; e.burst = 0; e.burstT = 0; e.sum = 0; e.sumN = 0; e.sumT = 0; e.x = W / 2; e.y = -90; e.z = -420;
   e.after = 0;   // health still to come from the pieces it will break into (the Fracture Cube only)
@@ -1001,14 +1027,107 @@ function spawnBoss(tier) {
     e.beams = [];   // added after spawnEnemy listed the model's meshes, so the hit-flash leaves the beams alone
     for (let i = 0; i < WARDEN.max; i++) { const a = part(geo.plane, M.beamAim, 1, 1, 1), c = part(geo.plane, M.beamCore, 1, 1, 1); a.visible = c.visible = false; e.g.add(a, c); e.beams.push({ a, c }); }
   }
-  G.boss = e; G.bossMax = e.def.hp * mul; $('bossbar').hidden = false; SFX.warn();
+  if (B.type === 'siege') {
+    e.mode = 'guard'; e.pt = 0; e.open = 0; e.salvo = 0; e.salvoT = 0; e.again = false;
+    e.lines = [part(geo.plane, M.beamAim, 1, 1, 1), part(geo.plane, M.beamAim, 1, 1, 1)];   // the two thin lines that mark the lane it will charge down
+    for (const l of e.lines) { l.visible = false; e.g.add(l); }
+  }
+  G.boss = e;
+}
+// The Triad is three bodies around one centre. The centre (hub) is a plain record they share: it carries the
+// position, the spin and the attack timers, and is moved once a frame by whichever core is updated first.
+function spawnTriad(tier, mul) {
+  const hub = { x: W / 2, y: -90, z: -420, t: 0, ang: rand(TAU), intro: 2.6, atkT: 1.4, atk: 0, seq: 0, seqT: 0, shot: 0, wheel: 0, wheelT: 0, alive: 3, stamp: -1, lv: 0 };
+  for (let k = 0; k < 3; k++) {
+    const e = spawnEnemy('triad', null, null, { boss: true, hpMul: mul / 3, x: W / 2, y: -90 });
+    e.state = 'boss'; e.tier = tier; e.intro = 0; e.after = 0; e.hub = hub; e.slot = k; e.oa = 0; e.z = -420; G.boss = e;
+  }
+  hub.lv = bossLv(G.boss);
 }
 // Health left in the whole boss fight: every body still alive, plus the pieces they have yet to break into.
 function bossLeft() { let h = 0; for (const e of G.enemies) if (!e.dead && e.def.boss) h += Math.max(0, e.hp) + (e.after || 0); return h; }
 function updateBoss(e, dt) {
   // every boss glides in from the top the same way. The sway clock starts only once the entrance is over, so it glides out from the centre instead of jumping sideways
   if (e.intro > 0) { e.intro -= dt; const k = smooth(clamp(1 - e.intro / 2.6, 0, 1)); e.x = W / 2; e.y = lerp(-90, 130, k); e.z = lerp(-420, 0, k); e.t = 0; return; }
-  if (e.type === 'cube') updateCube(e, dt); else if (e.type === 'warden') updateWarden(e, dt); else updateCore(e, dt);
+  if (e.type === 'cube') updateCube(e, dt); else if (e.type === 'warden') updateWarden(e, dt); else if (e.type === 'siege') updateSiege(e, dt); else if (e.type === 'triad') updateTriad(e, dt); else updateCore(e, dt);
+}
+
+// ---- Siege Beetle ----
+// Shell shut (guard), it sways across the top firing missile salvos and fans of balls, and most damage bounces
+// off. Then it slides over the ship, marks a lane with two thin red lines (aim), charges down it, climbs back
+// (back) and hangs open at the top for a while (open). Climbing and open, its shell is apart and shots hurt it in full.
+const siegeClear = () => shipY() - 130;   // above this height the Siege Beetle's body is clear of the ship's rows
+function updateSiege(e, dt) {
+  const Q = SIEGE, lv = bossLv(e), rage = e.hp < e.maxHp * 0.35;
+  e.open += ((e.mode === 'back' || e.mode === 'open' ? 1 : 0) - e.open) * Math.min(1, 8 * dt);
+  if (e.mode === 'guard') {
+    e.t += dt; e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y += (130 + Math.sin(e.t * 1.1) * 12 - e.y) * Math.min(1, 6 * dt);
+    if (e.salvo > 0) { e.salvoT -= dt; if (e.salvoT <= 0) { fireMissile(e.x + (e.salvo % 2 ? -30 : 30), e.y + 8); e.salvo--; e.salvoT = Q.salvoGap; } return; }
+    e.atkT -= dt * (rage ? 1.4 : 1);
+    if (e.atkT > 0) return;
+    e.atkT = Q.gap - 0.1 * lv;
+    const k = e.atk++ % 3;
+    if (k === 0) { e.salvo = Math.min(Q.salvo + lv, EM_MAX - G.em.length); e.salvoT = 0; e.atkT = Q.afterSalvo; }
+    else if (k === 1) { const n = Q.fan + 2 * lv; for (let i = 0; i < n; i++) fireE(e.x, e.y + 22, Math.PI / 2 + (i - (n - 1) / 2) * 0.2, ebSpeed() * 0.85, 5); SFX.eshoot(); }
+    else { e.mode = 'aim'; e.pt = Q.aim; SFX.charge(); }
+  } else if (e.mode === 'aim') {
+    e.pt -= dt;
+    if (e.pt > Q.aim * 0.4) e.x = clamp(e.x + clamp(P.x - e.x, -260 * dt, 260 * dt), e.rad, W - e.rad);   // follows the ship, then holds still so the lane can be left
+    if (e.pt <= 0) { e.mode = 'charge'; SFX.dive(); }
+  } else if (e.mode === 'charge') {
+    e.y += Q.speed * dt;
+    if (e.y >= H - 44) { e.y = H - 44; e.mode = 'back'; shake(8); ringFx(e.x, e.y, 20, 110, 0xffffff, 0.4); burst(e.x, e.y + 20, FLASH_RGB, 14, 160, 0.4); SFX.boom(); }
+  } else if (e.mode === 'back') {
+    e.y -= (e.y > siegeClear() ? Q.backFast : Q.back) * dt;
+    if (e.y <= 130) {
+      e.y = 130;
+      if (rage && !e.again) { e.again = true; e.mode = 'aim'; e.pt = Q.aim * 0.85; SFX.charge(); }   // badly hurt, it charges twice before it rests
+      else { e.again = false; e.mode = 'open'; e.pt = Q.open; }
+    }
+  } else {
+    e.pt -= dt; e.x += (clamp(e.x, 70, W - 70) - e.x) * Math.min(1, 3 * dt);   // drifts back inside its sway while it hangs open
+    if (e.pt <= 0) { e.mode = 'guard'; e.atkT = 0.7; e.t = Math.asin(clamp((e.x - W / 2) / (W / 2 - 70), -1, 1)) / 0.5; }   // the sway picks up from where it is
+  }
+}
+
+// ---- Triad ----
+// Three cores circle one centre, which sways across the top. They take turns firing aimed fans, then all fire
+// straight outward as they spin (a pinwheel of slow balls), then release triplets. Each core destroyed makes the
+// others spin and fire faster.
+function triadAttack(h, dt) {
+  const T = TRIAD, gone = 3 - h.alive;
+  if (h.wheel > 0) {   // the pinwheel
+    h.wheel -= dt; h.wheelT -= dt;
+    if (h.wheelT <= 0) { h.wheelT = T.wheelGap * (1 - 0.15 * gone); for (const o of G.enemies) if (!o.dead && o.hub === h) fireE(o.x, o.y, o.oa, ebSpeed() * 0.7); SFX.eshoot(); }
+    return;
+  }
+  if (h.seq > 0) {     // aimed fans, one core at a time
+    h.seqT -= dt;
+    if (h.seqT <= 0) {
+      h.seqT = 0.42; h.seq--;
+      let i = h.shot++ % h.alive;
+      for (const o of G.enemies) if (!o.dead && o.hub === h && i-- === 0) { const n = T.fan + gone, a = aimAt(o.x, o.y); for (let k = 0; k < n; k++) fireE(o.x, o.y, a + (k - (n - 1) / 2) * 0.2, ebSpeed() * 0.9, 5); break; }
+      SFX.eshoot();
+    }
+    return;
+  }
+  h.atkT -= dt;
+  if (h.atkT > 0) return;
+  h.atkT = T.gap - 0.15 * h.lv;
+  const k = h.atk++ % 3;
+  if (k === 0) { h.seq = T.volleys + h.lv; h.seqT = 0; }
+  else if (k === 1) { h.wheel = T.wheel; h.wheelT = 0; }
+  else { const n = Math.max(0, Math.min(T.triplets + h.lv, Math.floor((18 - G.enemies.length) / 3))); for (let i = 0; i < n; i++) launchDive(spawnEnemy('triplet', null, null, { x: h.x + (i - (n - 1) / 2) * 40, y: h.y })); }   // launchDive is what breaks a triplet into three
+}
+function updateTriad(e, dt) {
+  const h = e.hub, T = TRIAD;
+  if (h.stamp !== G.time) {
+    h.stamp = G.time; let alive = 0; for (const o of G.enemies) if (!o.dead && o.hub === h) alive++; h.alive = alive;
+    h.ang += (T.spin + T.spinMore * (3 - alive)) * dt;
+    if (h.intro > 0) { h.intro -= dt; const k = smooth(clamp(1 - h.intro / 2.6, 0, 1)); h.x = W / 2; h.y = lerp(-90, 150, k); h.z = lerp(-420, 0, k); h.t = 0; }
+    else { h.t += dt; h.x = W / 2 + Math.sin(h.t * 0.45) * (W / 2 - 96); h.y = 150 + Math.sin(h.t) * 12; h.z = 0; triadAttack(h, dt); }
+  }
+  e.oa = h.ang + e.slot * TAU / 3; e.x = h.x + Math.cos(e.oa) * T.orbit; e.y = h.y + Math.sin(e.oa) * T.orbit; e.z = h.z;
 }
 
 // ---- Fracture Cube ----
@@ -1188,6 +1307,7 @@ function despawn(e) { e.dead = true; restoreMats(e); scene.remove(e.g); }   // g
 function clearBoss() { G.boss = null; $('bossbar').hidden = true; bossFrac = -1; }
 function damageEnemy(e, d) {
   if (e.dead || e.born > 0) return;   // a piece of the Fracture Cube cannot be hurt for a moment after it breaks off
+  if (e.type === 'siege' && e.open < 0.5) d *= SIEGE.armour;   // the Siege Beetle's shell is shut
   e.hp -= d;
   // a boss is under constant fire, so it only blinks now and then instead of staying white
   if (e.flash <= 0 && (!e.def.boss || G.time - (e.blinkAt || 0) > 0.22)) { for (const m of e.meshes) m.material = M.flash; e.flash = 0.06; e.blinkAt = G.time; }
@@ -1428,6 +1548,16 @@ function updateEnemies(dt) {
     else if (e.type === 'splitter') { g.rotation.z = t * 2.5; g.rotation.y = Math.sin(t * 2) * 0.6; }
     else if (e.type === 'triplet') { g.rotation.z = t * 1.6; g.rotation.y = Math.sin(t * 1.4) * 0.4; }
     else if (e.type === 'beetle') { g.rotation.y = Math.sin(t * 1.5) * 0.35; g.rotation.z = tilt * 0.5; }
+    else if (e.type === 'triad') { g.rotation.z = -(e.oa || 0); g.userData.spin.rotation.z = t * 2.2; }   // the spoke points back at the centre
+    else if (e.type === 'siege') {
+      const u = g.userData, o = e.open || 0, aim = e.mode === 'aim' || e.mode === 'charge' || (e.mode === 'back' && e.y > siegeClear());   // the lane stays marked until its body has climbed clear of the ship's rows
+      u.body.rotation.y = Math.sin(t * 1.3) * 0.25 * (1 - o); u.shL.position.x = -13.5 - o * 17; u.shR.position.x = 13.5 + o * 17; u.shL.rotation.z = o * 0.5; u.shR.rotation.z = -o * 0.5;
+      const cs = 11 * (0.6 + o * (0.5 + Math.sin(G.time * 9) * 0.08)); u.core.scale.set(cs, cs, cs * 0.75); u.core.visible = o > 0.08;   // hidden while shut: glowing things are drawn through whatever covers them
+      if (e.lines) for (let i = 0; i < 2; i++) {
+        const l = e.lines[i], len = H + 70 - e.y; l.visible = aim;
+        if (aim) { l.scale.set(2 + (Math.random() < 0.4 ? 1.5 : 0), len, 1); l.position.set((i ? 1 : -1) * e.rad, -len / 2, 0); }
+      }
+    }
     else if (e.type === 'cube') { g.rotation.z = t * (0.5 + 0.5 * (e.gen || 0)); g.rotation.y = Math.sin(t * 1.3) * 0.4; }
     else if (e.type === 'warden') {
       const B = e.bm, on = !!B && B.phase !== 'idle', fire = on && B.phase === 'fire', k = on && !fire ? 1 - B.t / WARDEN.charge : 1, eye = g.userData.eye;
@@ -1973,7 +2103,7 @@ function frame(now) {
 }
 resize(); soundLabels(); gfxLabels(); showTitle();
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, SIEGE, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

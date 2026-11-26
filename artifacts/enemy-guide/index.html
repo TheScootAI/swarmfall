@@ -24,7 +24,7 @@ header{display:flex;flex-direction:column;gap:14px}
 
 /* summary strip: every wave 1-20 and what turns up */
 .strip-wrap{overflow-x:auto;margin-inline:-4px;padding:4px}
-.strip{display:grid;grid-template-columns:repeat(26,minmax(30px,1fr));gap:3px;min-width:800px}
+.strip{display:grid;grid-template-columns:repeat(31,minmax(28px,1fr));gap:3px;min-width:940px}
 .strip div{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px;background:var(--panel);font:700 .8rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--dim)}
 .strip div.core{background:color-mix(in srgb,var(--core) 26%,var(--panel));color:var(--ink)}
 .strip div.new{color:var(--ink)}
@@ -99,10 +99,10 @@ footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);paddin
   </header>
 
   <section aria-labelledby="h-strip" style="display:flex;flex-direction:column;gap:12px">
-    <h2 id="h-strip">Waves 1 to 26 at a glance</h2>
+    <h2 id="h-strip">Waves 1 to 31 at a glance</h2>
     <div class="strip-wrap">
       <div class="strip" role="list">
-        <div class="new" role="listitem">1<i></i></div><div class="new" role="listitem">2<i></i></div><div role="listitem">3<i></i></div><div role="listitem">4<i></i></div><div class="new" role="listitem">5<i></i></div><div class="core" role="listitem">6<i></i></div><div class="new" role="listitem">7<i></i></div><div class="new" role="listitem">8<i></i></div><div role="listitem">9<i></i></div><div class="new" role="listitem">10<i></i></div><div role="listitem">11<i></i></div><div class="core" role="listitem">12<i></i></div><div class="new" role="listitem">13<i></i></div><div role="listitem">14<i></i></div><div class="new" role="listitem">15<i></i></div><div role="listitem">16<i></i></div><div role="listitem">17<i></i></div><div class="core" role="listitem">18<i></i></div><div role="listitem">19<i></i></div><div class="new" role="listitem">20<i></i></div><div role="listitem">21<i></i></div><div role="listitem">22<i></i></div><div role="listitem">23<i></i></div><div class="core" role="listitem">24<i></i></div><div class="new" role="listitem">25<i></i></div><div role="listitem">26<i></i></div>
+        <div class="new" role="listitem">1<i></i></div><div class="new" role="listitem">2<i></i></div><div role="listitem">3<i></i></div><div role="listitem">4<i></i></div><div class="new" role="listitem">5<i></i></div><div class="core" role="listitem">6<i></i></div><div class="new" role="listitem">7<i></i></div><div class="new" role="listitem">8<i></i></div><div role="listitem">9<i></i></div><div class="new" role="listitem">10<i></i></div><div role="listitem">11<i></i></div><div class="core" role="listitem">12<i></i></div><div class="new" role="listitem">13<i></i></div><div role="listitem">14<i></i></div><div class="new" role="listitem">15<i></i></div><div role="listitem">16<i></i></div><div role="listitem">17<i></i></div><div class="core" role="listitem">18<i></i></div><div role="listitem">19<i></i></div><div class="new" role="listitem">20<i></i></div><div role="listitem">21<i></i></div><div role="listitem">22<i></i></div><div role="listitem">23<i></i></div><div class="core" role="listitem">24<i></i></div><div class="new" role="listitem">25<i></i></div><div role="listitem">26<i></i></div><div role="listitem">27<i></i></div><div role="listitem">28<i></i></div><div role="listitem">29<i></i></div><div class="core" role="listitem">30<i></i></div><div role="listitem">31<i></i></div>
       </div>
     </div>
     <div class="key"><span><i></i>Something new arrives</span><span><i class="c"></i>Boss wave</span></div>
@@ -133,13 +133,13 @@ footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);paddin
               <dl><dt>Threat</dt><dd>Zigzags side to side as it dives, so it is hard to line up with or dodge.</dd><dt class="beat">Beat it</dt><dd>Shoot it while it sits. Once it dives, wait where its weave crosses the middle.</dd></dl></div></article>
         </div></div>
       <div class="stop boss"><div class="rail"><div class="wave"><small>BOSS</small>6</div></div>
-        <div class="body"><h3>First boss · returns on waves 24 and 42</h3>
+        <div class="body"><h3>First boss · returns on waves 36 and 66</h3>
           <article class="foe boss"><img src="img/boss.png" alt="Hive Core: a large pink crystal inside a turning blue ring with four pods">
             <div class="foe-text"><h4>Hive Core</h4><p class="role">The whole wave is just the core. It sweeps side to side near the top and cycles through four attacks.</p>
               <div class="stats"><span>Hits to destroy <b>95</b></span><span class="gold">Scrap <b>14</b></span><span>Repair <b>always</b></span></div>
               <dl><dt>Threat</dt><dd><ul><li>A fan of seven balls spread across the screen.</li><li>A burst of four aimed balls plus two homing missiles.</li><li>Five ships released one at a time into separate lanes.</li><li>A ring of fourteen balls in every direction.</li></ul></dd>
               <dt class="beat">Beat it</dt><dd>Below about a third of its health it attacks half again as fast, so save nothing for the end. Its shots in flight keep coming after it dies.</dd></dl>
-              <p class="note">The three bosses take turns, one every sixth wave, so the core is back on wave 24 and again on 42, much tougher each time. On wave 24 its fan is 13 balls, its ring 20, and it releases 8 ships, some of them weavers. Destroying any boss takes you to the station for a new module.</p></div></article>
+              <p class="note">The five bosses take turns, one every sixth wave, so the core is back on wave 36 and again on 66, much tougher each time. On wave 36 its fan is 15 balls, its ring 22, and it releases 9 ships, some of them weavers. Destroying any boss takes you to the station for a new module.</p></div></article>
         </div></div>
       <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>7</div></div>
         <div class="body"><h3>After the first boss</h3>
@@ -164,7 +164,7 @@ footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);paddin
               <dl><dt>Threat</dt><dd>Armoured and slow. It stops partway down the screen, launches two homing missiles, then dives fast. You hear a beeping alarm while a missile is homing in.</dd><dt class="beat">Beat it</dt><dd>Shoot the missiles down, or lead them sideways and let them overshoot. Missiles stop turning once they are level with you.</dd></dl></div></article>
         </div></div>
       <div class="stop boss"><div class="rail"><div class="wave"><small>BOSS</small>12</div></div>
-        <div class="body"><h3>Second boss · returns on waves 30 and 48</h3>
+        <div class="body"><h3>Second boss · returns on waves 42 and 72</h3>
           <article class="foe boss"><img src="img/cube.png" alt="Fracture Cube: an orange cube and a yellow cube locked together, each with a dark band, around a white eye">
             <div class="foe-text"><h4>Fracture Cube</h4><p class="role">A giant splitter. Destroy it and it breaks into two halves; destroy a half and it breaks into two quarters. Seven bodies in all, and the fight ends with the last one.</p>
               <div class="stats"><span>Hits to destroy <b>75</b></span><span>Each half <b>28</b></span><span>Each quarter <b>14</b></span><span class="gold">Scrap <b>18</b></span><span>Repair <b>always</b></span></div>
@@ -188,7 +188,7 @@ footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);paddin
               <dl><dt>Threat</dt><dd>Stops, charges for 1.3 seconds while a thin red line marks its lane, then fires a beam down the whole screen for 1.7 seconds. Cools down for 3 to 5 seconds and moves on.</dd><dt class="beat">Beat it</dt><dd>Leave the lane as soon as the thin line appears. Destroying it cuts the beam off instantly. No more than two charge or fire at the same time.</dd></dl></div></article>
         </div></div>
       <div class="stop boss"><div class="rail"><div class="wave"><small>BOSS</small>18</div></div>
-        <div class="body"><h3>Third boss · returns on waves 36 and 54</h3>
+        <div class="body"><h3>Third boss · returns on waves 48 and 78</h3>
           <article class="foe boss"><img src="img/warden.png" alt="Beam Warden: a tall red crystal between two dark plates inside a dark ring, with a white emitter below">
             <div class="foe-text"><h4>Beam Warden</h4><p class="role">A great lancer. It glides across the top, then stops and fires a fan of laser beams from its eye, at angles, down the whole screen.</p>
               <div class="stats"><span>Hits to destroy <b>318</b></span><span class="gold">Scrap <b>22</b></span><span>Repair <b>always</b></span></div>
@@ -200,9 +200,27 @@ footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);paddin
         <div class="body"><h3>Two lancers</h3>
           <p class="note">A second lancer joins every regular wave.</p>
         </div></div>
+      <div class="stop boss"><div class="rail"><div class="wave"><small>BOSS</small>24</div></div>
+        <div class="body"><h3>Fourth boss · returns on waves 54 and 84</h3>
+          <article class="foe boss"><img src="img/siege.png" alt="Siege Beetle: a large teal armoured shell with white eyes, its two shell plates shut over a bright core">
+            <div class="foe-text"><h4>Siege Beetle</h4><p class="role">A great beetle. While its shell is shut, most of every shot bounces off. It opens only after it has charged.</p>
+              <div class="stats"><span>Hits to destroy <b>321</b> while open</span><span>Shut, a hit does <b>40%</b></span><span class="gold">Scrap <b>26</b></span><span>Repair <b>always</b></span></div>
+              <dl><dt>Threat</dt><dd><ul><li>A salvo of four homing missiles, one after another.</li><li>A fan of seven balls straight down the screen.</li><li>The charge: it slides over your ship, marks its lane with two thin red lines for about a second, then drops down that lane to the bottom of the screen.</li><li>It climbs back, quickly at first and then slowly, and hangs at the top with its shell apart for 2.6 seconds. The red lines stay until it is clear of your rows.</li></ul></dd>
+              <dt class="beat">Beat it</dt><dd>Shoot the missiles down while its shell is shut. When the red lines appear, step out of the lane; it stops following you before it drops. Stay out until the lines go: it comes back up the same lane. Then slide under it. From the bottom of its charge until its shell shuts again, every shot counts in full.</dd></dl>
+              <p class="note">Below about a third of its health it charges twice before it rests. Each later visit adds a missile to the salvo and two balls to the fan.</p></div></article>
+        </div></div>
       <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>25</div></div>
         <div class="body"><h3>Three lancers</h3>
-          <p class="note">A third lancer joins. Waves keep growing after this, but no new enemy types arrive.</p>
+          <p class="note">A third lancer joins. Waves keep growing after this and no new regular enemies arrive, but there is one more boss to meet, on wave 30.</p>
+        </div></div>
+      <div class="stop boss"><div class="rail"><div class="wave"><small>BOSS</small>30</div></div>
+        <div class="body"><h3>Fifth boss · returns on waves 60 and 90</h3>
+          <article class="foe boss"><img src="img/triad.png" alt="Triad: three large blue three-pointed cores on dark spokes that meet at one centre">
+            <div class="foe-text"><h4>Triad</h4><p class="role">Three cores circling one centre, which sways across the top. Each core is a body of its own, and the fight ends with the last one.</p>
+              <div class="stats"><span>Hits to destroy <b>222</b> each core</span><span class="gold">Scrap <b>30</b></span><span>Repair <b>always</b></span></div>
+              <dl><dt>Threat</dt><dd><ul><li>The cores take turns: four aimed fans of three balls, one core after another.</li><li>The pinwheel: for three seconds every core fires straight outward as they spin, sending slow curving lines of balls across the screen.</li><li>Two triplets released. Each breaks into three at once, so six small ones dive.</li></ul></dd>
+              <dt class="beat">Beat it</dt><dd>The bar shows all three cores together. Each core you destroy makes the others spin faster, fire the pinwheel faster and add a ball to their fans, so the last core is the most dangerous one. The pinwheel's balls are slow and spread wide: watch where a line is heading and step through the gaps.</dd></dl>
+              <p class="note">Each later visit adds a volley of fans and one more triplet.</p></div></article>
         </div></div>
     </div>
   </section>
@@ -211,11 +229,11 @@ footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);paddin
     <h2 id="h-fire">What hurts you</h2>
     <p class="note">All enemy fire is red. A new ship has one hull point, so any of these ends the run unless you have added hull or a shield is up.</p>
     <div class="fire">
-      <div><div class="art"><span class="ball"></span></div><h4>Ball</h4><p>Slow and round. Fired by the Hive Core from wave 6, by any enemy in the formation from wave 7, and by the Fracture Cube.</p></div>
+      <div><div class="art"><span class="ball"></span></div><h4>Ball</h4><p>Slow and round. Fired by the Hive Core from wave 6, by any enemy in the formation from wave 7, and by every boss but the Beam Warden.</p></div>
       <div><div class="art"><span class="dart"></span></div><h4>Dart</h4><p>A thin streak, 40% faster than a ball. Fired by wasps from wave 2, and by the Fracture Cube's quarters and the Beam Warden.</p></div>
-      <div><div class="art"><span class="missile"></span></div><h4>Missile</h4><p>Homes in, with an alarm while it does. From the Hive Core at wave 6, beetles from wave 10 and the Beam Warden. Can be shot down.</p></div>
+      <div><div class="art"><span class="missile"></span></div><h4>Missile</h4><p>Homes in, with an alarm while it does. From the Hive Core at wave 6, beetles from wave 10, the Beam Warden and, in salvos, the Siege Beetle. Can be shot down.</p></div>
       <div><div class="art"><span class="beam"></span></div><h4>Laser beam</h4><p>Blocks one lane for 1.7 seconds. From lancers at wave 15. The Beam Warden on wave 18 fires two or three at once, at angles.</p></div>
-      <div><div class="art"><span class="ram"></span></div><h4>Collision</h4><p>Any enemy that touches your ship hurts it, from wave 1.</p></div>
+      <div><div class="art"><span class="ram"></span></div><h4>Collision</h4><p>Any enemy that touches your ship hurts it, from wave 1. The Siege Beetle on wave 24 charges down a lane it marks with two thin red lines.</p></div>
     </div>
   </section>
 

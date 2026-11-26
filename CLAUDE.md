@@ -20,7 +20,7 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **Colours carry meaning.** All enemy fire is the same red (`ENEMY_RED`), and nothing good is red. Anything good to grab sits in a pulsing blue halo: gold rings are scrap, green crosses repair hull.
 - **Mites are the pawns.** They are the largest group in every wave and hold the front two rows. Stronger enemies sit behind them.
 - **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
-- **Three bosses take turns** (`BOSSES`): the Hive Core on wave 6, the Fracture Cube on 12, the Beam Warden on 18, then round again, tougher. The laser boss comes third because the owner set lancers to arrive at wave 15, so players have met lasers first.
+- **Five bosses take turns** (`BOSSES`): the Hive Core on wave 6, the Fracture Cube on 12, the Beam Warden on 18, the Siege Beetle on 24, the Triad on 30, then round again, tougher. Each is built on an enemy the player has already met (splitter, lancer, beetle, triplet). The laser boss comes third because the owner set lancers to arrive at wave 15, so players have met lasers first.
 - **Cutscenes always play out.** A touch or a key never skips the launch, the shuttle or the docking scene, because a player steering by touch has a finger on the screen as each one starts. (The launch could be skipped at first; the owner asked for that to stop.)
 - **A boss dies big.** Its death is a scene of about 2.5 seconds (`FINALE`): game time slows to a fifth, smaller blasts follow the first, and a long deep boom plays (`SFX.core`). The camera does not move: a push-in on the boss was tried, and the owner said the slow motion is enough. The ship cannot be hit during the scene, nor for a blink afterwards (`FINALE.grace`), because it steers at a fifth of its speed while time is slow. The boss's shots are not removed: they carry on afterwards.
 - **Sound.** Firing is silent on purpose, since a constant shooting sound was annoying. New sounds should be short and soft. The one long sound is a boss's death, which the owner asked to be longer and deeper.
@@ -37,7 +37,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 | three.js stage | Renderer, lights and the reflection environment, `geo` and `M` (shared geometries and materials), the nebula backdrop, stars, particles (`burst`), effect pools (`ringFx`, `zapFx`), instanced shots, the player ship, station and shuttle models, post-processing (`draw()`, `GFX`), `resize()`. |
 | game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`. |
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
-| enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the three bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`), and `buildWave()`. |
+| enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the five bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`, `updateSiege`, `updateTriad`), and `buildWave()`. |
 | player | Ship hit shape (`shipHit`), shields, shots, seekers, picking up scrap. |
 | cutscenes | `CUTS` (durations), `startCut`, `updateCut`, docking at the station. A boss's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, next to `shake()`. |
 | drawing | `syncScene()`: copies game state into the three.js scene once a frame. |
@@ -59,16 +59,17 @@ The script is split into sections, each marked with a `// ---------- name ------
   - `pick()`, `turnToward()` and `wrapAngle()` are small maths helpers.
 - **Tuning belongs in the tables**, not as `n >= 12` thresholds scattered through the code.
 - **Bosses.** A boss is any enemy type whose `ET` entry has `boss: true`; test `e.def.boss`, never the type name.
-  - A fight may have several bodies (the Fracture Cube's pieces). `G.boss` is any one live body, `bossLeft()` adds up the health of the whole fight for the bar, and `killEnemy()` runs the death scene, the scrap shower and `G.bossDown` only when the last body goes.
+  - A fight may have several bodies (the Fracture Cube's pieces, the Triad's three cores, which share one `hub` record for position, spin and attack timers). `G.boss` is any one live body, `bossLeft()` adds up the health of the whole fight for the bar, and `killEnemy()` runs the death scene, the scrap shower and `G.bossDown` only when the last body goes.
   - `bossLv(e)` is 0 the first time a boss is met, 1 the second, and so on: scale attacks by it, not by `e.tier`, which is already 2 or 3 at a later boss's first meeting. Health scales by tier.
   - A first-time `hint()` never shows on a late wave (nobody reaches wave 12 in their first runs). Put the one-line tip in the boss's `tip` in `BOSSES`; it shows under the name when the boss arrives.
-  - How hard: the owner found the Fracture Cube and Beam Warden "a touch too easy" on first meeting, asked for mites to come down while the Warden's beams are on, and for bosses to do more each time they are met. First-meeting numbers and their growth per visit are in `CUBE` and `WARDEN`.
-  - Design rules the owner's preferences imply: one attack of the boss's own to read at a time (its helpers may fly meanwhile); every attack leaves a safe place reachable within its warning time at base steering speed (240 a second); gaps between beams must clear the ship and its shield (`BEAM_HALF + SHIELD_R` each side); bodies stay out of the ship's rows; the model must look as wide as its hit circle (`e.rad`).
+  - How hard: the owner found the Fracture Cube and Beam Warden "a touch too easy" on first meeting, asked for mites to come down while the Warden's beams are on, and for bosses to do more each time they are met. First-meeting numbers and their growth per visit are in `CUBE`, `WARDEN`, `SIEGE` and `TRIAD`.
+  - Design rules the owner's preferences imply: one attack of the boss's own to read at a time (its helpers may fly meanwhile); every attack leaves a safe place reachable within its warning time at base steering speed (240 a second); gaps between beams must clear the ship and its shield (`BEAM_HALF + SHIELD_R` each side); bodies stay out of the ship's rows unless the lane is marked first (the Siege Beetle's charge: two thin red lines, and it stops following the ship before it drops); the model must look as wide as its hit circle (`e.rad`).
+  - A glowing part cannot be hidden behind another part: the glow pass draws glowing things alone. Hide it with `visible` (the Siege Beetle's core while its shell is shut).
   - A new boss needs: an `ET` entry, a line in `BOSSES`, a model branch in `buildEnemy()`, set-up in `spawnBoss()`, an `update…` function called from `updateBoss()`, a branch in the model-motion chain in `updateEnemies()`, checks in `smoke.js`, pictures in `shots.js`, a portrait, and a card in the enemy guide.
   - The Beam Warden's beams are `e.bm` and `e.beams`, not `e.laser`: that field marks a lancer everywhere.
 - **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during a boss's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
-- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
+- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
 
 ## Graphics
@@ -98,14 +99,14 @@ Not done, on purpose: the WebGPU renderer and node materials. They cannot be run
 
 ```
 cd tools && npm install          # three.js, esbuild; Playwright and Chromium are already on the machine
-node smoke.js [shots-dir]        # about 4 minutes; exits 1 on any failure
-node shots.js <dir> "gfx=high"   # nine fixed pictures for judging the look by eye; about 3 minutes
+node smoke.js [shots-dir]        # about 8 minutes; exits 1 on any failure
+node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by eye; add `bosses` for only the boss ones
 ```
 
 `smoke.js` uses headless Chromium in a phone viewport with software WebGL. It covers:
 
 - A full run: launch, booster shuttle, Hive Core, docking, the station, death and reload.
-- The Fracture Cube and the Beam Warden: each arrives on its wave, every attack happens, the cube breaks 1 to 2 to 4 with the bar following, a gap between beams is safe and a beam is not, and destroying each leads to docking and a new module.
+- The four bosses after the Hive Core: each arrives on its wave, every attack happens, and destroying each leads to docking and a new module. Also: the cube breaks 1 to 2 to 4 with the bar following; a gap between the Warden's beams is safe and a beam is not; the Siege Beetle's shell lets 40% of a hit through shut and all of it open; losing a Triad core does not end the fight.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
 - A stress run with every booster on, and pause.
 - A boss's death scene: slow motion happens and the camera stays put, the ship cannot be hit during it, and speed is normal again before docking.

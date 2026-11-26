@@ -107,7 +107,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   // When each enemy first appears: build every wave 1-20 many times and record the first wave each type shows up.
   await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
   const first = await page.evaluate(() => { const s = window.__swarmfall, first = {};
-    for (let w = 1; w <= 26; w++) for (let k = 0; k < 30; k++) {
+    for (let w = 1; w <= 31; w++) for (let k = 0; k < 30; k++) {
       for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0;
       for (const e of s.G.enemies) for (const t of [e.type, e.elite && 'elite']) if (t && !(t in first)) first[t] = w;
     }
@@ -120,24 +120,35 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   check(lancersAt.join() === '1,2,3', 'lancers: 1, 2 and 3 from waves ' + U.lancer.join(', '), 'got ' + lancersAt.join(','));
   // the bosses take turns, in the order of the BOSSES table: one every 6th wave
   const order = await page.evaluate(() => window.__swarmfall.BOSSES.map(b => b.type));
-  check(order.every((type, i) => first[type] === 6 * (i + 1)) && order.length === 3, 'bosses arrive in turn on waves 6, 12 and 18', order.map(type => type + ' ' + first[type]).join(', '));
+  check(order.every((type, i) => first[type] === 6 * (i + 1)) && order.length === 5, 'bosses arrive in turn on waves 6, 12, 18, 24 and 30', order.map(type => type + ' ' + first[type]).join(', '));
 
-  // ---- the Fracture Cube and the Beam Warden ----
+  // ---- the four bosses after the Hive Core ----
   // Each fight is watched for about 20 seconds of game time with the ship safe, to see every attack happen.
   // Then the boss is destroyed, which must end in the death scene, docking and a new module.
-  for (const b of [{ wave: 12, type: 'cube', name: 'FRACTURE CUBE' }, { wave: 18, type: 'warden', name: 'BEAM WARDEN' }]) {
+  for (const b of [{ wave: 12, type: 'cube', name: 'FRACTURE CUBE' }, { wave: 18, type: 'warden', name: 'BEAM WARDEN' }, { wave: 24, type: 'siege', name: 'SIEGE BEETLE' }, { wave: 30, type: 'triad', name: 'TRIAD' }]) {
     await page.reload(); await page.waitForTimeout(500);
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const mods0 = (await st()).mods.split(',').length;
     const seen = await page.evaluate(wave => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P; G.wave = wave - 1; s.nextWave();
-      const w = { type: null, hud: '', balls: 0, darts: false, missiles: false, helpers: {}, beamFrames: 0, gapSafe: null, beamHurts: null, fans: {} }, g0 = G.time, t0 = performance.now(); let test = 0, hp0 = 0;
+      const w = { type: null, hud: '', balls: 0, darts: false, missiles: false, helpers: {}, beamFrames: 0, gapSafe: null, beamHurts: null, fans: {}, modes: {} }, g0 = G.time, t0 = performance.now(); let test = 0, hp0 = 0;
       (function f() {
         const e = G.boss, B = e && e.bm;
         if (e) { w.type = e.type; w.hud = document.getElementById('wave').textContent; }
         if (B && G.time - g0 > 16 && !w.hurtIt) { w.hurtIt = true; e.hp = e.maxHp * 0.3; }   // badly hurt: each fan must now be followed at once by the other
         if (B && B.again) { w.followUp = true; w.fans['again' + B.n] = true; }
+        if (e && e.type === 'siege') {   // Siege Beetle: every part of its cycle, and how much of a 1000-point hit gets through shut and open
+          P.fireT = 9; w.modes[e.mode] = true;
+          const hit = k => { w.pend = { k, hp: e.hp, at: G.time }; G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1000, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); };
+          if (w.pend) { if (G.time - w.pend.at > 0.2) { w[w.pend.k] = Math.round(w.pend.hp - e.hp); w.pend = null; } }
+          else if (e.mode === 'guard' && e.intro <= 0 && e.open < 0.05 && w.shut === undefined) hit('shut');
+          else if (e.mode === 'open' && e.open > 0.95 && w.wide === undefined) hit('wide');
+          if (G.time - g0 > 24 && !w.hurtIt && e.mode === 'guard') { w.hurtIt = true; e.hp = e.maxHp * 0.3; }
+          if (e.again) w.twice = true;
+        }
+        if (e && e.hub) { w.cores = Math.max(w.cores || 0, G.enemies.filter(o => !o.dead && o.def.boss).length); if (e.hub.wheel > 0) w.wheel = true; }
         w.balls = Math.max(w.balls, G.eb.filter(x => !x.kind).length); if (G.eb.some(x => x.kind === 1)) w.darts = true; if (G.em.length) w.missiles = true;
         for (const o of G.enemies) if (!o.def.boss) w.helpers[o.type] = true;
+        w.triplets = Math.max(w.triplets || 0, G.enemies.filter(o => !o.dead && o.type === 'triplet').length);
         if (B && B.phase === 'fire') {   // stand in a gap between two beams, then on a beam, with the ship's protection off
           w.beamFrames++; w.fans[B.n] = true; G.eb.length = 0; G.em.length = 0;
           const ey = e.y + 26, at = a => e.x + Math.tan(a) * (P.y - ey);
@@ -147,9 +158,26 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
           if (test === 1 || test === 2) { P.target = P.x; P.vx = 0; }
         } else { P.inv = 9; P.hp = Math.max(P.hp, 5); }
         G.revive = 1;
-        if (G.time - g0 > (wave === 18 ? 30 : 21) || performance.now() - t0 > 120000) res(w); else requestAnimationFrame(f); })(); }), b.wave);
+        if (G.time - g0 > ({ 18: 30, 24: 46 }[wave] || 21) || performance.now() - t0 > 150000) res(w); else requestAnimationFrame(f); })(); }), b.wave);
     check(seen.type === b.type && seen.hud === b.name, 'wave ' + b.wave + ' is the ' + b.name + ', named on the HUD', seen.type + ' / ' + seen.hud);
     if (b.type === 'cube') check(seen.balls >= 12 && seen.helpers.splitter, b.name + ': fans, rings and splitters all happen', JSON.stringify(seen));
+    else if (b.type === 'siege') {
+      const m = seen.modes;
+      check(m.guard && m.aim && m.charge && m.back && m.open && seen.missiles && seen.balls >= 5, b.name + ': missiles, a fan, and a charge down and back all happen', JSON.stringify(seen));
+      check(Math.abs(seen.shut - 400) < 5 && Math.abs(seen.wide - 1000) < 5, b.name + ': its shell stops most of a hit when shut and none when open', 'of 1000: ' + seen.shut + ' shut, ' + seen.wide + ' open');
+      check(seen.twice === true, b.name + ': badly hurt, it charges twice before it rests');
+      // the charge with the ship's protection off: beside the marked lane, then in it behind a shield
+      const lane = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, e = G.boss, out = {}, t0 = performance.now(); let test = 0;
+        const begin = shield => { e.hp = e.maxHp; e.again = false; e.mode = 'aim'; e.pt = 0.3; e.x = 180; e.y = 130; e.open = 0; P.inv = 0; P.hp = 1; G.revive = 0; P.shieldUp = shield; P.shieldT = 99; };
+        begin(false);
+        (function f() {
+          G.eb.length = 0; G.em.length = 0; P.fireT = 9; P.vx = 0;
+          if (test === 0) { P.x = P.target = 180 + 34 + 17; if (e.mode === 'open') { out.beside = P.alive && P.hp === 1; test = 1; begin(true); } }
+          else { P.x = P.target = 180; if (e.mode === 'open') { out.shielded = P.alive && P.hp === 1 && !P.shieldUp; P.inv = 9; return res(out); } }
+          if (!P.alive || performance.now() - t0 > 60000) { out.died = !P.alive; out.during = test ? 'in the lane' : 'beside the lane'; return res(out); }
+          requestAnimationFrame(f); })(); }));
+      check(lane.beside === true && lane.shielded === true, b.name + ': a ship beside the marked lane is untouched, and one in the lane behind a shield loses only the shield', JSON.stringify(lane));
+    } else if (b.type === 'triad') check(seen.cores === 3 && seen.wheel && seen.balls >= 3 && seen.triplets >= 6, b.name + ': three cores, aimed fans, the pinwheel, and two triplets that each break into three', JSON.stringify(seen));
     else {
       check(seen.beamFrames > 20 && seen.fans[3] && seen.fans[2] && seen.darts && seen.missiles && seen.helpers.mite, b.name + ': both beam fans, darts, missiles and mites all happen', JSON.stringify(seen));
       check(seen.gapSafe === true && seen.beamHurts === true, b.name + ': the gap between two beams is safe and a beam is not', 'gap safe ' + seen.gapSafe + ', beam hurts ' + seen.beamHurts);
@@ -163,13 +191,22 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
       check(steps[0].n === 2 && steps[1].n === 4 && !steps[1].down, b.name + ': breaks into two halves, then four quarters', JSON.stringify(steps));
       check(Math.abs(steps[0].bar - 0.6) < 0.03 && Math.abs(steps[1].bar - 0.3) < 0.03, b.name + ': the bar shows the health left in all its pieces', steps.map(x => x.bar).join(' then '));
     }
+    if (b.type === 'triad') {   // destroy one core at a time: the fight goes on, and the bar falls by a third each time
+      const steps = [];
+      for (const want of [2, 1]) {
+        await page.evaluate(() => { const s = window.__swarmfall, e = s.G.enemies.find(e => !e.dead && e.def.boss); s.P.inv = 9; s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); });
+        await page.waitForFunction(n => window.__swarmfall.G.enemies.filter(e => !e.dead && e.def.boss).length === n, want, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(400); steps.push(await bodies());
+      }
+      // the ship's own fire has worn the cores down a little, so the bar sits somewhat under two thirds and one third
+      check(steps[0].n === 2 && steps[1].n === 1 && !steps[1].down && steps[0].bar > 0.5 && steps[0].bar < 0.68 && steps[1].bar > 0.2 && steps[1].bar < 0.345, b.name + ': losing a core does not end the fight, and the bar falls by a third', JSON.stringify(steps));
+    }
     await smash();
     s = await waitFor(x => x.state === 'cut' && x.cut === 'dock', 40000);
     const after = await bodies(); check(s.state === 'cut' && after.down && after.n === 0, b.name + ': destroying it leads to docking', s.state + ' ' + JSON.stringify(after));
     s = await waitFor(x => x.state === 'station', 20000);
     const left = await page.evaluate(() => window.__swarmfall.G.enemies.length);
     check(s.state === 'station' && s.mods.split(',').length === mods0 + 1 && left === 0, b.name + ': a new module is fitted and nothing is left on the field', s.mods + ', enemies left ' + left);
-    await shot(b.type === 'cube' ? '11-after-cube' : '12-after-warden');
+    await shot('1' + (b.wave / 6 - 1) + '-after-' + b.type);
   }
 
   // Every system at once: all boosters on, late waves with lasers, missiles and triplets, while the ship

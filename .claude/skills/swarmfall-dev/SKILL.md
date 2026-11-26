@@ -19,7 +19,7 @@ This installs three.js and esbuild, which are only needed to rebuild `vendor/thr
 
 - **When an enemy first appears:** edit the `UNLOCK` table only. `buildWave()` and the formation-fire code read it, and the smoke test checks the game follows it. Wave 6, 12, 18 and so on are boss waves with no regular enemies. If the owner asks for one of those, put the wave after it in `UNLOCK` (the smoke test checks the first wave each enemy is actually seen), and tell them why.
 - **Enemy stats** (health, speed, scrap chance): `ET`. Behaviour is in `updateDive()`, `updateLancer()`, `updateBoss()` and `launchDive()`.
-- **Bosses:** `BOSSES` sets their order, `ET` their health, `CUBE` and `WARDEN` the two newer ones' numbers. `CLAUDE.md` lists the rules a boss must follow and everything a new one needs.
+- **Bosses:** `BOSSES` sets their order, `ET` their health, `CUBE`, `WARDEN`, `SIEGE` and `TRIAD` the numbers of the four after the Hive Core. `CLAUDE.md` lists the rules a boss must follow and everything a new one needs.
 - **Boosters** (in-run picks): `UP`, plus `recalc()` for how they change stats. Any one-off effect at the moment of picking goes in `applyUpgrade()`.
 - **Station modules:** `SHOP` and `recalc()`. `UNLOCK_ORDER` sets which module each boss earns, and `START_MODS` sets what a new save starts with. A module bought while docked applies at once in the `#shop` click handler.
 - **Cutscene timing:** `CUTS`. Choreography is in `updateCut()`. A boss's death scene (slow motion and follow-up blasts; no camera move, at the owner's request) is `FINALE` and the `finale…` functions.
@@ -48,7 +48,7 @@ These are in `CLAUDE.md`. The ones that bite most often:
 cd tools && node smoke.js /tmp/shots   # every check must PASS; screenshots land in /tmp/shots
 ```
 
-- If you changed rendering, colours, HUD or any screen, also run `node shots.js <dir> "gfx=high"` and look at the nine pictures; the checks cannot see colour. Compare with the pictures from before your change.
+- If you changed rendering, colours, HUD or any screen, also run `node shots.js <dir> "gfx=high"` and look at the pictures; the checks cannot see colour. Compare with the pictures from before your change.
 - Frame rate on a phone cannot be measured in the sandbox. Tell the owner when a change could cost speed.
 - For a balance change, tell the owner it is untested by a person.
 - For a behaviour the smoke test does not cover, add a check to `smoke.js`, not a throwaway script. Use `window.__swarmfall` (see `CLAUDE.md`) to set up the situation.

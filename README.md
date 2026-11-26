@@ -24,7 +24,12 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 - **One hit ends the run.** A new ship has a single hull point. Everything that makes it stronger is a choice about where your scrap and booster picks go: weapons to kill faster, armor to take more hits, shields to block hits and recharge, or specials such as drones and homing missiles.
 - **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else is a hit, and all enemy fire is red: balls, darts, missiles and laser beams.
 - **Waves** grow in size and add enemy types: mites (the pawns: the largest group in every wave, holding the front two rows), wasps (fire fast darts while diving), weavers (from wave 5; zigzag), splitters (from wave 8; break into two mites when destroyed), triplets (from wave 13, after the second boss; break into three smaller copies that fan out across the screen when they leave the formation, so shoot them while they sit), lancers (one from wave 15, two from 20, three from 25; patrol above the top row from one side of the screen to the other, then stop, charge up and fire a laser beam down the screen that blocks a lane for a couple of seconds), beetles (from wave 10, taking over the top row from wave 13; armoured, launch homing missiles you can shoot down), and red-ringed elites (from wave 8; three times the health, extra scrap).
-- **Bosses** take turns, one every sixth wave, and come back tougher. The **Hive Core** (waves 6, 24, 42) sweeps the top with fans and rings of shots, missiles and released ships. The **Fracture Cube** (12, 30, 48) breaks into two halves when destroyed, and each half into two quarters; every piece shoots, and the fight ends with the last one. The **Beam Warden** (18, 36, 54) stops and fires fans of angled laser beams; thin red lines show where they will be, and you stand between them while mites dive down your lane.
+- **Bosses** take turns, one every sixth wave, and come back tougher. Each is built on an enemy you have already met.
+  - The **Hive Core** (waves 6, 36, 66) sweeps the top with fans and rings of shots, missiles and released ships.
+  - The **Fracture Cube** (12, 42, 72) breaks into two halves when destroyed, and each half into two quarters; every piece shoots, and the fight ends with the last one.
+  - The **Beam Warden** (18, 48, 78) stops and fires fans of angled laser beams; thin red lines show where they will be, and you stand between them while mites dive down your lane.
+  - The **Siege Beetle** (24, 54, 84) is armoured: most of every shot bounces off its shell. It fires missile salvos, then marks a lane and charges down it, and for a few seconds afterwards its shell is open and shots count in full.
+  - The **Triad** (30, 60, 90) is three cores circling one centre. They fire aimed fans in turn and a slow pinwheel of shots, and each core destroyed makes the others spin and fire faster.
 - **Boosters** last for one run. They come in three rarities and stack: fire rate, damage, extra barrels, piercing, ricochet, shields, drones, homing missiles, chain lightning, and more.
 - **Station modules** are permanent, upgraded with scrap, and saved in the browser's local storage. A new game has two, Tuned Cannons and Reinforced Hull. Each boss you destroy earns the next one (`UNLOCK_ORDER`), fitted when you dock. Modules fall under Weapons, Armor, Shields and Specials, plus Salvage. You can spend scrap at the station between runs or while docked after a boss.
 - **Cutscenes** are short: leaving the station at the start of a run, the booster shuttle arriving, and docking after a boss. None of them can be skipped. When a boss is destroyed, time slows for about two and a half seconds while it blows apart; the ship cannot be hit while that plays.
@@ -38,7 +43,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `UP`: boosters.
 - `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER`: station modules, their costs and the order they are earned.
 - `DRAFT_EVERY` and `BOSS_EVERY`: how often boosters and bosses come.
-- `BOSSES`: the bosses in the order they take turns. `CUBE` and `WARDEN`: the Fracture Cube's and Beam Warden's numbers.
+- `BOSSES`: the bosses in the order they take turns. `CUBE`, `WARDEN`, `SIEGE` and `TRIAD`: each later boss's numbers.
 - `SKIP_SCRAP`: scrap for passing up a booster.
 - `FINALE`: a boss's death scene (length, how slow, how often the follow-up blasts come).
 
@@ -51,7 +56,7 @@ There is no build for the game. Edit `index.html` and open it in a browser.
 ```
 cd tools && npm install
 node smoke.js [screenshot-dir]   # plays a full run in a headless phone browser; exits 1 on failure
-node shots.js <dir> "gfx=high"   # nine fixed pictures for judging the look by eye
+node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by eye
 node artifact.js [out.html]      # the copy of the game published as a claude.ai artifact
 node portraits.js                # re-renders the enemy pictures for the guide
 node build-three.js              # rebuilds vendor/three.min.js (after changing three-entry.js or the three.js version)
