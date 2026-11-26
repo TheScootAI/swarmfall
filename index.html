@@ -538,10 +538,11 @@ const GROUPS = [
 ];
 // The station starts with two modules fitted. Each Hive Core destroyed earns the next one, in this order.
 const START_MODS = ['dmg', 'hull'];
-const UNLOCK_ORDER = ['shield', 'rate', 'drone', 'scrap', 'charge', 'twin', 'magnet', 'missile', 'reroll', 'head', 'revive'];
+const UNLOCK_ORDER = ['shield', 'rate', 'speed', 'drone', 'scrap', 'charge', 'twin', 'magnet', 'missile', 'reroll', 'head', 'revive'];
 const SHOP = [
   { g: 'weapons', id: 'dmg', n: 'Tuned Cannons', d: '+10% damage.', cost: [15, 35, 70, 120, 200] },
   { g: 'weapons', id: 'rate', n: 'Feed Mechanism', d: '+6% fire rate.', cost: [15, 35, 70, 120, 200] },
+  { g: 'weapons', id: 'speed', n: 'Mass Driver', d: '+8% bullet speed.', cost: [15, 35, 70, 120, 200] },
   { g: 'weapons', id: 'twin', n: 'Twin Mount', d: 'Start each run with a second barrel.', cost: [200] },
   { g: 'armor', id: 'hull', n: 'Reinforced Hull', d: 'Start each run able to take 1 more hit.', cost: [30, 80, 180] },
   { g: 'armor', id: 'revive', n: 'Emergency Reboot', d: 'Once per run, survive a killing blow.', cost: [300] },
@@ -570,7 +571,7 @@ const ulv = id => G.up[id] || 0;
 function recalc() {
   const od = ulv('over');
   S.dmg = 10 * (1 + 0.1 * mlv('dmg')) * (1 + 0.25 * ulv('heavy')) * (1 + 0.1 * ulv('velocity')) * (1 + 0.2 * od);
-  S.shotSpeed = 366 * (1 + 0.25 * ulv('velocity'));
+  S.shotSpeed = 366 * (1 + 0.08 * mlv('speed')) * (1 + 0.25 * ulv('velocity'));
   S.shots = 1 + mlv('twin') + ulv('twin'); S.pierce = ulv('pierce'); S.rico = ulv('rico');
   S.move = 240 * (1 + 0.15 * ulv('thrust'));
   S.maxHp = Math.max(1, 1 + mlv('hull') + ulv('plate') - od);   // a new ship has 1 hull: one hit ends the run until hull is added
