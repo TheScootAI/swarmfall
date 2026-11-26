@@ -574,7 +574,7 @@ function recalc() {
   S.shots = 1 + mlv('twin') + ulv('twin'); S.pierce = ulv('pierce'); S.rico = ulv('rico');
   S.move = 240 * (1 + 0.15 * ulv('thrust'));
   S.maxHp = Math.max(1, 1 + mlv('hull') + ulv('plate') - od);   // a new ship has 1 hull: one hit ends the run until hull is added
-  S.rate = 3.6 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
+  S.rate = 3.24 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
   S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
   S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.nova = ulv('nova');
   S.ebMul = 1 - 0.2 * ulv('slow');
