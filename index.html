@@ -112,6 +112,9 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
 .item .btn{min-height:44px;min-width:92px;padding:0 12px;font-size:.9rem;color:var(--gold);font-variant-numeric:tabular-nums}
 .grp{margin:10px 0 0;font:700 .95rem/1.2 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--arc)}
 .grp:first-child{margin-top:0}
+.item.fresh{box-shadow:inset 0 0 0 1.5px var(--gold)}
+.item .nm em{font:700 .68rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-left:6px}
+.locked{margin-top:4px}
 .grp span{font:400 .85rem/1.2 var(--body);letter-spacing:0;text-transform:none;color:var(--dim);margin-left:6px}
 /* Feedback: a button in the top-right corner and the box it opens */
 #hud{padding-right:calc(var(--gut-r) + 46px)}
@@ -159,10 +162,10 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
       <div class="inner">
         <p class="eyebrow">Roguelite swarm shooter</p>
         <h1>SWARM<b>FALL</b></h1>
-        <p class="lede">One hit destroys a new ship. Every third wave earns an upgrade, and the scrap you salvage buys weapons, armor, shields or specials for the next one.</p>
+        <p class="lede">One hit destroys a new ship. A supply shuttle brings a booster after every third wave. Destroy a Hive Core to dock at the station for a new module, upgraded with the scrap you salvage.</p>
         <div class="row">
           <button id="btnPlay" class="btn primary">Launch</button>
-          <button id="btnHangar" class="btn">Hangar</button>
+          <button id="btnHangar" class="btn">Station</button>
         </div>
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Red dots are enemy shots.</p>
@@ -174,7 +177,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
     <section id="scrDraft" class="screen" hidden>
       <div class="inner">
         <p class="eyebrow" id="draftEyebrow">Wave cleared</p>
-        <h2>Choose an upgrade</h2>
+        <h2>Choose a booster</h2>
         <div class="cards" id="cards"></div>
         <div class="row">
           <button id="btnReroll" class="btn">Reroll</button>
@@ -203,9 +206,9 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
         <p class="eyebrow" id="deadEyebrow">Ship lost</p>
         <h2 id="deadTitle">Wave 1</h2>
         <dl class="stats" id="deadStats"></dl>
-        <p class="lede">Scrap carries over. Spend it in the hangar on weapons, armor, shields or specials for the next ship.</p>
+        <p class="lede">Scrap carries over. Spend it at the station on your ship's modules before the next launch.</p>
         <div class="row">
-          <button id="btnDeadHangar" class="btn primary">Open hangar</button>
+          <button id="btnDeadHangar" class="btn primary">Return to station</button>
           <button id="btnAgain" class="btn">Fly again</button>
         </div>
       </div>
@@ -213,11 +216,13 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
 
     <section id="scrHangar" class="screen" hidden>
       <div class="inner">
-        <p class="eyebrow">Hangar</p>
-        <h2>Build your next ship</h2>
+        <p class="eyebrow" id="stEyebrow">Space station</p>
+        <h2 id="stTitle">Upgrade your modules</h2>
+        <p class="lede" id="stNote"></p>
         <p class="bank" id="bank">◆ 0</p>
         <div class="shop" id="shop"></div>
         <div class="row">
+          <button id="btnUndock" class="btn primary" hidden>Undock</button>
           <button id="btnHangarPlay" class="btn primary">Launch</button>
           <button id="btnHangarBack" class="btn">Back</button>
         </div>
@@ -256,12 +261,12 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------- save ----------
 const SAVE_KEY = 'swarmfall.v1';
-const meta = { scrap: 0, best: 0, runs: 0, mute: false, up: {} };
+const meta = { scrap: 0, best: 0, runs: 0, mute: false, up: {}, mods: null };
 try {
   const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
   if (s && typeof s === 'object') {
     meta.scrap = +s.scrap || 0; meta.best = +s.best || 0; meta.runs = +s.runs || 0;
-    meta.mute = !!s.mute; meta.up = Object.assign({}, s.up);
+    meta.mute = !!s.mute; meta.up = Object.assign({}, s.up); if (Array.isArray(s.mods)) meta.mods = s.mods.filter(m => typeof m === 'string');
   }
 } catch (e) { /* storage unavailable: play without saving */ }
 const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch (e) {} };
@@ -308,6 +313,9 @@ const SFX = {
   eshoot() { if (limited('e', 90)) tone('square', 300, 200, 0.06, 0.08); },
   buy() { tone('triangle', 660, 990, 0.12, 0.3); tone('triangle', 990, 1320, 0.14, 0.3, 0.1); },
   deny() { tone('square', 160, 120, 0.12, 0.2); },
+  launch() { noise(1.3, 0.45, 500); tone('sawtooth', 70, 240, 1.2, 0.25); },
+  dock() { tone('square', 110, 80, 0.12, 0.35); tone('square', 90, 60, 0.16, 0.35, 0.18); noise(0.2, 0.3, 600); },
+  shuttle() { tone('sine', 500, 760, 0.18, 0.2); tone('sine', 760, 1000, 0.18, 0.2, 0.16); },
 };
 const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 
@@ -423,6 +431,25 @@ ship.add(part(geo.cone, M.hull, 7, 30, 6, 0, 2), part(geo.box, M.wing, 30, 5, 2.
 const flame = part(geo.cone, M.flame, 4, 12, 4, 0, -19, 0, Math.PI); ship.add(flame);
 const shieldMesh = part(geo.ico, M.shield, 24, 24, 24); ship.add(shieldMesh);
 scene.add(ship);
+// the space station: a hub with a docking port above and below, a slowly turning ring and two solar wings
+const stM = { hull: phong(0xcfd6ff, 0x1a2050), dark: phong(0x4a5490, 0x10143a), panel: phong(0x2a56d8, 0x0a1c70), port: phong(0xffc857, 0x6a4a00), light: basic(0x5fe8ff) };
+geo.cyl = new THREE.CylinderGeometry(1, 1, 1, 8); geo.band = new THREE.TorusGeometry(1, 0.09, 6, 30);
+const station = new THREE.Group(), stRing = new THREE.Group();
+station.add(part(geo.ico, stM.hull, 30, 30, 26), part(geo.cyl, stM.dark, 9, 30, 9, 0, 40), part(geo.cyl, stM.dark, 9, 30, 9, 0, -40),
+  part(geo.box, stM.port, 15, 5, 15, 0, 55), part(geo.box, stM.port, 15, 5, 15, 0, -55));
+for (const sd of [-1, 1]) station.add(part(geo.box, stM.dark, 46, 4, 4, sd * 52, 0), part(geo.box, stM.panel, 42, 20, 1.5, sd * 97, 13), part(geo.box, stM.panel, 42, 20, 1.5, sd * 97, -13));
+stRing.add(part(geo.band, stM.hull, 62, 62, 62)); for (let i = 0; i < 4; i++) stRing.add(part(geo.box, stM.dark, 62, 2.5, 2.5, Math.cos(i * TAU / 4 + 0.4) * 31, Math.sin(i * TAU / 4 + 0.4) * 31, 0, i * TAU / 4 + 0.4));
+stRing.rotation.x = 1.15; station.add(stRing);
+const stLights = [[0, 59, 5], [0, -59, 5], [-118, 0, 2], [118, 0, 2]].map(([x, y, z]) => { const m = part(geo.sph, stM.light, 2.4, 2.4, 2.4, x, y, z); station.add(m); return m; });
+station.visible = false; scene.add(station);
+// the supply shuttle that brings a booster after every third wave
+const shuttle = new THREE.Group();
+shuttle.add(part(geo.box, stM.hull, 12, 20, 9), part(geo.cone, stM.hull, 6.5, 9, 5, 0, 14.5), part(geo.box, stM.dark, 24, 5, 3, 0, -6));
+const shPod = part(geo.box, stM.port, 8, 8, 8, 0, 0, 8); shuttle.add(shPod);
+const shFlame = part(geo.cone, M.flame, 3, 9, 3, 0, -15, 0, Math.PI); shuttle.add(shFlame);
+shuttle.visible = false; scene.add(shuttle);
+const DOCK_TOP = 71, DOCK_BOTTOM = 75;   // how far the ship's centre sits from the station's when docked above / below it
+const ST = { on: false, x: W / 2, y: 0 }, SH = { on: false, x: 0, y: 0, pod: true, leave: false, side: 1 };
 const droneMeshes = [0, 1, 2].map(() => { const m = part(geo.oct, M.drone, 5, 7, 5); m.visible = false; scene.add(m); return m; });
 
 function resize() {
@@ -481,8 +508,11 @@ const GROUPS = [
   ['armor', 'Armor', 'Take more hits.'],
   ['shields', 'Shields', 'Block hits, then recharge.'],
   ['specials', 'Specials', 'Extra systems that fight alongside you.'],
-  ['salvage', 'Salvage', 'Earn and steer upgrades.'],
+  ['salvage', 'Salvage', 'Earn more scrap and steer your boosters.'],
 ];
+// The station starts with two modules fitted. Each Hive Core destroyed earns the next one, in this order.
+const START_MODS = ['dmg', 'hull'];
+const UNLOCK_ORDER = ['shield', 'rate', 'drone', 'scrap', 'charge', 'twin', 'magnet', 'missile', 'reroll', 'head', 'revive'];
 const SHOP = [
   { g: 'weapons', id: 'dmg', n: 'Tuned Cannons', d: '+10% damage.', cost: [15, 35, 70, 120, 200] },
   { g: 'weapons', id: 'rate', n: 'Feed Mechanism', d: '+6% fire rate.', cost: [15, 35, 70, 120, 200] },
@@ -495,13 +525,19 @@ const SHOP = [
   { g: 'specials', id: 'missile', n: 'Seeker Rack', d: 'Start each run with homing missiles.', cost: [220] },
   { g: 'salvage', id: 'scrap', n: 'Salvage Rig', d: '+20% scrap from every run.', cost: [40, 90, 170] },
   { g: 'salvage', id: 'magnet', n: 'Tractor Coil', d: 'Wider scrap pickup range.', cost: [20, 50] },
-  { g: 'salvage', id: 'reroll', n: 'Reroll Chips', d: '+1 upgrade reroll each run.', cost: [30, 70, 130] },
-  { g: 'salvage', id: 'head', n: 'Head Start', d: 'Pick a free upgrade before wave 1.', cost: [150] },
+  { g: 'salvage', id: 'reroll', n: 'Reroll Chips', d: '+1 booster reroll each run.', cost: [30, 70, 130] },
+  { g: 'salvage', id: 'head', n: 'Head Start', d: 'Pick a free booster before leaving the station.', cost: [150] },
 ];
 
+// older saves had every module available: keep whatever was already bought
+if (!meta.mods) meta.mods = SHOP.filter(m => START_MODS.includes(m.id) || mlv(m.id) > 0).map(m => m.id);
+for (const id of START_MODS) if (!meta.mods.includes(id)) meta.mods.push(id);
+const SHOPBY = {}; SHOP.forEach(m => SHOPBY[m.id] = m);
+const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
+
 // ---------- game state ----------
-const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0 },
-  form: { cols: 6, rows: 3, dx: 38, dy: 34, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, boss: null, bossDown: false, cards: [], hint: {} };
+const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
+  form: { cols: 6, rows: 3, dx: 38, dy: 34, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, boss: null, bossDown: false, cards: [], hint: {}, cut: null, draftKind: 'wave', docked: false, newMod: null };
 const P = { x: W / 2, y: H - 70, vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
 const ulv = id => G.up[id] || 0;
@@ -875,13 +911,53 @@ function updateGame(dt) {
   updatePlayer(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt);
   if (G.enemies.some(e => e.dead)) G.enemies = G.enemies.filter(e => !e.dead);
   if (G.boss) $('bossbar').firstElementChild.style.transform = 'scaleX(' + clamp(G.boss.hp / G.boss.maxHp, 0, 1) + ')';
-  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; const left = DRAFT_EVERY - G.wave % DRAFT_EVERY; toast(G.bossDown ? 'CORE DESTROYED' : 'WAVE CLEARED', left === DRAFT_EVERY ? 'Upgrade earned' : left === 1 ? 'Upgrade after the next wave' : 'Upgrade in ' + left + ' waves'); }
+  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; const left = DRAFT_EVERY - G.wave % DRAFT_EVERY; toast(G.bossDown ? 'CORE DESTROYED' : 'WAVE CLEARED', G.bossDown ? 'Returning to the station' : left === DRAFT_EVERY ? 'Supply shuttle inbound' : left === 1 ? 'Booster after the next wave' : 'Booster in ' + left + ' waves'); }
   else if (G.state === 'clear') {
     G.clearT -= dt;
     // the upgrade screen waits until the last enemy shots have left the field, so nothing vanishes mid-flight
-    if (G.clearT <= 0 && P.alive) { if (G.wave % DRAFT_EVERY !== 0) nextWave(); else if (!G.eb.length) openDraft(G.bossDown ? 'boss' : 'wave'); }
+    if (G.clearT <= 0 && P.alive) { if (G.wave % DRAFT_EVERY !== 0) nextWave(); else if (!G.eb.length) { if (G.bossDown) startCut('dock', 2.8, arriveStation); else startCut('shuttle', 1.6, () => openDraft('wave')); } }
   }
   else if (G.state === 'dying') { G.dieT -= dt / 0.45; if (G.dieT <= 0) endRun(); }
+}
+
+// ---------- cutscenes ----------
+// Three short scripted scenes, each skippable with a tap: leaving the station, a supply shuttle
+// pulling alongside with a booster, and flying back to dock after a Hive Core.
+const easeIO = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+function dockPose() { ST.on = true; ST.x = W / 2; ST.y = H - 79; P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
+function startCut(kind, dur, done) {
+  G.state = 'cut'; G.cut = { kind, t: 0, dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
+  if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
+  else if (kind === 'dock') { ST.on = true; toast('DOCKING'); }
+  else { SH.side = P.x > W - 90 ? -1 : 1; SH.on = true; SH.pod = true; SH.leave = false; SFX.shuttle(); }
+}
+function updateCut(dt) {
+  const c = G.cut; c.t = Math.min(c.dur, c.t + dt); const u = c.t / c.dur;
+  if (c.kind === 'launch') {
+    // clamps release, then the station falls away behind while the ship settles into its flying position
+    const hold = 0.2, e = u < hold ? 0 : easeIO((u - hold) / (1 - hold));
+    ST.x = W / 2; ST.y = H - 79 + 370 * e; P.x = W / 2; P.y = H - 79 - DOCK_TOP + (DOCK_TOP + 9) * e; P.vx = 0;
+    if (!c.fx && u >= hold) { c.fx = true; ringFx(P.x, P.y + 14, 6, 44, 0x5fe8ff, 0.4); SFX.launch(); }
+    if (c.fx && Math.random() < 0.7) burst(P.x + rand(-3, 3), P.y + 24, [1, 0.7, 0.4], 1, 50, 0.35);
+    if (u >= 1) ST.on = false;
+  } else if (c.kind === 'dock') {
+    // the station drifts in from ahead and the ship rises to its lower port
+    const e = smooth(u), sy = H * 0.4;
+    ST.x = W / 2; ST.y = lerp(-240, sy, e); P.x = lerp(c.x0, W / 2, e); P.y = lerp(c.y0, sy + DOCK_BOTTOM, e); P.vx = 0;
+    if (!c.fx && u > 0.97) { c.fx = true; ringFx(P.x, P.y - 18, 6, 44, 0xffc857, 0.4); SFX.dock(); }
+  } else {
+    // the shuttle catches up from behind and holds station beside the ship
+    const e = 1 - Math.pow(1 - u, 3);
+    P.y = H - 70; SH.x = clamp(P.x + SH.side * lerp(86, 40, e), 16, W - 16); SH.y = lerp(H + 70, P.y + 2, e);
+  }
+  updateShots(dt); updatePicks(dt);
+  if (c.t >= c.dur) { const done = c.done; G.cut = null; done(); }
+}
+// Docked after a Hive Core: the next module is fitted, the run's scrap is banked, and the station shop opens.
+function arriveStation() {
+  const id = nextMod(); G.newMod = id || null; if (id) meta.mods.push(id);
+  const add = Math.floor(G.run.scrap) - G.run.banked; if (add > 0) { meta.scrap += add; G.run.banked += add; }
+  save(); G.state = 'station'; G.docked = true; SFX.card(); $('hud').hidden = true; drawShop(); show('scrHangar', 'btnUndock');
 }
 
 // ---------- drawing ----------
@@ -893,13 +969,19 @@ function syncScene(dt) {
   // ship
   ship.position.set(TX(P.x), TY(P.y) + Math.sin(G.time * 3) * 1.2, 0);
   ship.rotation.y = clamp(P.vx / 420, -0.7, 0.7);
-  if (P.alive) ship.visible = P.inv <= 0 || Math.floor(G.time * 14) % 2 === 0;
+  if (P.alive) ship.visible = P.inv <= 0 || G.state === 'cut' || Math.floor(G.time * 14) % 2 === 0;   // no hit-blink during cutscenes
   flame.scale.y = 12 + Math.sin(G.time * 40) * 3;
   shieldMesh.visible = P.shieldUp; shieldMesh.rotation.y = G.time * 1.5; shieldMesh.rotation.x = G.time;
   for (let i = 0; i < 3; i++) {
     const m = droneMeshes[i]; m.visible = P.alive && i < (S.drones || 0) && G.state !== 'title';
     if (m.visible) { const a = G.time * 2.4 + i * TAU / S.drones; m.position.set(TX(P.x) + Math.cos(a) * 30, TY(P.y) + 6, Math.sin(a) * 30); m.rotation.y = a * 2; }
   }
+  // station and shuttle
+  station.visible = ST.on;
+  if (ST.on) { station.position.set(TX(ST.x), TY(ST.y), -20); stRing.rotation.z += 0.45 * dt; const blink = Math.floor(G.time * 2) % 2 === 0; stLights[0].visible = stLights[1].visible = blink; stLights[2].visible = stLights[3].visible = !blink; }
+  if (SH.leave) { SH.y += 280 * dt; SH.x += SH.side * 70 * dt; if (SH.y > H + 80) { SH.on = false; SH.leave = false; } }   // drops back once the booster is aboard
+  shuttle.visible = SH.on;
+  if (SH.on) { shuttle.position.set(TX(SH.x), TY(SH.y) + Math.sin(G.time * 2.6) * 1.5, 0); shuttle.rotation.y = SH.side * -0.35; shPod.visible = SH.pod; shPod.rotation.z += 2.5 * dt; shFlame.scale.y = 9 + Math.sin(G.time * 36) * 2.5; }
   // shots
   let n = 0;
   for (const b of G.pb) {
@@ -933,7 +1015,7 @@ function syncScene(dt) {
   }
   for (let i = zaps.length - 1; i >= 0; i--) { const z = zaps[i]; z.t -= dt; if (z.t <= 0) { scene.remove(z.line); z.line.geometry.dispose(); zaps.splice(i, 1); } }
   // background
-  const sp = G.state === 'play' || G.state === 'clear' ? 1 : 0.35;
+  const sp = G.state === 'play' || G.state === 'clear' ? 1 : G.state === 'cut' ? (G.cut.kind === 'launch' ? 0.35 + 1.5 * (G.cut.t / G.cut.dur) : 0.7) : 0.35;
   for (let i = 0; i < STARS; i++) { const j = i * 3 + 1, lim = 520 * (1 - stars.pos[j + 1] / 700); stars.pos[j] -= starV[i] * sp * dt; if (stars.pos[j] < -lim) stars.pos[j] = lim; }
   stars.g.attributes.position.needsUpdate = true;
   for (const h of hulks) { h.position.y -= 14 * sp * dt; h.rotation.x += 0.05 * dt; h.rotation.y += 0.08 * dt; if (h.position.y < -1300) { h.position.y = 1300; h.position.x = rand(-500, 500); } }
@@ -962,7 +1044,7 @@ function drawHud() {
 }
 function loadoutHtml() {
   const ids = Object.keys(G.up).filter(id => id !== 'patch');
-  return ids.length ? ids.map(id => '<span>' + UPBY[id].n + ' <b>' + G.up[id] + '</b></span>').join('') : '<span>No upgrades yet</span>';
+  return ids.length ? ids.map(id => '<span>' + UPBY[id].n + ' <b>' + G.up[id] + '</b></span>').join('') : '<span>No boosters yet</span>';
 }
 function soundLabels() { $('btnSound').textContent = $('btnSound2').textContent = meta.mute ? 'Sound off' : 'Sound on'; }
 function toggleMute() { meta.mute = !meta.mute; save(); soundLabels(); }
@@ -971,25 +1053,27 @@ function resetField() {
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.queue = []; G.blastQ = []; G.boss = null; $('bossbar').hidden = true;
+  G.cut = null; G.docked = false; ST.on = false; SH.on = false; SH.leave = false;
 }
 function titleScene() {
   resetField(); G.wave = 0; G.up = {}; recalc(); G.form = { cols: 6, rows: 2, dx: 38, dy: 34, top: 62 };
   for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++) spawnEnemy(r === 0 ? 'wasp' : c % 3 === 1 ? 'weaver' : 'mite', c, r);
-  P.x = W / 2; P.vx = 0; P.alive = true; P.inv = 0; P.shieldUp = false; P.target = null; ship.visible = true;
+  P.x = W / 2; P.vx = 0; P.alive = true; P.inv = 0; P.shieldUp = false; P.target = null; ship.visible = true; dockPose();
 }
 function showTitle() {
   G.state = 'title'; titleScene(); $('hud').hidden = true;
-  $('btnHangar').textContent = 'Hangar · ◆ ' + meta.scrap;
+  $('btnHangar').textContent = 'Station · ◆ ' + meta.scrap;
   $('bestLine').textContent = meta.best ? 'Deepest run: wave ' + meta.best + '. Runs flown: ' + meta.runs + '.' : '';
   show('scrTitle', 'btnPlay');
 }
 function startRun() {
   audioInit(); resetField();
-  G.up = {}; G.run = { scrap: 0, kills: 0 }; G.hint = {}; G.wave = 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
+  G.up = {}; G.run = { scrap: 0, kills: 0, banked: 0 }; G.hint = {}; G.wave = 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
   Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; hudKey = ''; drawHud();
-  if (mlv('head')) openDraft('head'); else nextWave();
+  dockPose();   // every run begins docked at the station
+  if (mlv('head')) openDraft('head'); else startCut('launch', 2.4, nextWave);
 }
 function nextWave() {
   G.wave++; buildWave(G.wave); G.state = 'play'; show(null); drawHud();
@@ -1016,9 +1100,15 @@ function drawDraft() {
   $('draftLoadout').innerHTML = loadoutHtml();
 }
 function openDraft(kind) {
-  G.state = 'draft'; G.eb.length = 0; G.cards = rollCards(kind);
-  $('draftEyebrow').textContent = kind === 'head' ? 'Head start' : kind === 'boss' ? 'Hive core destroyed · rare salvage' : 'Wave ' + G.wave + ' cleared';
+  G.state = 'draft'; G.draftKind = kind; G.eb.length = 0; G.cards = rollCards(kind);
+  $('draftEyebrow').textContent = kind === 'head' ? 'Station workshop · head start' : kind === 'boss' ? 'Station workshop · rare booster' : 'Supply shuttle · wave ' + G.wave + ' cleared';
   drawDraft(); show('scrDraft');
+}
+// After a booster is fitted (or skipped): the shuttle drops back and the next wave begins, or the ship leaves the station.
+function afterDraft(fitted) {
+  hudKey = '';
+  if (G.draftKind === 'wave') { SH.pod = !fitted; SH.leave = true; if (fitted) ringFx(P.x, P.y, 8, 46, 0xffc857, 0.4); nextWave(); }
+  else startCut('launch', 2.4, nextWave);
 }
 function applyUpgrade(u) {
   if (u.id === 'patch') { P.hp = Math.min(S.maxHp, P.hp + 2); return; }
@@ -1030,7 +1120,7 @@ function applyUpgrade(u) {
 function choose(i) {
   if (G.state !== 'draft') return;
   const u = G.cards[i]; if (!u) return;
-  applyUpgrade(u); SFX.card(); hudKey = ''; nextWave();
+  applyUpgrade(u); SFX.card(); afterDraft(true);
 }
 function togglePause() {
   if (G.state === 'play' || G.state === 'clear') {
@@ -1038,40 +1128,53 @@ function togglePause() {
   } else if (G.state === 'pause') { G.state = G.prev; show(null); }
 }
 function endRun() {
-  const bonus = Math.max(0, G.wave - 1) * 3, got = Math.floor(G.run.scrap) + bonus, best = G.wave > meta.best;
+  const bonus = Math.max(0, G.wave - 1) * 3, got = Math.floor(G.run.scrap) - G.run.banked + bonus, best = G.wave > meta.best;
   meta.scrap += got; meta.runs++; if (best) meta.best = G.wave; save();
   G.state = 'dead';
   $('deadEyebrow').textContent = best && meta.runs > 1 ? 'Ship lost · new record' : 'Ship lost';
   $('deadTitle').textContent = 'Reached wave ' + G.wave;
-  $('deadStats').innerHTML = '<dt>Enemies destroyed</dt><dd>' + G.run.kills + '</dd><dt>Scrap collected</dt><dd>' + Math.floor(G.run.scrap) + '</dd><dt>Depth bonus</dt><dd>' + bonus +
-    '</dd><dt>Banked this run</dt><dd class="gold">◆ ' + got + '</dd><dt>Hangar total</dt><dd class="gold">◆ ' + meta.scrap + '</dd>';
+  $('deadStats').innerHTML = '<dt>Enemies destroyed</dt><dd>' + G.run.kills + '</dd><dt>Scrap collected</dt><dd>' + Math.floor(G.run.scrap) + '</dd>' + (G.run.banked ? '<dt>Already banked at the station</dt><dd>' + G.run.banked + '</dd>' : '') + '<dt>Depth bonus</dt><dd>' + bonus +
+    '</dd><dt>Banked now</dt><dd class="gold">◆ ' + got + '</dd><dt>Station total</dt><dd class="gold">◆ ' + meta.scrap + '</dd>';
   show('scrDead', 'btnDeadHangar');
 }
 function drawShop() {
+  const docked = G.docked, next = nextMod(), nm = G.newMod && SHOPBY[G.newMod];
+  $('stEyebrow').textContent = docked ? 'Docked · Hive Core destroyed' : 'Space station';
+  $('stTitle').textContent = docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
+  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade. ' : '') + 'Scrap from this run is banked. Spend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries. Each Hive Core you destroy earns a new one.';
+  $('btnUndock').hidden = !docked; $('btnHangarPlay').hidden = $('btnHangarBack').hidden = docked;
   $('bank').textContent = '◆ ' + meta.scrap + ' scrap';
-  $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => '<h3 class="grp">' + name + ' <span>' + blurb + '</span></h3>' + SHOP.map((s, i) => {
-    if (s.g !== key) return '';
-    const lv = mlv(s.id), max = s.cost.length, cost = s.cost[lv];
-    let pips = ''; for (let k = 0; k < max; k++) pips += '<i' + (k < lv ? ' class="on"' : '') + '></i>';
-    return '<div class="item"><div><div class="nm">' + s.n + '</div><div class="ds">' + s.d + '</div><div class="pips" aria-label="Level ' + lv + ' of ' + max + '">' + pips + '</div></div>' +
-      '<button class="btn" data-i="' + i + '"' + (lv >= max || cost > meta.scrap ? ' disabled' : '') + '>' + (lv >= max ? (max > 1 ? 'Maxed' : 'Owned') : '◆ ' + cost) + '</button></div>';
-  }).join('')).join('');
+  $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => {
+    const rows = SHOP.map((s, i) => {
+      if (s.g !== key || !meta.mods.includes(s.id)) return '';
+      const lv = mlv(s.id), max = s.cost.length, cost = s.cost[lv];
+      let pips = ''; for (let k = 0; k < max; k++) pips += '<i' + (k < lv ? ' class="on"' : '') + '></i>';
+      return '<div class="item' + (docked && s.id === G.newMod ? ' fresh' : '') + '"><div><div class="nm">' + s.n + (docked && s.id === G.newMod ? ' <em>New</em>' : '') + '</div><div class="ds">' + s.d + '</div><div class="pips" aria-label="Level ' + lv + ' of ' + max + '">' + pips + '</div></div>' +
+        '<button class="btn" data-i="' + i + '"' + (lv >= max || cost > meta.scrap ? ' disabled' : '') + '>' + (lv >= max ? (max > 1 ? 'Maxed' : 'Owned') : '◆ ' + cost) + '</button></div>';
+    }).join('');
+    return rows ? '<h3 class="grp">' + name + ' <span>' + blurb + '</span></h3>' + rows : '';
+  }).join('') + '<p class="fine locked">' + (next ? 'Next module: ' + SHOPBY[next].n + '. Destroy a Hive Core and the station will fit it. ' + (SHOP.length - meta.mods.length) + ' still to earn.' : 'Every module is fitted.') + '</p>';
 }
-function openHangar() { if (G.state !== 'title') { G.state = 'title'; titleScene(); $('hud').hidden = true; } G.state = 'hangar'; drawShop(); show('scrHangar', 'btnHangarPlay'); }
+function openHangar() { if (G.state !== 'title') { G.state = 'title'; titleScene(); $('hud').hidden = true; } G.state = 'hangar'; G.docked = false; drawShop(); show('scrHangar', 'btnHangarPlay'); }
 
 $('btnPlay').onclick = startRun; $('btnAgain').onclick = startRun; $('btnHangarPlay').onclick = startRun;
 $('btnHangar').onclick = openHangar; $('btnDeadHangar').onclick = openHangar; $('btnHangarBack').onclick = showTitle;
 $('btnSound').onclick = $('btnSound2').onclick = () => { audioInit(); toggleMute(); };
 $('btnPause').onclick = $('btnResume').onclick = togglePause;
+$('btnUndock').onclick = () => { if (G.state === 'station') { G.docked = false; $('hud').hidden = false; hudKey = ''; drawHud(); dockPose(); openDraft('boss'); } };
 $('btnQuit').onclick = () => { if (G.state === 'pause') { show(null); endRun(); } };
 $('btnReroll').onclick = () => { if (G.state === 'draft' && G.rerolls > 0) { G.rerolls--; G.cards = rollCards('wave'); drawDraft(); SFX.pick(); } };
-$('btnSkip').onclick = () => { if (G.state === 'draft') { G.run.scrap += 10; hudKey = ''; nextWave(); } };
+$('btnSkip').onclick = () => { if (G.state === 'draft') { G.run.scrap += 10; afterDraft(false); } };
 $('cards').onclick = e => { const b = e.target.closest('.card'); if (b) choose(+b.dataset.i); };
 $('shop').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   const s = SHOP[+b.dataset.i], lv = mlv(s.id), cost = s.cost[lv];
   if (cost == null || cost > meta.scrap) { SFX.deny(); return; }
-  meta.scrap -= cost; meta.up[s.id] = lv + 1; save(); SFX.buy(); drawShop();
+  meta.scrap -= cost; meta.up[s.id] = lv + 1; save(); SFX.buy();
+  if (G.docked) {   // bought mid-run while docked: the ship gets it straight away
+    recalc(); if (s.id === 'hull') P.hp = Math.min(S.maxHp, P.hp + 1); if (s.id === 'reroll') G.rerolls++; if (s.id === 'revive') G.revive++; hudKey = ''; drawHud();
+  }
+  drawShop();
 };
 
 // ---------- feedback ----------
@@ -1194,6 +1297,7 @@ addEventListener('keydown', e => {
   if (typing(e)) return;               // letters typed into the feedback box are not game keys
   audioInit(); const k = e.key.toLowerCase();
   if (k === 'arrowleft' || k === 'arrowright' || k === 'a' || k === 'd') { keys[k] = true; if (inPlay()) e.preventDefault(); }
+  else if (G.state === 'cut' && (k === ' ' || k === 'enter' || k === 'escape')) G.cut.t = G.cut.dur;
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'm') toggleMute();
   else if (G.state === 'draft' && (k === '1' || k === '2' || k === '3')) choose(+k - 1);
@@ -1203,7 +1307,9 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 let drag = null;
 const worldX = cx => clamp((cx - window.innerWidth / 2) * unitsPerPx + W / 2, 14, W - 14);
 addEventListener('pointerdown', e => {
-  audioInit(); if (!inPlay() || (e.target.closest && e.target.closest('button, #fb'))) return;
+  audioInit();
+  if (G.state === 'cut' && !(e.target.closest && e.target.closest('button, #fb'))) { G.cut.t = G.cut.dur; return; }   // a tap skips a cutscene
+  if (!inPlay() || (e.target.closest && e.target.closest('button, #fb'))) return;
   if (e.pointerType === 'mouse') P.target = worldX(e.clientX); else drag = { id: e.pointerId, sx: e.clientX, tx: P.x };
 });
 addEventListener('pointermove', e => {
@@ -1227,14 +1333,16 @@ let last = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.034, (now - last) / 1000 || 0); last = now;
-  if (G.state !== 'pause' && G.state !== 'draft') G.time += dt;
+  const frozen = G.state === 'pause' || G.state === 'draft' || G.state === 'station';
+  if (!frozen) G.time += dt;
   if (inPlay() || G.state === 'dying') updateGame(dt);
-  else if (G.state !== 'pause' && G.state !== 'draft') { P.y = H - 70; if (G.state === 'title' || G.state === 'hangar') P.x = W / 2 + Math.sin(G.time * 0.6) * 60; updateEnemies(dt); if (G.enemies.some(e => e.dead)) G.enemies = G.enemies.filter(e => !e.dead); }
+  else if (G.state === 'cut') updateCut(dt);
+  else if (!frozen) { if (G.state === 'title' || G.state === 'hangar') dockPose(); else P.y = H - 70; updateEnemies(dt); if (G.enemies.some(e => e.dead)) G.enemies = G.enemies.filter(e => !e.dead); }
   syncScene(G.state === 'pause' ? 0 : dt);
   renderer.render(scene, camera);
 }
 resize(); soundLabels(); showTitle();
-window.__swarmfall = { G, P, S, UP, meta, recalc, startRun, nextWave, choose, openDraft, issueUrl, spawnPick };
+window.__swarmfall = { G, P, S, ST, SH, UP, meta, recalc, startRun, nextWave, choose, openDraft, issueUrl, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
