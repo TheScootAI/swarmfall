@@ -14,7 +14,7 @@ const OUT = process.argv[2];
 const THREE_LOCAL = path.join(__dirname, 'node_modules/three/build/three.min.js');
 
 // When each enemy first appears (wave number). Change these together with buildWave() in index.html.
-const FIRST_WAVE = { mite: 1, wasp: 2, weaver: 5, triplet: 7, splitter: 8, elite: 8, beetle: 10, lancer: 10 };
+const FIRST_WAVE = { mite: 1, wasp: 2, weaver: 5, splitter: 8, elite: 8, beetle: 10, triplet: 13, lancer: 15 };
 
 let failures = 0;
 const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ') + label + (detail ? '  — ' + detail : '')); if (!ok) failures++; };
