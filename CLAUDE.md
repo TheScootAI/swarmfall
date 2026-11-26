@@ -20,8 +20,9 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **One hit ends a new ship's run.** Hull, shields and everything else are bought with scrap (station modules) or picked as boosters.
 - **Colours carry meaning.** All enemy fire is the same red (`ENEMY_RED`), and nothing good is red. Anything good to grab sits in a pulsing blue halo: gold rings are scrap, green crosses repair hull.
 - **Mites are the pawns.** They are the largest group in every wave and hold the front two rows. Stronger enemies sit behind them.
-- **Darts lean toward the ship** a little as they fly (`DART_TURN`), so they do not always come straight down. Far gentler than a missile.
+- **Darts lean toward the ship** a little as they fly (`DART`), so they do not always come straight down. Each dart may turn about 6 degrees in all, so a sidestep still clears it.
 - **A boss's scrap arrives in a line.** Each ring of the shower flies to the ship at its own speed (`sp` on the pickup), so they are collected one after another.
+- **The cloud boosters are gentle on purpose.** Flame Cloud weakens and never finishes an enemy off (the owner: "just want it to weaken them slowly"); it takes a share of the enemy's own health, so it means the same on wave 3 and wave 30. Confusion Gas confuses for 5 seconds from first touch, once; a confused enemy leaves the ship alone and shoots the enemy furthest from it.
 - **Waves gather faster as they go.** Enemies fly into the formation 5% faster each wave (`ENTER`), levelling off at 2.5 times the first wave's pace.
 - **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
 - **Five bosses take turns** (`BOSSES`): the Hive Core on wave 6, the Fracture Cube on 12, the Beam Warden on 18, the Siege Beetle on 24, the Triad on 30, then round again, tougher. Each is built on an enemy the player has already met (splitter, lancer, beetle, triplet). The laser boss comes third because the owner set lancers to arrive at wave 15, so players have met lasers first.
@@ -39,7 +40,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 | save | `meta`: scrap, records, mute, the graphics setting (`meta.gfx`, `meta.autoQ`), bought modules (`meta.up`) and fitted modules (`meta.mods`), all in localStorage. |
 | audio | Web Audio synth: `tone()`, `noise()` and the `SFX` table. Phone unlock tricks are in `audioInit()`. |
 | three.js stage | Renderer, lights and the reflection environment, `geo` and `M` (shared geometries and materials), the nebula backdrop, stars, particles (`burst`), effect pools (`ringFx`, `zapFx`), instanced shots, the player ship, station and shuttle models, post-processing (`draw()`, `GFX`), `resize()`. |
-| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`, `ENTER` (how fast enemies fly into formation), `DART_TURN`, `CLOUD` (the gas and flame cloud boosters), `BOSSES` and each boss's table, `FINALE`. |
+| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`, `ENTER` (how fast enemies fly into formation), `DART`, `CLOUD` (the gas and flame cloud boosters), `BOSSES` and each boss's table, `FINALE`. |
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
 | enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the five bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`, `updateSiege`, `updateTriad`), and `buildWave()`. |
 | player | Ship hit shape (`shipHit`), shields, shots, seekers, the cloud boosters (`launchCloud`, `updateClouds`, and `afflicted` for what a burning or confused enemy does), picking up scrap. |
@@ -73,7 +74,7 @@ The script is split into sections, each marked with a `// ---------- name ------
   - The Beam Warden's beams are `e.bm` and `e.beams`, not `e.laser`: that field marks a lancer everywhere.
 - **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during a boss's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
-- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `CLOUD`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
+- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `DART`, `CLOUD`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
 
 ## Graphics
@@ -112,7 +113,7 @@ node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by
 - A full run: launch, booster shuttle, Hive Core, docking, the station, death and reload.
 - The four bosses after the Hive Core: each arrives on its wave, every attack happens, and destroying each leads to docking and a new module. Also: the cube breaks 1 to 2 to 4 with the bar following; a gap between the Warden's beams is safe and a beam is not; the Siege Beetle's shell lets 40% of a hit through shut and all of it open; losing a Triad core does not end the fight.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
-- The cloud boosters: an enemy in a Flame Cloud burns slowly; one in Confusion Gas is confused and its shots hurt other enemies; the ship lobs clouds by itself. A dart bends a little toward the ship. A boss's scrap arrives over time.
+- The cloud boosters: a Flame Cloud weakens an enemy and never destroys it; Confusion Gas confuses for 5 seconds, once, and one cloud does not clear the swarm; the ship lobs clouds by itself. A dart bends a little toward the ship and a sidestep still clears it. A boss's scrap arrives over time and is all in before docking.
 - A stress run with every booster on, and pause.
 - The station: Undock stays on screen while the list scrolls, and "More below" shows until its end. On a short phone (iPhone SE size), the same for the title, pause and booster screens.
 - A boss's death scene: slow motion happens and the camera stays put, the ship cannot be hit during it, and speed is normal again before docking.
