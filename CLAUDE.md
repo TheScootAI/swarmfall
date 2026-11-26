@@ -22,7 +22,7 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
 - **Three bosses take turns** (`BOSSES`): the Hive Core on wave 6, the Fracture Cube on 12, the Beam Warden on 18, then round again, tougher. The laser boss comes third because the owner set lancers to arrive at wave 15, so players have met lasers first.
 - **Cutscenes.** Only the launch can be skipped with a tap. The shuttle and docking scenes always play out, because a player steering by touch puts a finger down just as they start.
-- **A boss dies big.** Its death is a scene of about 2.5 seconds (`FINALE`): game time slows to a fifth, the camera pushes in on it, smaller blasts follow the first, and a long deep boom plays (`SFX.core`). The ship cannot be hit during it, nor for a blink afterwards (`FINALE.grace`), because the camera may leave the ship out of view. The core's shots are not removed: they carry on afterwards.
+- **A boss dies big.** Its death is a scene of about 2.5 seconds (`FINALE`): game time slows to a fifth, smaller blasts follow the first, and a long deep boom plays (`SFX.core`). The camera does not move: a push-in on the boss was tried, and the owner said the slow motion is enough. The ship cannot be hit during the scene, nor for a blink afterwards (`FINALE.grace`), because it steers at a fifth of its speed while time is slow. The boss's shots are not removed: they carry on afterwards.
 - **Sound.** Firing is silent on purpose, since a constant shooting sound was annoying. New sounds should be short and soft. The one long sound is a boss's death, which the owner asked to be longer and deeper.
 - **How the owner tunes the game.** They leave comments on the guide artifacts ("start at wave 15"). When you change the game, update the tables, the guides and the README together.
 
@@ -39,7 +39,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
 | enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the three bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`), and `buildWave()`. |
 | player | Ship hit shape (`shipHit`), shields, shots, seekers, picking up scrap. |
-| cutscenes | `CUTS` (durations and which can be skipped), `startCut`, `updateCut`, docking at the station. A boss's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, `finaleZoom`, next to `shake()`. |
+| cutscenes | `CUTS` (durations and which can be skipped), `startCut`, `updateCut`, docking at the station. A boss's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, next to `shake()`. |
 | drawing | `syncScene()`: copies game state into the three.js scene once a frame. |
 | UI | HUD, screens, booster choice (draft), the station shop, buttons. |
 | feedback | The speech-bubble button that opens a prefilled GitHub issue. |
@@ -107,7 +107,7 @@ node shots.js <dir> "gfx=high"   # nine fixed pictures for judging the look by e
 - The Fracture Cube and the Beam Warden: each arrives on its wave, every attack happens, the cube breaks 1 to 2 to 4 with the bar following, a gap between beams is safe and a beam is not, and destroying each leads to docking and a new module.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
 - A stress run with every booster on, and pause.
-- A boss's death scene: slow motion and the camera push happen, the ship cannot be hit during it, and speed and camera are normal again before docking.
+- A boss's death scene: slow motion happens and the camera stays put, the ship cannot be hit during it, and speed is normal again before docking.
 - Graphics: the setting button, that a real picture reaches the screen with every effect on, and that `auto` steps down on a slow device.
 
 The main run uses `?gfx=low`, because software rendering makes the effects very slow. Frame rate on a real phone cannot be measured here; say so when it matters.

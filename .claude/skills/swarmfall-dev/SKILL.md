@@ -22,7 +22,7 @@ This installs three.js and esbuild, which are only needed to rebuild `vendor/thr
 - **Bosses:** `BOSSES` sets their order, `ET` their health, `CUBE` and `WARDEN` the two newer ones' numbers. `CLAUDE.md` lists the rules a boss must follow and everything a new one needs.
 - **Boosters** (in-run picks): `UP`, plus `recalc()` for how they change stats. Any one-off effect at the moment of picking goes in `applyUpgrade()`.
 - **Station modules:** `SHOP` and `recalc()`. `UNLOCK_ORDER` sets which module each boss earns, and `START_MODS` sets what a new save starts with. A module bought while docked applies at once in the `#shop` click handler.
-- **Cutscene timing:** `CUTS`. Choreography is in `updateCut()`. A boss's death scene (slow motion, camera push, follow-up blasts) is `FINALE` and the `finale…` functions.
+- **Cutscene timing:** `CUTS`. Choreography is in `updateCut()`. A boss's death scene (slow motion and follow-up blasts; no camera move, at the owner's request) is `FINALE` and the `finale…` functions.
 - **Anything drawn** (materials, glow, lights, backdrop, effects): read the Graphics section of `CLAUDE.md` first. A three.js name missing from the bundle goes in `tools/three-entry.js`, then `node tools/build-three.js`.
 - **Sounds:** the `SFX` table. Keep them short and quiet, and call them through `limited()` if they can fire many times a second.
 - **New enemy type:** it needs an entry in each of these, or it will throw every frame:

@@ -27,7 +27,7 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 - **Bosses** take turns, one every sixth wave, and come back tougher. The **Hive Core** (waves 6, 24, 42) sweeps the top with fans and rings of shots, missiles and released ships. The **Fracture Cube** (12, 30, 48) breaks into two halves when destroyed, and each half into two quarters; every piece shoots, and the fight ends with the last one. The **Beam Warden** (18, 36, 54) stops and fires fans of angled laser beams; thin red lines show where they will be, and you stand between them.
 - **Boosters** last for one run. They come in three rarities and stack: fire rate, damage, extra barrels, piercing, ricochet, shields, drones, homing missiles, chain lightning, and more.
 - **Station modules** are permanent, upgraded with scrap, and saved in the browser's local storage. A new game has two, Tuned Cannons and Reinforced Hull. Each boss you destroy earns the next one (`UNLOCK_ORDER`), fitted when you dock. Modules fall under Weapons, Armor, Shields and Specials, plus Salvage. You can spend scrap at the station between runs or while docked after a boss.
-- **Cutscenes** are short: leaving the station at the start of a run (a tap skips it), the booster shuttle arriving, and docking after a boss. When a boss is destroyed, time slows and the camera pushes in on the explosion for about two and a half seconds; the ship cannot be hit while that plays.
+- **Cutscenes** are short: leaving the station at the start of a run (a tap skips it), the booster shuttle arriving, and docking after a boss. When a boss is destroyed, time slows for about two and a half seconds while it blows apart; the ship cannot be hit while that plays.
 
 ## Tuning
 
@@ -40,7 +40,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `DRAFT_EVERY` and `BOSS_EVERY`: how often boosters and bosses come.
 - `BOSSES`: the bosses in the order they take turns. `CUBE` and `WARDEN`: the Fracture Cube's and Beam Warden's numbers.
 - `SKIP_SCRAP`: scrap for passing up a booster.
-- `FINALE`: a boss's death scene (length, how slow, how far the camera pushes in).
+- `FINALE`: a boss's death scene (length, how slow, how often the follow-up blasts come).
 
 `recalc()` turns upgrades into ship stats, and `buildWave()` builds each formation. Cutscene timings are in `CUTS`.
 

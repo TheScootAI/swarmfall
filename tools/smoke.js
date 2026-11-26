@@ -70,7 +70,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
       if (s.G.state !== 'station') requestAnimationFrame(f); })(); });
   s = await playTo(x => x.state === 'cut' && x.cut === 'dock'); check(s.wave === 6 && s.state === 'cut', 'Hive Core on wave 6 leads to docking', 'wave ' + s.wave + ' ' + s.state);
   const fin = await page.evaluate(() => { const s = window.__swarmfall; return { ...window.__fin, on: s.FIN.on, speed: s.G.speed, z: s.camera.position.z }; });
-  check(fin.slowest < 0.3 && fin.closest < 0.8, 'the Hive Core dies in slow motion with the camera pushing in', JSON.stringify(fin));
+  check(fin.slowest < 0.3 && fin.closest > 0.999, 'the Hive Core dies in slow motion, and the camera stays where it is', JSON.stringify(fin));
   check(!fin.hurt && fin.grace > 0.3, 'the ship cannot be hit during the core\'s death scene, nor for a moment after', 'grace ' + fin.grace);
   check(!fin.on && fin.speed === 1 && Math.abs(fin.z - fin.far) < 0.01, 'speed and camera are back to normal by the time docking starts', JSON.stringify(fin));
   s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);

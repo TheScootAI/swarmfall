@@ -724,15 +724,16 @@ const UNLOCK = {
   triplet: 13,         // after the second boss
   lancer: [15, 20, 25] // the first, second and third lancer
 };
-const SKIP_SCRAP = 10;
+const SKIP_SCRAP = 10;   // scrap for passing up a booster
 // A boss's death scene (the Hive Core, the last piece of the Fracture Cube, the Beam Warden): time slows and
-// the camera pushes in on the explosion, then both ease back.
-// Times are real seconds. slow: how fast game time runs at its slowest. zoom: the share of its distance the
-// camera closes. pan: how far the centre of the view moves toward the core. blastEvery: gap between the
-// smaller blasts that follow the first. grace: how long the ship stays untouchable (and blinks) once the camera
-// is back, so a shot that crept up while the ship was out of view can still be dodged.
-const FINALE = { dur: 2.5, slow: 0.2, easeIn: 0.25, easeOut: 0.6, zoom: 0.34, pan: 0.75, blastEvery: 0.2, grace: 0.6 };
-const FLASH_RGB = [1, 1, 0.8];   // scrap for passing up a booster
+// smaller blasts follow the first, then time eases back. The camera does not move: the owner tried a push-in
+// and found the slow motion enough.
+// Times are real seconds. slow: how fast game time runs at its slowest. blastEvery: gap between the
+// smaller blasts that follow the first. grace: how long the ship stays untouchable (and blinks) after the scene.
+// The ship cannot be hit during the scene either: it steers at a fifth of its speed while time is slow, so a
+// shot that reaches it then could not have been dodged.
+const FINALE = { dur: 2.5, slow: 0.2, easeIn: 0.25, easeOut: 0.6, blastEvery: 0.2, grace: 0.6 };
+const FLASH_RGB = [1, 1, 0.8];
 const UP = [
   { id: 'rapid', c: 'w', n: 'Rapid Feed', r: 0, max: 8, d: '+20% fire rate.' },
   { id: 'heavy', c: 'w', n: 'Heavy Rounds', r: 0, max: 8, d: '+25% damage.' },
@@ -1241,12 +1242,6 @@ function finaleStep(real) {
   }
   return lerp(1, FINALE.slow, smooth(Math.min(1, FIN.t / FINALE.easeIn)));
 }
-// How far the camera has pushed in, from 0 to 1: a slow push that eases to a stop, then a quicker pull back.
-function finaleZoom() {
-  if (!FIN.on) return 0;
-  const out = FINALE.dur - FINALE.easeOut, k = Math.min(1, FIN.t / out);
-  return FIN.t < out ? 1 - (1 - k) * (1 - k) : 1 - smooth((FIN.t - out) / FINALE.easeOut);
-}
 function clearShotsNear(x, y, r) { for (const a of [G.eb, G.em]) for (const b of a) if ((b.x - x) ** 2 + (b.y - y) ** 2 <= r * r) b.dead = true; }
 function clearEnemyFire() { for (const b of G.eb) b.dead = true; for (const m of G.em) m.dead = true; }
 const repair = k => { P.hp = Math.min(S.maxHp, P.hp + k); };
@@ -1264,7 +1259,7 @@ function shipHit(x, y, r) {
   const wx = clamp(dx, -12, 12); return (dx - wx) ** 2 + (dy - 5) ** 2 < (r + 4.5) ** 2;     // wings and their tip fins
 }
 function hitPlayer() {
-  if (P.inv > 0 || !P.alive || FIN.on) return;   // nothing can hit the ship during the core's death scene: the camera is on the core and the ship may be out of view
+  if (P.inv > 0 || !P.alive || FIN.on) return;   // nothing can hit the ship during a boss's death scene: time is slow, so the ship is too slow to dodge
   if (P.shieldUp) {   // the shield takes the hit and is gone until it recharges
     P.shieldUp = false; P.shieldT = S.shieldCD; P.inv = 0.7; ringFx(P.x, P.y, SHIELD_R, 70, 0xc79bff); burst(P.x, P.y, [0.78, 0.6, 1], 26, 190, 0.5);
     SFX.shield(); vibrate(30); clearShotsNear(P.x, P.y, 70); drawHud(); return;
@@ -1453,7 +1448,7 @@ function updateEnemies(dt) {
 let bossFrac = -1;   // the boss bar's last drawn fill, so it is only restyled when it changes
 function clearedToast() {
   const left = DRAFT_EVERY - G.wave % DRAFT_EVERY;
-  if (G.bossDown) { if (FIN.on) FIN.toast = true; else CORE_TOAST(); }   // during the death scene the words would sit on top of the explosion: they wait for it to end
+  if (G.bossDown) { if (FIN.on) FIN.toast = true; else CORE_TOAST(); }   // the words wait for the death scene to end, so the explosion plays uncluttered
   else toast('WAVE CLEARED', left === DRAFT_EVERY ? 'Booster shuttle inbound' : left === 1 ? 'Booster shuttle arrives after the next wave' : 'Booster shuttle arrives in ' + left + ' waves');
 }
 function updateGame(dt) {
@@ -1531,12 +1526,10 @@ function arriveStation() {
 // ---------- drawing ----------
 function syncScene(dt) {
   // camera: a little sideways drift with the ship for parallax, plus shake
-  // During the Hive Core's death scene it also pushes in toward the core. All of it is worked out afresh each
-  // frame from camBase, so a resize in the middle of the scene changes nothing.
+  // It is placed afresh each frame from camBase, so a resize changes nothing.
   shakeAmt = Math.max(0, shakeAmt - 40 * realDt);   // real time: shake must not drag on while game time runs slow
-  const zoom = finaleZoom(), pan = FINALE.pan * zoom;
   camX = lerp(camX, (P.x - W / 2) * 0.035, Math.min(1, 4 * dt));
-  camera.position.set(camX + TX(FIN.x) * pan + rand(-1, 1) * shakeAmt * 0.3, TY(FIN.y) * pan + rand(-1, 1) * shakeAmt * 0.3, camBase * (1 - FINALE.zoom * zoom));
+  camera.position.set(camX + rand(-1, 1) * shakeAmt * 0.3, rand(-1, 1) * shakeAmt * 0.3, camBase);
   // ship
   ship.position.set(TX(P.x), TY(P.y) + Math.sin(G.time * 3) * 1.2, 0);
   ship.rotation.y = clamp(P.vx / 420, -0.7, 0.7);
