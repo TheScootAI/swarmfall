@@ -570,7 +570,7 @@ const ulv = id => G.up[id] || 0;
 function recalc() {
   const od = ulv('over');
   S.dmg = 10 * (1 + 0.1 * mlv('dmg')) * (1 + 0.25 * ulv('heavy')) * (1 + 0.1 * ulv('velocity')) * (1 + 0.2 * od);
-  S.shotSpeed = 430 * (1 + 0.25 * ulv('velocity'));
+  S.shotSpeed = 366 * (1 + 0.25 * ulv('velocity'));
   S.shots = 1 + mlv('twin') + ulv('twin'); S.pierce = ulv('pierce'); S.rico = ulv('rico');
   S.move = 240 * (1 + 0.15 * ulv('thrust'));
   S.maxHp = Math.max(1, 1 + mlv('hull') + ulv('plate') - od);   // a new ship has 1 hull: one hit ends the run until hull is added
