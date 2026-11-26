@@ -12,6 +12,10 @@ Open `index.html` in a browser, or serve the folder with any static host (GitHub
 - **Mouse:** the ship follows the cursor.
 - **Keyboard:** ← → or A D to steer, 1 2 3 to pick an upgrade, P to pause, M to mute.
 
+## Feedback
+
+The speech-bubble button in the top-right corner opens a box for a bug or an idea. "Open on GitHub" is a link to this repository's new-issue page with the note filled in, plus one line about the run. Nothing is sent from the game; the note is posted only when the player presses GitHub's own button. During a run the box also offers a screenshot of the playfield to copy and paste into the issue.
+
 ## How a run works
 
 - **Waves** grow in size and add enemy types: mites, wasps (shoot while diving), weavers (zigzag), splitters (break into two mites), beetles (armoured, fire spreads), and gold-ringed elites.
