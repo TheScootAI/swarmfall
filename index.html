@@ -85,7 +85,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
 .card{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:baseline;text-align:left;width:100%;min-height:84px;
   padding:14px 16px;border:0;background:var(--panel);color:var(--ink);cursor:pointer;font:inherit;clip-path:var(--chamfer)}
 .card .nm{font:700 1.1rem/1.15 var(--display);letter-spacing:.04em}
-.card .rar{font:700 .72rem/1 var(--display);letter-spacing:.16em;text-transform:uppercase}
+.card .rar{font:700 .68rem/1 var(--display);letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
 .card .ds{grid-column:1/-1;color:var(--dim);font-size:.95rem}
 .card .lv{grid-column:1/-1;font:500 .8rem/1 var(--display);letter-spacing:.1em;color:var(--dim)}
 .card.r0 .nm,.card.r0 .rar{color:var(--ink)}
@@ -109,9 +109,10 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
 .item .pips{display:flex;gap:4px;margin-top:6px}
 .item .pips i{width:14px;height:5px;background:var(--line)}
 .item .pips i.on{background:var(--arc)}
-.item .acts{display:flex;flex-direction:column;gap:6px}
 .item .btn{min-height:44px;min-width:92px;padding:0 12px;font-size:.9rem;color:var(--gold);font-variant-numeric:tabular-nums}
-.item .btn.sell{color:var(--dim);font-size:.8rem}
+.grp{margin:10px 0 0;font:700 .95rem/1.2 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--arc)}
+.grp:first-child{margin-top:0}
+.grp span{font:400 .85rem/1.2 var(--body);letter-spacing:0;text-transform:none;color:var(--dim);margin-left:6px}
 /* Feedback: a button in the top-right corner and the box it opens */
 #hud{padding-right:calc(var(--gut-r) + 46px)}
 #bossbar{margin-right:-46px}
@@ -158,7 +159,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
       <div class="inner">
         <p class="eyebrow">Roguelite swarm shooter</p>
         <h1>SWARM<b>FALL</b></h1>
-        <p class="lede">One hit destroys a new ship. Every third wave earns an upgrade: stay light and kill fast, or add armour and kill slower. Scrap you salvage buys permanent upgrades.</p>
+        <p class="lede">One hit destroys a new ship. Every third wave earns an upgrade, and the scrap you salvage buys weapons, armor, shields or specials for the next one.</p>
         <div class="row">
           <button id="btnPlay" class="btn primary">Launch</button>
           <button id="btnHangar" class="btn">Hangar</button>
@@ -202,7 +203,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
         <p class="eyebrow" id="deadEyebrow">Ship lost</p>
         <h2 id="deadTitle">Wave 1</h2>
         <dl class="stats" id="deadStats"></dl>
-        <p class="lede">Scrap carries over. Spend it in the hangar and the next ship starts stronger.</p>
+        <p class="lede">Scrap carries over. Spend it in the hangar on weapons, armor, shields or specials for the next ship.</p>
         <div class="row">
           <button id="btnDeadHangar" class="btn primary">Open hangar</button>
           <button id="btnAgain" class="btn">Fly again</button>
@@ -213,7 +214,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
     <section id="scrHangar" class="screen" hidden>
       <div class="inner">
         <p class="eyebrow">Hangar</p>
-        <h2>Permanent upgrades</h2>
+        <h2>Build your next ship</h2>
         <p class="bank" id="bank">◆ 0</p>
         <div class="shop" id="shop"></div>
         <div class="row">
@@ -450,40 +451,52 @@ const ET = {
 };
 const BOSS_TINT = [0xff4f8b, 0xffb02e, 0x5fe8ff, 0xa56bff];
 const RARITY = ['Common', 'Rare', 'Prototype'];
-const HULL_DRAG = 0.1;                   // fire rate lost per hull point beyond the first: light ships kill fast, tanks kill slower
+const CATEGORY = { w: 'Weapons', a: 'Armor', h: 'Shields', s: 'Specials' };
 const DRAFT_EVERY = 3, BOSS_EVERY = 6;   // an upgrade pick after every 3rd wave; every 6th wave is a boss, so its pick is the rare one
 const UP = [
-  { id: 'rapid', n: 'Rapid Feed', r: 0, max: 8, d: '+20% fire rate.' },
-  { id: 'heavy', n: 'Heavy Rounds', r: 0, max: 8, d: '+25% damage.' },
-  { id: 'thrust', n: 'Side Thrusters', r: 0, max: 4, d: '+15% steering speed.' },
-  { id: 'plate', n: 'Hull Plate', r: 0, max: 5, d: 'Take 1 more hit, but armour is heavy: −10% fire rate. Repairs 1 now.' },
-  { id: 'velocity', n: 'Rail Coils', r: 0, max: 4, d: '+25% shot speed and +10% damage.' },
-  { id: 'magnet', n: 'Tractor Field', r: 0, max: 3, d: 'Pull scrap in from much farther away.' },
-  { id: 'patch', n: 'Patch Kit', r: 0, max: 99, d: 'Repair 2 hull now.', ok: () => P.hp < S.maxHp },
-  { id: 'twin', n: 'Split Barrel', r: 1, max: 3, d: '+1 shot in every volley.' },
-  { id: 'pierce', n: 'Piercing Core', r: 1, max: 3, d: 'Shots pass through 1 more enemy.' },
-  { id: 'shield', n: 'Aegis Shell', r: 1, max: 3, d: 'A shield absorbs one hit, then recharges. More levels recharge faster.' },
-  { id: 'drone', n: 'Wing Drone', r: 1, max: 3, d: 'A drone orbits your ship and fires with you.' },
-  { id: 'crit', n: 'Weak-Point Scanner', r: 1, max: 4, d: '+15% chance for a shot to deal 2.5× damage.' },
-  { id: 'blast', n: 'Volatile Payload', r: 1, max: 3, d: 'Destroyed enemies explode and damage their neighbours.' },
-  { id: 'rico', n: 'Ricochet', r: 1, max: 2, d: 'After a hit, shots bounce to another enemy.' },
-  { id: 'scav', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
-  { id: 'missile', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
-  { id: 'chain', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
-  { id: 'over', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull. Shedding the armour speeds your guns up too.', ok: () => S.maxHp > 1 },
-  { id: 'slow', n: 'Time Dilation', r: 2, max: 2, d: 'Enemy shots travel 20% slower.' },
-  { id: 'nova', n: 'Reactive Nova', r: 2, max: 2, d: 'Taking a hit wipes every enemy shot and blasts the whole swarm.' },
+  { id: 'rapid', c: 'w', n: 'Rapid Feed', r: 0, max: 8, d: '+20% fire rate.' },
+  { id: 'heavy', c: 'w', n: 'Heavy Rounds', r: 0, max: 8, d: '+25% damage.' },
+  { id: 'thrust', c: 's', n: 'Side Thrusters', r: 0, max: 4, d: '+15% steering speed.' },
+  { id: 'plate', c: 'a', n: 'Hull Plate', r: 0, max: 5, d: '+1 max hull, so you can take 1 more hit. Repairs 1 now.' },
+  { id: 'velocity', c: 'w', n: 'Rail Coils', r: 0, max: 4, d: '+25% shot speed and +10% damage.' },
+  { id: 'magnet', c: 's', n: 'Tractor Field', r: 0, max: 3, d: 'Pull scrap in from much farther away.' },
+  { id: 'patch', c: 'a', n: 'Patch Kit', r: 0, max: 99, d: 'Repair 2 hull now.', ok: () => P.hp < S.maxHp },
+  { id: 'twin', c: 'w', n: 'Split Barrel', r: 1, max: 3, d: '+1 shot in every volley.' },
+  { id: 'pierce', c: 'w', n: 'Piercing Core', r: 1, max: 3, d: 'Shots pass through 1 more enemy.' },
+  { id: 'shield', c: 'h', n: 'Aegis Shell', r: 1, max: 3, d: 'A shield absorbs one hit, then recharges. More levels recharge faster.' },
+  { id: 'drone', c: 's', n: 'Wing Drone', r: 1, max: 3, d: 'A drone orbits your ship and fires with you.' },
+  { id: 'crit', c: 'w', n: 'Weak-Point Scanner', r: 1, max: 4, d: '+15% chance for a shot to deal 2.5× damage.' },
+  { id: 'blast', c: 'w', n: 'Volatile Payload', r: 1, max: 3, d: 'Destroyed enemies explode and damage their neighbours.' },
+  { id: 'rico', c: 'w', n: 'Ricochet', r: 1, max: 2, d: 'After a hit, shots bounce to another enemy.' },
+  { id: 'scav', c: 's', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
+  { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
+  { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
+  { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
+  { id: 'slow', c: 'h', n: 'Time Dilation', r: 2, max: 2, d: 'Enemy shots travel 20% slower.' },
+  { id: 'nova', c: 'h', n: 'Reactive Nova', r: 2, max: 2, d: 'Taking a hit wipes every enemy shot and blasts the whole swarm.' },
 ];
 const UPBY = {}; UP.forEach(u => UPBY[u.id] = u);
+const GROUPS = [
+  ['weapons', 'Weapons', 'Kill faster.'],
+  ['armor', 'Armor', 'Take more hits.'],
+  ['shields', 'Shields', 'Block hits, then recharge.'],
+  ['specials', 'Specials', 'Extra systems that fight alongside you.'],
+  ['salvage', 'Salvage', 'Earn and steer upgrades.'],
+];
 const SHOP = [
-  { id: 'hull', n: 'Reinforced Hull', d: 'Start each run able to take 1 more hit, but armour is heavy: −10% fire rate. Sell it back any time.', cost: [30, 80, 180], sell: true },
-  { id: 'dmg', n: 'Tuned Cannons', d: '+10% damage.', cost: [15, 35, 70, 120, 200] },
-  { id: 'rate', n: 'Feed Mechanism', d: '+6% fire rate.', cost: [15, 35, 70, 120, 200] },
-  { id: 'scrap', n: 'Salvage Rig', d: '+20% scrap from every run.', cost: [40, 90, 170] },
-  { id: 'magnet', n: 'Tractor Coil', d: 'Wider scrap pickup range.', cost: [20, 50] },
-  { id: 'reroll', n: 'Reroll Chips', d: '+1 upgrade reroll each run.', cost: [30, 70, 130] },
-  { id: 'head', n: 'Head Start', d: 'Pick a free upgrade before wave 1.', cost: [150] },
-  { id: 'revive', n: 'Emergency Reboot', d: 'Once per run, survive a killing blow.', cost: [300] },
+  { g: 'weapons', id: 'dmg', n: 'Tuned Cannons', d: '+10% damage.', cost: [15, 35, 70, 120, 200] },
+  { g: 'weapons', id: 'rate', n: 'Feed Mechanism', d: '+6% fire rate.', cost: [15, 35, 70, 120, 200] },
+  { g: 'weapons', id: 'twin', n: 'Twin Mount', d: 'Start each run with a second barrel.', cost: [200] },
+  { g: 'armor', id: 'hull', n: 'Reinforced Hull', d: 'Start each run able to take 1 more hit.', cost: [30, 80, 180] },
+  { g: 'armor', id: 'revive', n: 'Emergency Reboot', d: 'Once per run, survive a killing blow.', cost: [300] },
+  { g: 'shields', id: 'shield', n: 'Aegis Generator', d: 'Start each run with a shield that absorbs one hit, then recharges in 15 seconds.', cost: [70] },
+  { g: 'shields', id: 'charge', n: 'Fast Recharge', d: 'Shields recharge 2 seconds sooner.', cost: [40, 90, 160] },
+  { g: 'specials', id: 'drone', n: 'Drone Bay', d: 'Start each run with a wing drone that fires with you.', cost: [150] },
+  { g: 'specials', id: 'missile', n: 'Seeker Rack', d: 'Start each run with homing missiles.', cost: [220] },
+  { g: 'salvage', id: 'scrap', n: 'Salvage Rig', d: '+20% scrap from every run.', cost: [40, 90, 170] },
+  { g: 'salvage', id: 'magnet', n: 'Tractor Coil', d: 'Wider scrap pickup range.', cost: [20, 50] },
+  { g: 'salvage', id: 'reroll', n: 'Reroll Chips', d: '+1 upgrade reroll each run.', cost: [30, 70, 130] },
+  { g: 'salvage', id: 'head', n: 'Head Start', d: 'Pick a free upgrade before wave 1.', cost: [150] },
 ];
 
 // ---------- game state ----------
@@ -496,13 +509,12 @@ function recalc() {
   const od = ulv('over');
   S.dmg = 10 * (1 + 0.1 * mlv('dmg')) * (1 + 0.25 * ulv('heavy')) * (1 + 0.1 * ulv('velocity')) * (1 + 0.2 * od);
   S.shotSpeed = 430 * (1 + 0.25 * ulv('velocity'));
-  S.shots = 1 + ulv('twin'); S.pierce = ulv('pierce'); S.rico = ulv('rico');
+  S.shots = 1 + mlv('twin') + ulv('twin'); S.pierce = ulv('pierce'); S.rico = ulv('rico');
   S.move = 240 * (1 + 0.15 * ulv('thrust'));
   S.maxHp = Math.max(1, 1 + mlv('hull') + ulv('plate') - od);   // a new ship has 1 hull: one hit ends the run until hull is added
-  S.weight = Math.pow(1 - HULL_DRAG, S.maxHp - 1);               // the trade: every hull point past the first slows the guns
-  S.rate = 3.6 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od) * S.weight;
-  S.crit = 0.15 * ulv('crit'); S.shield = ulv('shield'); S.shieldCD = 15 - 3.5 * (S.shield - 1);
-  S.drones = ulv('drone'); S.blast = ulv('blast'); S.missile = ulv('missile'); S.chain = ulv('chain'); S.nova = ulv('nova');
+  S.rate = 3.6 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
+  S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
+  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.nova = ulv('nova');
   S.ebMul = 1 - 0.2 * ulv('slow');
   S.scrapMul = (1 + 0.2 * mlv('scrap')) * (1 + 0.5 * ulv('scav'));
   S.magnet = 42 + 22 * mlv('magnet') + 60 * ulv('magnet');
@@ -936,8 +948,7 @@ function drawHud() {
 }
 function loadoutHtml() {
   const ids = Object.keys(G.up).filter(id => id !== 'patch');
-  const trade = '<span>Hull <b>' + S.maxHp + '</b> · ' + (S.maxHp > 1 ? 'fire rate −' + Math.round((1 - S.weight) * 100) + '%' : 'full fire rate') + '</span>';
-  return trade + (ids.length ? ids.map(id => '<span>' + UPBY[id].n + ' <b>' + G.up[id] + '</b></span>').join('') : '<span>No upgrades yet</span>');
+  return ids.length ? ids.map(id => '<span>' + UPBY[id].n + ' <b>' + G.up[id] + '</b></span>').join('') : '<span>No upgrades yet</span>';
 }
 function soundLabels() { $('btnSound').textContent = $('btnSound2').textContent = meta.mute ? 'Sound off' : 'Sound on'; }
 function toggleMute() { meta.mute = !meta.mute; save(); soundLabels(); }
@@ -984,7 +995,7 @@ function rollCards(kind) {
 function drawDraft() {
   $('cards').innerHTML = G.cards.map((u, i) => {
     const lv = ulv(u.id);
-    return '<button class="card r' + u.r + '" data-i="' + i + '"><span class="nm">' + u.n + '</span><span class="rar">' + RARITY[u.r] + '</span><span class="ds">' + u.d + '</span>' +
+    return '<button class="card r' + u.r + '" data-i="' + i + '"><span class="nm">' + u.n + '</span><span class="rar">' + CATEGORY[u.c] + ' · ' + RARITY[u.r] + '</span><span class="ds">' + u.d + '</span>' +
       (u.id === 'patch' ? '' : '<span class="lv">' + (lv ? 'LEVEL ' + lv + ' → ' + (lv + 1) : 'NEW') + '</span>') + '</button>';
   }).join('');
   $('btnReroll').textContent = 'Reroll · ' + G.rerolls + ' left'; $('btnReroll').disabled = G.rerolls <= 0; $('btnReroll').hidden = !mlv('reroll');
@@ -1024,13 +1035,13 @@ function endRun() {
 }
 function drawShop() {
   $('bank').textContent = '◆ ' + meta.scrap + ' scrap';
-  $('shop').innerHTML = SHOP.map((s, i) => {
+  $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => '<h3 class="grp">' + name + ' <span>' + blurb + '</span></h3>' + SHOP.map((s, i) => {
+    if (s.g !== key) return '';
     const lv = mlv(s.id), max = s.cost.length, cost = s.cost[lv];
     let pips = ''; for (let k = 0; k < max; k++) pips += '<i' + (k < lv ? ' class="on"' : '') + '></i>';
     return '<div class="item"><div><div class="nm">' + s.n + '</div><div class="ds">' + s.d + '</div><div class="pips" aria-label="Level ' + lv + ' of ' + max + '">' + pips + '</div></div>' +
-      '<div class="acts"><button class="btn" data-i="' + i + '"' + (lv >= max || cost > meta.scrap ? ' disabled' : '') + '>' + (lv >= max ? 'Maxed' : '◆ ' + cost) + '</button>' +
-      (s.sell && lv > 0 ? '<button class="btn sell" data-i="' + i + '" data-sell="1">Sell ◆ ' + s.cost[lv - 1] + '</button>' : '') + '</div></div>';
-  }).join('');
+      '<button class="btn" data-i="' + i + '"' + (lv >= max || cost > meta.scrap ? ' disabled' : '') + '>' + (lv >= max ? (max > 1 ? 'Maxed' : 'Owned') : '◆ ' + cost) + '</button></div>';
+  }).join('')).join('');
 }
 function openHangar() { if (G.state !== 'title') { G.state = 'title'; titleScene(); $('hud').hidden = true; } G.state = 'hangar'; drawShop(); show('scrHangar', 'btnHangarPlay'); }
 
@@ -1045,7 +1056,6 @@ $('cards').onclick = e => { const b = e.target.closest('.card'); if (b) choose(+
 $('shop').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   const s = SHOP[+b.dataset.i], lv = mlv(s.id), cost = s.cost[lv];
-  if (b.dataset.sell) { if (s.sell && lv > 0) { meta.scrap += s.cost[lv - 1]; meta.up[s.id] = lv - 1; save(); SFX.pick(); drawShop(); } return; }
   if (cost == null || cost > meta.scrap) { SFX.deny(); return; }
   meta.scrap -= cost; meta.up[s.id] = lv + 1; save(); SFX.buy(); drawShop();
 };
