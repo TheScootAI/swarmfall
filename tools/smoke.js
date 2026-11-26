@@ -61,6 +61,8 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   // watch the Hive Core's death scene from inside the page: slowest game speed, closest camera, and hull lost during it
   await page.evaluate(() => { const s = window.__swarmfall, w = window.__fin = { slowest: 1, closest: 1, far: s.camera.position.z, hp: null, hurt: false };
     (function f() {
+      if (s.FIN.on && !w.sps) w.sps = s.G.picks.filter(p => p.kind === 'scrap').map(p => +p.sp.toFixed(2));   // how fast each ring of the scrap shower will fly to the ship
+      if (w.sps && s.G.run.scrap !== w.lastScrap) { w.lastScrap = s.G.run.scrap; w.gotLast = s.G.time; if (w.gotFirst === undefined) w.gotFirst = s.G.time; }
       if (s.FIN.on && !w.done) {   // a shot is dropped on the ship every frame, with its usual protection taken away
         w.slowest = Math.min(w.slowest, s.G.speed); w.closest = Math.min(w.closest, s.camera.position.z / w.far);
         if (w.hp === null) w.hp = s.P.hp; if (s.P.hp < w.hp || !s.P.alive) w.hurt = true;
@@ -73,6 +75,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   check(fin.slowest < 0.3 && fin.closest > 0.999, 'the Hive Core dies in slow motion, and the camera stays where it is', JSON.stringify(fin));
   check(!fin.hurt && fin.grace > 0.3, 'the ship cannot be hit during the core\'s death scene, nor for a moment after', 'grace ' + fin.grace);
   check(!fin.on && fin.speed === 1 && Math.abs(fin.z - fin.far) < 0.01, 'speed and camera are back to normal by the time docking starts', JSON.stringify(fin));
+  check(new Set(fin.sps).size >= 10 && Math.max(...fin.sps) === 1 && Math.min(...fin.sps) < 0.5 && fin.gotLast - fin.gotFirst > 0.4, 'the boss\'s scrap flies to the ship at different speeds and arrives one after another', fin.sps.length + ' rings, speeds ' + Math.min(...fin.sps) + ' to 1, collected over ' + (fin.gotLast - fin.gotFirst).toFixed(2) + ' s of game time');
   s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);
   check(s.scrap >= 60, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
   await shot('05-station');
@@ -218,13 +221,40 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
     await shot('1' + (b.wave / 6 - 1) + '-after-' + b.type);
   }
 
+  // ---- the cloud boosters and the darts ----
+  await page.reload(); await page.waitForTimeout(500);
+  await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await waitFor(x => x.state === 'play');
+  const cl = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, out = {}, t0 = performance.now(); G.wave = 3; s.nextWave();
+    let step = 0, at = 0, A = null, B = null, hpB = 0, sum0 = 0, dart = null;
+    const hpSum = () => G.enemies.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0), since = () => G.time - at, go = n => { step = n; at = G.time; };
+    (function f() {
+      P.inv = 9; P.fireT = 9; G.diveT = 99; G.shootT = 99; P.x = P.target = 300;   // the ship does not fire and nothing dives: only the clouds act
+      const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
+      if (step === 0 && G.waveT > 5 && formed.length >= 8) { B = formed[formed.length - 1]; hpB = B.hp; s.launchCloud(1, B.x, B.y, 1); go(1); }   // flame first, on its own
+      else if (step === 1 && since() > 1.5) { out.burning = B.burn > 0; out.burnDrop = +(hpB - B.hp).toFixed(1); out.ofHp = +hpB.toFixed(1); go(2); }
+      else if (step === 2 && since() > 7) {   // the flame has gone: now gas, on an enemy at the other end
+        out.flameGone = !s.clouds.some(c => c.on); A = formed[0]; sum0 = hpSum(); if (!A) return res(out); s.launchCloud(0, A.x, A.y, 1); go(3); }
+      else if (step === 3) {
+        if (A.conf > 0) out.confused = true; if (G.pb.some(b => b.kind === 3)) out.greenShots = true;
+        if (since() > 3) { out.hurtEachOther = +(sum0 - hpSum()).toFixed(1); G.up.gas = 1; s.recalc(); P.gasT = 0.05; go(4); }
+      } else if (step === 4) {
+        if (s.clouds.some(c => c.on && c.kind === 0)) out.auto = true;
+        if (since() > 1) { dart = { x: 60, y: 100, vx: 0, vy: 240, r: 3.4, kind: 1, dead: false }; G.eb.push(dart); go(5); }   // a dart fired straight down, far to the ship's left
+      } else if (step === 5 && since() > 1.2) { out.dartVx = +dart.vx.toFixed(1); out.dartLean = +Math.atan2(dart.vx, dart.vy).toFixed(3); return res(out); }
+      if (performance.now() - t0 > 90000) { out.stuckAt = step; return res(out); }
+      requestAnimationFrame(f); })(); }));
+  check(cl.burning && cl.burnDrop > 0.5 && cl.burnDrop < cl.ofHp * 0.6 && cl.flameGone, 'Flame Cloud: an enemy in it burns, losing health slowly, and the cloud goes', JSON.stringify(cl));
+  check(cl.confused && cl.greenShots && cl.hurtEachOther > 5, 'Confusion Gas: an enemy in it is confused and its shots hurt other enemies', 'health lost by the swarm with the ship not firing: ' + cl.hurtEachOther);
+  check(cl.auto === true, 'with the booster, the ship lobs a cloud by itself');
+  check(cl.dartVx > 5 && cl.dartLean > 0.05 && cl.dartLean < 0.35, 'a dart bends a little toward the ship, far less than a missile turns', 'lean after 1.2 s: ' + cl.dartLean + ' radians');
+
   // Every system at once: all boosters on, late waves with lasers, missiles and triplets, while the ship
   // keeps firing. This exercises the effect pools (rings, lightning, particles), missiles being shot down,
   // shields and Reactive Nova clearing fire mid-loop, triplet splits and the lancer beam.
   await page.reload(); await page.waitForTimeout(500);   // a fresh page: the wave check above leaves its test enemies in the scene
   await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
   const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
-    for (const id of ['twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield']) s.G.up[id] = 2;
+    for (const id of ['twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame']) s.G.up[id] = 2;
     s.recalc(); s.G.wave = 15; s.nextWave(); s.S.maxHp = 9; s.P.hp = 9;
     const seen = { kills: 0, maxShots: 0, maxMissiles: 0, splits: 0, beams: 0, waves: new Set() }; const t0 = performance.now(); let k0 = s.G.run.kills;
     (function f() { const G = s.G;

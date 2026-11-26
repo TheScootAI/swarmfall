@@ -34,6 +34,8 @@ const NOTES = {
   crit: 'Each level adds 15%: 60% of shots at level 4. A critical shot does 2.5× damage. Homing missiles never crit.',
   blast: 'A destroyed enemy damages everything within 40, 50, then 60 units, for 60%, 120%, then 180% of your shot damage.',
   rico: 'Each level is 1 bounce to another enemy, up to 2 bounces per shot.',
+  flame: 'The ship lobs a cloud of flame at an enemy every 7 seconds, then every 5.5, then every 4. It hangs for 4.5 seconds. An enemy in it, and for 3 seconds after leaving, loses 40% of your shot damage a second per level and trails flame. Bosses burn too.',
+  gas: 'The ship lobs a gas cloud at an enemy every 7 seconds, then every 5.5, then every 4. It hangs for 4.5 seconds. An enemy that touches it is confused for 5 seconds: it stops firing at you and shoots the enemy furthest from it every 0.6 seconds, for 1.2× your shot damage. Bosses cannot be confused, but confused enemies will shoot them.',
   scav: 'Each level adds 50%: double scrap at level 2. It multiplies with the Salvage Rig module.',
   missile: 'One missile every 1.7 seconds, then every 0.85, then every 0.57. Each does 2.5× your shot damage to its target and half of that to enemies close by.',
   chain: 'Each level adds 20%: 60% of hits at level 3. The lightning jumps to up to 2 enemies near the one you hit, for 70% of the shot\'s damage each.',

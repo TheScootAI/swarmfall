@@ -5,7 +5,7 @@
 const { chromium, devices } = require('playwright');
 const fs = require('fs'), path = require('path');
 const OUT = process.argv[2] || path.join(__dirname, 'out', 'shots'), QUERY = process.argv[3] ? '?' + process.argv[3] : '';
-const BOSSES_ONLY = process.argv[4] === 'bosses';   // only the pictures of the four bosses after the Hive Core
+const BOSSES_ONLY = process.argv[4] === 'bosses';   // only the pictures of the four bosses after the Hive Core, and of the clouds
 const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
 
 (async () => {
@@ -96,6 +96,15 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   await bodies(page, 1);
   await page.waitForFunction(() => { const b = window.__swarmfall.G.boss; return b && b.hub && b.hub.wheel > 0 && b.hub.wheel < 0.5; }, null, { timeout: 180000 }); await snap(page, '20-triad-last-core');
 
-  console.log('wrote 20 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
+  // the cloud boosters: a flame cloud and a gas cloud on the formation, then burning and confused enemies
+  page = await open(); await start(page); await safe(page);
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 8; s.nextWave(); (function k() { s.G.diveT = 9; s.P.fireT = 9; requestAnimationFrame(k); })(); });
+  await page.waitForFunction(() => { const s = window.__swarmfall; return s.G.waveT > 4.5 && s.G.enemies.filter(e => e.state === 'form').length > 12; }, null, { timeout: 120000 });
+  await page.evaluate(() => { const s = window.__swarmfall, f = s.G.enemies.filter(e => e.state === 'form'), a = f[1], b = f[f.length - 2]; s.launchCloud(1, a.x, a.y, 2); s.launchCloud(0, b.x, b.y, 2); });
+  const gameWait = sec => page.evaluate(sec => new Promise(r => { const s = window.__swarmfall, g0 = s.G.time; (function f() { if (s.G.time - g0 > sec) r(); else requestAnimationFrame(f); })(); }), sec);
+  await gameWait(0.45); await snap(page, '21-clouds-flying');
+  await gameWait(1.6); await snap(page, '22-clouds-hanging');
+
+  console.log('wrote 22 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
   await browser.close();
 })();

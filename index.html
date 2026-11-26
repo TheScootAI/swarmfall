@@ -356,6 +356,7 @@ const SFX = {
   rumble() { if (limited('r', 120)) { noise(0.5, 0.2, 600, 0.02); tone('triangle', 170, 70, 0.4, 0.15); } },   // the smaller blasts that follow it
   hurt() { tone('sawtooth', 520, 110, 0.4, 0.5); noise(0.3, 0.5, 2000); },
   pick() { if (limited('p', 40)) tone('sine', 880, 1500, 0.08, 0.25); },
+  puff() { if (limited('c', 200)) noise(0.4, 0.14, 700, 0.06); },   // a cloud leaving the ship: a soft breath
   dive() { if (limited('d', 170)) tone('sine', 860, 520, 0.16, 0.1); },
   split() { if (limited('d', 170)) { tone('triangle', 520, 980, 0.09, 0.1); tone('triangle', 660, 1240, 0.1, 0.08, 0.06); } },
   heal() { tone('sine', 520, 1040, 0.2, 0.3); },
@@ -582,7 +583,7 @@ function commitInst(im, n) {
 const heading = (vx, vy) => Math.atan2(-vy, vx) - Math.PI / 2;   // rotation that points a model along its velocity
 const PB_MAX = 180, EB_MAX = 240, EM_MAX = 24;
 const pbMesh = instanced(new THREE.BoxGeometry(3.6, 14, 3.6), PB_MAX), ebMesh = instanced(geo.sph, EB_MAX, ENEMY_RED), emMesh = instanced(geo.cone, EM_MAX, ENEMY_RED);
-const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a;   // player shots: cannon, seeker, drone
+const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff, 0x7dffa0], CRIT_COL = 0xffe27a;   // shots on your side: cannon, seeker, drone, and a confused enemy's
 
 // player ship
 const ship = new THREE.Group();
@@ -770,6 +771,18 @@ const SKIP_SCRAP = 10;   // scrap for passing up a booster
 // quicker each wave (the owner asked for 5%). max: it never gets quicker than this many times the wave-1 pace,
 // which it reaches on wave 31; past that the flight would be too quick to follow.
 const ENTER = { faster: 0.05, max: 2.5 };
+// Darts bend a little toward the ship as they fly, so they do not always come straight down. Radians a second:
+// far gentler than a missile, which turns about ten times as fast.
+const DART_TURN = 0.22;
+// The two cloud boosters, Confusion Gas and Flame Cloud. every: seconds between clouds at levels 1, 2 and 3.
+// r: a cloud's radius, and rMore: how much wider per level past the first. fly: seconds it takes to reach the
+// enemy it was lobbed at. hang: seconds it then stays.
+// Gas: conf is the seconds an enemy stays confused. While confused it fires at the enemy furthest from it every
+// confShot seconds, for confDmg × your shot damage, and does not fire at you. Bosses cannot be confused.
+// Flame: an enemy keeps burning for burn seconds after it leaves the cloud, losing burnDmg × your shot damage
+// × the booster's level every second. That is meant to weaken, not to kill quickly.
+const CLOUD = { every: [7, 5.5, 4], r: 46, rMore: 8, fly: 0.8, hang: 4.5, conf: 5, confShot: 0.6, confDmg: 1.2, confSpeed: 280, burn: 3, burnDmg: 0.4 };
+const GAS_RGB = [0.45, 1, 0.6], FLAME_RGB = [1, 0.6, 0.15];
 const enterPace = () => Math.min(ENTER.max, 1 + ENTER.faster * (Math.max(1, G.wave) - 1));
 // A boss's death scene (the Hive Core, the last piece of the Fracture Cube, the Beam Warden): time slows and
 // smaller blasts follow the first, then time eases back. The camera does not move: the owner tried a push-in
@@ -795,11 +808,13 @@ const UP = [
   { id: 'crit', c: 'w', n: 'Weak-Point Scanner', r: 1, max: 4, d: '+15% chance for a shot to deal 2.5× damage.' },
   { id: 'blast', c: 'w', n: 'Volatile Payload', r: 1, max: 3, d: 'Destroyed enemies explode and damage their neighbours.' },
   { id: 'rico', c: 'w', n: 'Ricochet', r: 1, max: 2, d: 'After a hit, shots bounce to another enemy.' },
+  { id: 'flame', c: 'w', n: 'Flame Cloud', r: 1, max: 3, d: 'Lob a cloud of flame at the swarm. Enemies that pass through it burn slowly.' },
   { id: 'scav', c: 's', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
   { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
   { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
   { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
   { id: 'slow', c: 'h', n: 'Time Dilation', r: 2, max: 2, d: 'Enemy shots travel 20% slower.' },
+  { id: 'gas', c: 's', n: 'Confusion Gas', r: 2, max: 3, d: 'Lob a gas cloud at the swarm. Enemies that pass through it fire on their own side for 5 seconds.' },
   { id: 'nova', c: 'h', n: 'Reactive Nova', r: 2, max: 2, d: 'Taking a hit wipes every enemy shot and blasts the whole swarm.' },
 ];
 const UPBY = {}; UP.forEach(u => UPBY[u.id] = u);
@@ -852,7 +867,7 @@ function recalc() {
   S.maxHp = Math.max(1, 1 + mlv('hull') + ulv('plate') - od);   // a new ship has 1 hull: one hit ends the run until hull is added
   S.rate = 2.75 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
   S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
-  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.nova = ulv('nova');
+  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame');
   S.ebMul = 1 - 0.2 * ulv('slow');
   S.scrapMul = (1 + 0.2 * mlv('scrap')) * (1 + 0.5 * ulv('scav'));
   S.magnet = 42 + 22 * mlv('magnet') + 60 * ulv('magnet');
@@ -908,7 +923,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0 };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confT: 0 };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? 3 : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo); hint('elite', 3, 'ELITE', 'Red-ringed enemies are tougher and drop extra scrap'); }
@@ -1027,7 +1042,7 @@ function updateDive(e, dt) {
     else if (steer && k) e.vx += (clamp((P.x - e.x) * k, -170, 170) - e.vx) * Math.min(1, 2.6 * dt);
     if (e.type === 'weaver') e.x += Math.cos(e.t * 4.6 + e.ph) * 150 * dt;
     else if (e.type === 'mite' && e.lane == null) e.x += Math.sin(e.t * 3.4 + e.ph) * 62 * dt;   // a gentle side-to-side wobble all the way down
-    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6) { e.shootT -= dt; if (e.shootT <= 0) { fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
+    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6 && !(e.conf > 0)) { e.shootT -= dt; if (e.shootT <= 0) { fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
   if (e.x < 12) { e.x = 12; e.vx = Math.abs(e.vx); } else if (e.x > W - 12) { e.x = W - 12; e.vx = -Math.abs(e.vx); }
@@ -1330,13 +1345,15 @@ function buildWave(n) {
 function restoreMats(e) { for (const m of e.meshes) m.material = m.userData.base; }
 function despawn(e) { e.dead = true; restoreMats(e); scene.remove(e.g); }   // gone from the field; swept from G.enemies later
 function clearBoss() { G.boss = null; $('bossbar').hidden = true; bossFrac = -1; }
-function damageEnemy(e, d) {
+function damageEnemy(e, d, quiet) {   // quiet: no blink and no sound, for the slow burn of a Flame Cloud
   if (e.dead || e.born > 0) return;   // a piece of the Fracture Cube cannot be hurt for a moment after it breaks off
   if (e.type === 'siege' && e.open < 0.5) d *= SIEGE.armour;   // the Siege Beetle's shell is shut
   e.hp -= d;
   // a boss is under constant fire, so it only blinks now and then instead of staying white
-  if (e.flash <= 0 && (!e.def.boss || G.time - (e.blinkAt || 0) > 0.22)) { for (const m of e.meshes) m.material = M.flash; e.flash = 0.06; e.blinkAt = G.time; }
-  SFX.hit();
+  if (!quiet) {
+    if (e.flash <= 0 && (!e.def.boss || G.time - (e.blinkAt || 0) > 0.22)) { for (const m of e.meshes) m.material = M.flash; e.flash = 0.06; e.blinkAt = G.time; }
+    SFX.hit();
+  }
   if (e.hp <= 0) killEnemy(e);
 }
 function spawnPick(kind, x, y) {
@@ -1345,9 +1362,11 @@ function spawnPick(kind, x, y) {
   if (kind === 'heart') core.add(part(geo.box, M.heart, 13, 5, 5), part(geo.box, M.heart, 5, 13, 5));
   else core.add(part(geo.torus, M.scrap, 6.5, 6.5, 6.5));
   mesh.add(core, halo); scene.add(mesh);
-  G.picks.push({ kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU) });
-  if (G.bossDown) return;   // the post-boss shower of scrap is no time for a lesson
+  const p = { kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU), sp: 1 };   // sp: how fast it flies to the ship when the field is swept, as a share of full speed
+  G.picks.push(p);
+  if (G.bossDown) return p;   // the post-boss shower of scrap is no time for a lesson
   if (kind === 'heart') hint(kind, 3, 'REPAIR', 'Fly into the green cross to restore 1 hull'); else hint(kind, 3, 'SCRAP', 'Fly into the gold rings to collect them');
+  return p;
 }
 function killEnemy(e) {
   despawn(e); G.run.kills++;
@@ -1362,7 +1381,8 @@ function killEnemy(e) {
     SFX.core(); shake(16); vibrate(200); ringFx(e.x, e.y, 20, 240, 0xffffff, 0.7); finaleStart(e);
     G.bossDown = true; clearBoss();   // its shots already in flight finish their course
     for (const o of G.enemies) if (!o.dead && o !== e) killEnemy(o);
-    for (let i = 0; i < 10 + 4 * e.tier; i++) spawnPick('scrap', e.x + rand(-40, 40), e.y + rand(-30, 30));
+    // each ring flies to the ship at its own speed, so they arrive one after another in a line and not all at once
+    for (let i = 0, n = 10 + 4 * e.tier; i < n; i++) spawnPick('scrap', e.x + rand(-40, 40), e.y + rand(-30, 30)).sp = 1 - 0.55 * i / (n - 1);
     spawnPick('heart', e.x, e.y);
     return;
   }
@@ -1459,6 +1479,83 @@ function updatePlayer(dt) {
     if (P.droneT <= 0) { P.droneT = 0.7; for (let i = 0; i < S.drones; i++) shot(P.x + Math.cos(G.time * 2.4 + i * TAU / S.drones) * 30, P.y - 8, 0, 2, 0.5); }
   }
   if (S.missile > 0) { P.missT -= dt; if (P.missT <= 0 && nearest(P.x, P.y, null, 900)) { P.missT = 1.7 / S.missile; shot(P.x, P.y - 10, rand(-0.6, 0.6), 1, 2.5); } }
+  P.gasT = cloudTimer(0, S.gas, P.gasT, dt); P.flameT = cloudTimer(1, S.flame, P.flameT, dt);
+}
+// ---- clouds (Confusion Gas and Flame Cloud) ----
+// A cloud is a soft disc drawn by a small shader, with sparks drifting in it. It is not on the glow layer: a shape
+// this big would flood the screen. Four are kept ready and reused.
+const cloudMat = c => new THREE.ShaderMaterial({
+  uniforms: { color: { value: new THREE.Color(c) }, opacity: { value: 0 }, time: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform vec3 color; uniform float opacity; uniform float time; varying vec2 vUv;
+    void main() {
+      vec2 d = vUv - 0.5; float r = length(d) * 2.0, a = atan(d.y, d.x);
+      float edge = 0.8 + 0.1 * sin(a * 5.0 + time * 1.7) + 0.06 * sin(a * 9.0 - time * 2.3);   // a wobbling, lobed outline
+      float m = smoothstep(edge, edge - 0.55, r) * (0.75 + 0.25 * sin(r * 9.0 - time * 3.0));
+      gl_FragColor = vec4(color * m * opacity, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+const CLOUD_COL = [0x35d46a, 0xff7a1a], CLOUD_RGB = [GAS_RGB, FLAME_RGB];   // 0 is gas, 1 is flame
+const clouds = [];
+for (let i = 0; i < 4; i++) { const mesh = new THREE.Mesh(geo.plane, cloudMat(0xffffff)); mesh.visible = false; mesh.frustumCulled = false; scene.add(mesh); clouds.push({ on: false, kind: 0, lv: 1, x: 0, y: 0, x0: 0, y0: 0, tx: 0, ty: 0, t: 0, r: 0, mesh }); }
+function launchCloud(kind, tx, ty, lv) {
+  let c = null; for (const o of clouds) if (!o.on) { c = o; break; }
+  if (!c) return false;
+  c.on = true; c.kind = kind; c.lv = lv; c.x = c.x0 = P.x; c.y = c.y0 = P.y - 20; c.tx = tx; c.ty = ty; c.t = 0; c.r = 0;
+  c.mesh.material.uniforms.color.value.set(CLOUD_COL[kind]); c.mesh.visible = true; SFX.puff();
+  return true;
+}
+// The ship lobs each kind of cloud it has at a random enemy on the field, on that kind's own timer.
+function cloudTimer(kind, lv, left, dt) {
+  if (!lv) return left;
+  left -= dt;
+  if (left > 0) return left;
+  let t = null, n = 0; for (const e of G.enemies) if (!e.dead && e.z > -60 && Math.random() < 1 / ++n) t = e;   // any one of them, with equal chance
+  return t && launchCloud(kind, t.x, t.y, lv) ? CLOUD.every[Math.min(lv, 3) - 1] : 0.3;   // nothing to aim at, or all four clouds in use: try again shortly
+}
+function clearClouds() { for (const c of clouds) { c.on = false; c.mesh.visible = false; } }
+function updateClouds(dt) {
+  const C = CLOUD, total = C.fly + C.hang;
+  for (const c of clouds) {
+    if (!c.on) continue;
+    c.t += dt;
+    if (c.t >= total) { c.on = false; c.mesh.visible = false; continue; }
+    const k = Math.min(1, c.t / C.fly), ease = 1 - (1 - k) * (1 - k), full = C.r + C.rMore * (c.lv - 1);
+    c.x = lerp(c.x0, c.tx, ease); c.y = lerp(c.y0, c.ty, ease); c.r = full * (0.25 + 0.75 * ease);
+    const u = c.mesh.material.uniforms; u.time.value = G.time; u.opacity.value = 0.5 * Math.min(1, (total - c.t) / 0.7);   // fades out at the end
+    c.mesh.position.set(TX(c.x), TY(c.y), 3); c.mesh.scale.set(c.r * 2.5, c.r * 2.5, 1);
+    if (Math.random() < 0.5) { const a = rand(TAU), d = rand(c.r); burst(c.x + Math.cos(a) * d, c.y + Math.sin(a) * d, CLOUD_RGB[c.kind], 1, 16, 0.6); }
+    for (const e of G.enemies) {
+      if (e.dead || e.z < -60) continue;
+      const dx = e.x - c.x, dy = e.y - c.y, rr = c.r + e.rad * 0.5;
+      if (dx * dx + dy * dy > rr * rr) continue;
+      if (c.kind === 1) { e.burn = C.burn; e.burnLv = c.lv; }
+      else if (!e.def.boss) e.conf = C.conf;
+    }
+  }
+}
+// What a burning or confused enemy does each frame. Returns false if the burn has just destroyed it.
+function afflicted(e, dt) {
+  if (e.burn > 0) {
+    e.burn -= dt; e.burnT -= dt;
+    if (Math.random() < 0.4) burst(e.x + rand(-5, 5), e.y - 3, FLAME_RGB, 1, 26, 0.38);   // the trail of flame it leaves
+    if (e.burnT <= 0) { e.burnT = 0.25; damageEnemy(e, S.dmg * CLOUD.burnDmg * e.burnLv * 0.25, true); if (e.dead) return false; }
+  }
+  if (e.conf > 0) {
+    e.conf -= dt; e.confT -= dt;
+    if (Math.random() < 0.3) burst(e.x + rand(-9, 9), e.y - e.rad, GAS_RGB, 1, 14, 0.45);
+    if (e.confT <= 0) {
+      e.confT = CLOUD.confShot;
+      let t = null, far = 0; for (const o of G.enemies) { if (o === e || o.dead || o.z < -60) continue; const d = (o.x - e.x) ** 2 + (o.y - e.y) ** 2; if (d > far) { far = d; t = o; } }
+      if (t && G.pb.length < PB_MAX) {   // its shot is on your side now: it flies like one of yours and cannot hit the enemy that fired it
+        const a = Math.atan2(t.y - e.y, t.x - e.x);
+        G.pb.push({ x: e.x, y: e.y, vx: Math.cos(a) * CLOUD.confSpeed, vy: Math.sin(a) * CLOUD.confSpeed, dmg: S.dmg * CLOUD.confDmg, pierce: 0, rico: 0, crit: false, kind: 3, hit: [e], dead: false });
+      }
+    }
+  }
+  return true;
 }
 function onHit(b, e) {
   damageEnemy(e, b.dmg);
@@ -1503,6 +1600,9 @@ function updateShots(dt) {
   G.blastQ.length = 0;
   for (const b of G.eb) {
     if (b.dead) continue;
+    if (b.kind === 1 && P.alive && b.y < P.y - 40) {   // a dart leans toward the ship until it is nearly level with it
+      const sp = Math.hypot(b.vx, b.vy), a = turnToward(Math.atan2(b.vy, b.vx), Math.atan2(P.y - b.y, P.x - b.x), DART_TURN * dt); b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp;
+    }
     b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.y > H + 20 || b.y < -30 || b.x < -30 || b.x > W + 30) b.dead = true;
     else if (P.alive && shipHit(b.x, b.y, b.r - 1)) { b.dead = true; hitPlayer(); }
@@ -1514,7 +1614,7 @@ function updatePicks(dt) {
   const sweep = G.state === 'clear'; let got = false, gotScrap = false;
   for (let i = G.picks.length - 1; i >= 0; i--) {
     const p = G.picks[i], dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy) || 1;
-    if (P.alive && (sweep || d < S.magnet)) { const pull = sweep ? 900 : 520; p.vx = lerp(p.vx, dx / d * pull, Math.min(1, 8 * dt)); p.vy = lerp(p.vy, dy / d * pull, Math.min(1, 8 * dt)); }
+    if (P.alive && (sweep || d < S.magnet)) { const pull = sweep ? 900 * p.sp : 520; p.vx = lerp(p.vx, dx / d * pull, Math.min(1, 8 * dt)); p.vy = lerp(p.vy, dy / d * pull, Math.min(1, 8 * dt)); }
     else { p.vy = Math.min(80, p.vy + 160 * dt); p.vx *= 1 - Math.min(1, 1.5 * dt); }
     p.x = clamp(p.x + p.vx * dt, 8, W - 8); p.y += p.vy * dt;
     let gone = p.y > H + 20;
@@ -1542,6 +1642,7 @@ function updateEnemies(dt) {
   for (const e of G.enemies) {
     if (e.dead) continue;
     if (e.flash > 0) { e.flash -= dt; if (e.flash <= 0) restoreMats(e); }
+    if ((e.burn > 0 || e.conf > 0) && !afflicted(e, dt)) continue;
     if (e.state === 'enter') {
       e.u += dt / e.dur; const u = Math.min(1, e.u), s = slotPos(e), m = 1 - u;
       const w0 = m * m * m, w1 = 3 * m * m * u, w2 = 3 * m * u * u, w3 = u * u * u;
@@ -1610,7 +1711,7 @@ function updateEnemies(dt) {
   if (!G.boss) {   // shots from the formation: wasps and beetles, then anyone from UNLOCK.formationFire
     G.shootT -= dt;
     if (G.shootT <= 0 && formed.length) {
-      const pool = formed.filter(e => e.type === 'wasp' || e.type === 'beetle' || G.wave >= UNLOCK.formationFire), e = pick(pool);
+      const pool = formed.filter(e => !(e.conf > 0) && (e.type === 'wasp' || e.type === 'beetle' || G.wave >= UNLOCK.formationFire)), e = pick(pool);   // a confused enemy does not fire at the ship
       if (e) { const a = lerp(Math.PI / 2, aimAt(e.x, e.y), 0.6); if (e.type === 'wasp') fireDart(e.x, e.y + 10, a); else fireE(e.x, e.y + 10, a, ebSpeed() * 0.8, 5); SFX.eshoot(); }
       G.shootT = Math.max(0.6, 3.2 - G.wave * 0.16) * rand(0.7, 1.3);
     }
@@ -1625,7 +1726,7 @@ function clearedToast() {
 function updateGame(dt) {
   if (G.state === 'dying') dt *= 0.45;
   G.waveT += dt;
-  updatePlayer(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt);
+  updatePlayer(dt); updateClouds(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt);
   sweepDead(G.enemies);
   if (G.boss) { const f = Math.round(clamp(bossLeft() / G.bossMax, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
   if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; clearedToast(); }
@@ -1649,7 +1750,7 @@ const easeIO = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 const CUTS = { launch: { dur: 2.4 }, shuttle: { dur: 2.3 }, dock: { dur: 2.8 } };   // seconds
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function startCut(kind, done) {
-  FIN.on = FIN.toast = false;
+  FIN.on = FIN.toast = false; clearClouds();   // a cloud would hang frozen through the scene
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
   else if (kind === 'dock') { ST.on = true; toast('DOCKING'); }
@@ -1818,7 +1919,7 @@ function toggleMute() {
 }
 
 function resetField() {
-  FIN.on = FIN.toast = false;
+  FIN.on = FIN.toast = false; clearClouds();
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; clearBoss();
@@ -1839,7 +1940,7 @@ function startRun() {
   audioInit(); resetField();
   G.up = {}; G.run = { scrap: 0, kills: 0, banked: 0 }; G.hint = {}; G.wave = 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
-  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, target: null, alive: true });
+  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
   dockPose();   // every run begins docked at the station
   if (mlv('head')) openDraft('head'); else startCut('launch', nextWave);
@@ -2144,7 +2245,7 @@ function frame(now) {
 }
 resize(); soundLabels(); gfxLabels(); showTitle();
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, SIEGE, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, SIEGE, CLOUD, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
