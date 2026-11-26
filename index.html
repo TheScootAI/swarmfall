@@ -220,7 +220,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
       <div class="inner">
         <p class="eyebrow" id="stEyebrow">Space station</p>
         <h2 id="stTitle">Upgrade your modules</h2>
-        <p class="lede" id="stNote"></p>
+        <p class="lede" id="stNote" style="white-space:pre-line;max-width:none;font-size:.95rem"></p>
         <p class="bank" id="bank">◆ 0</p>
         <div class="shop" id="shop"></div>
         <div class="row">
@@ -766,7 +766,7 @@ function buildWave(n) {
   if (n >= 3) shapes.push((c, r) => r <= (rows - 1) * (1 - Math.abs(c - mid) / (mid + 0.5)) + 0.5, c => c % 3 !== 2);
   if (rows >= 3) shapes.push((c, r) => (c + r) % 2 === 0 || r === 0);
   const shape = shapes[(Math.random() * shapes.length) | 0];
-  const pWeaver = n >= 3 ? Math.min(0.3, 0.1 + n * 0.012) : 0, pSplit = n >= 4 ? Math.min(0.2, 0.06 + n * 0.01) : 0, pTrip = n >= 5 ? Math.min(0.15, 0.06 + n * 0.008) : 0, pElite = n >= 4 ? Math.min(0.09, 0.02 + n * 0.005) : 0;
+  const pWeaver = n >= 3 ? Math.min(0.3, 0.1 + n * 0.012) : 0, pSplit = n >= 4 ? Math.min(0.2, 0.06 + n * 0.01) : 0, pTrip = n >= 7 ? Math.min(0.15, 0.06 + n * 0.008) : 0,   /* triplets: only once the first Hive Core (wave 6) is down */ pElite = n >= 4 ? Math.min(0.09, 0.02 + n * 0.005) : 0;
   let elites = 0, group = 0; const specs = [];
   for (let r = 0; r < rows; r++) {
     for (const side of [0, 1]) {
@@ -782,8 +782,8 @@ function buildWave(n) {
       if (any) group++;
     }
   }
-  // lancers (the laser enemy) join from wave 4: one, then more in later waves, always above the top row where the swarm shields them
-  const lancers = n >= 4 ? Math.min(3, 1 + Math.floor((n - 4) / 4)) : 0;
+  // lancers (the laser enemy) join from wave 10: one, then more in later waves, always above the top row where the swarm shields them
+  const lancers = n >= 10 ? Math.min(3, 1 + Math.floor((n - 10) / 4)) : 0;
   for (const q of specs) G.queue.push({ t: q.t, fn: () => startEnter(spawnEnemy(q.type, q.c, q.r, { elite: q.elite }), q.tpl, !!q.side) });
   for (let i = 0; i < lancers; i++) G.queue.push({ t: 0.6 + i * 0.5, fn: () => { const e = spawnEnemy('lancer', 0, 0); e.ph = i * 2.1 + rand(0.6); startEnter(e, 2, i % 2 === 1); } });
   G.queue.sort((a, b) => a.t - b.t);
@@ -1284,7 +1284,7 @@ function drawShop() {
   const docked = G.docked, next = nextMod(), nm = G.newMod && SHOPBY[G.newMod];
   $('stEyebrow').textContent = docked ? 'Docked · Hive Core destroyed' : 'Space station';
   $('stTitle').textContent = docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
-  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade. ' : '') + 'Scrap from this run is banked. Spend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries. Each Hive Core you destroy earns a new one.';
+  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade. ' : '') + 'Scrap from this run is banked. Spend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach Hive Core you destroy earns a new module.';
   $('btnUndock').hidden = !docked; $('btnHangarPlay').hidden = $('btnHangarBack').hidden = docked;
   $('bank').textContent = '◆ ' + meta.scrap + ' scrap';
   $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => {
