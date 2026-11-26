@@ -334,6 +334,7 @@ const SFX = {
   warn() { for (let i = 0; i < 3; i++) tone('square', 150, 140, 0.22, 0.3, i * 0.32); },
   eshoot() { if (limited('e', 90)) tone('square', 300, 200, 0.06, 0.08); },
   missile() { if (limited('m', 150)) { noise(0.35, 0.22, 1800, 0.02); tone('sawtooth', 240, 520, 0.3, 0.12); } },
+  alarm() { tone('square', 1320, 1240, 0.05, 0.06); },
   charge() { tone('sine', 220, 1100, 1.25, 0.16); },
   beam() { tone('sawtooth', 150, 130, 1.7, 0.2); noise(1.7, 0.16, 2400, 0.03); },
   buy() { tone('triangle', 660, 990, 0.12, 0.3); tone('triangle', 990, 1320, 0.14, 0.3, 0.1); },
@@ -568,7 +569,7 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
 // ---------- game state ----------
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
-  form: { cols: 6, rows: 3, dx: 38, dy: 34, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, boss: null, bossDown: false, cards: [], hint: {}, cut: null, draftKind: 'wave', docked: false, newMod: null };
+  form: { cols: 6, rows: 3, dx: 38, dy: 34, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossDown: false, cards: [], hint: {}, cut: null, draftKind: 'wave', docked: false, newMod: null };
 const P = { x: W / 2, y: H - 70, vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
 const ulv = id => G.up[id] || 0;
@@ -671,6 +672,9 @@ function fireMissile(x, y) {
   if (meta.runs < 6 && !G.hint.missile) { G.hint.missile = true; toast('MISSILE', 'It follows you. Shoot it down or slip past it'); }
 }
 function updateMissiles(dt) {
+  // warning beeps while a missile is still homing in: the closer the nearest one, the faster they come
+  let near = 1e9; for (const m of G.em) if (!m.dead && m.y < P.y) near = Math.min(near, Math.hypot(m.x - P.x, m.y - P.y));
+  if (near < 1e9 && P.alive && inPlay()) { G.alarmT -= dt; if (G.alarmT <= 0) { SFX.alarm(); G.alarmT = clamp(near / 700, 0.14, 0.55); } } else G.alarmT = 0;
   for (let i = G.em.length - 1; i >= 0; i--) {
     const m = G.em[i]; if (!m) continue; m.t += dt;   // a hit can clear other missiles mid-loop
     const sp = Math.min(205, 60 + 120 * m.t) * S.ebMul, cur = Math.atan2(m.vy, m.vx); let a = cur;
