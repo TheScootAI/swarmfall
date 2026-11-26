@@ -82,7 +82,9 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   await page.tap('#btnUndock'); s = await waitFor(x => x.state === 'draft');
   check((await page.textContent('#draftEyebrow')).includes('rare booster'), 'undocking offers the rare booster');
   await page.tap('.card'); s = await waitFor(x => x.state === 'cut'); check(s.cut === 'launch', 'the ship launches again after the rare booster');
-  await page.touchscreen.tap(195, 400); s = await waitFor(x => x.state === 'play', 3000); check(s.state === 'play' && s.wave === 7, 'a tap skips the launch; wave 7 starts');
+  await page.waitForTimeout(300); await page.touchscreen.tap(195, 400); await page.waitForTimeout(500);
+  check((await st()).state === 'cut', 'a tap does not skip the launch');
+  s = await waitFor(x => x.state === 'play', 6000); check(s.state === 'play' && s.wave === 7, 'wave 7 starts when the launch has played out');
 
   const banked = (await st()).scrap;
   await page.evaluate(() => { const s = window.__swarmfall; s.P.inv = 0; s.P.hp = 1; s.P.shieldUp = false; s.P.shieldT = 99; /* the rare booster may have been a shield: keep it down */ s.G.revive = 0; s.G.eb.push({ x: s.P.x, y: s.P.y - 3, vx: 0, vy: 5, r: 6 }); });
@@ -147,9 +149,9 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
         G.revive = 1;
         if (G.time - g0 > (wave === 18 ? 30 : 21) || performance.now() - t0 > 120000) res(w); else requestAnimationFrame(f); })(); }), b.wave);
     check(seen.type === b.type && seen.hud === b.name, 'wave ' + b.wave + ' is the ' + b.name + ', named on the HUD', seen.type + ' / ' + seen.hud);
-    if (b.type === 'cube') check(seen.balls >= 10 && seen.helpers.splitter, b.name + ': fans, rings and splitters all happen', JSON.stringify(seen));
+    if (b.type === 'cube') check(seen.balls >= 12 && seen.helpers.splitter, b.name + ': fans, rings and splitters all happen', JSON.stringify(seen));
     else {
-      check(seen.beamFrames > 20 && seen.fans[3] && seen.fans[2] && seen.darts && seen.missiles, b.name + ': both beam fans, darts and missiles all happen', JSON.stringify(seen));
+      check(seen.beamFrames > 20 && seen.fans[3] && seen.fans[2] && seen.darts && seen.missiles && seen.helpers.mite, b.name + ': both beam fans, darts, missiles and mites all happen', JSON.stringify(seen));
       check(seen.gapSafe === true && seen.beamHurts === true, b.name + ': the gap between two beams is safe and a beam is not', 'gap safe ' + seen.gapSafe + ', beam hurts ' + seen.beamHurts);
       check(seen.followUp === true, b.name + ': badly hurt, it follows a fan at once with the other one', JSON.stringify(seen.fans));
     }

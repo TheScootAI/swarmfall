@@ -680,8 +680,8 @@ const ET = {
   beetle: { hp: 70, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71] },
   lancer: { hp: 34, r: 12, scrap: 0.7, col: [1, 0.25, 0.35] },
   boss: { hp: 950, r: 34, col: [1, 0.31, 0.55], boss: true },      // the Hive Core
-  cube: { hp: 900, r: 36, col: [1, 0.6, 0.2], boss: true },        // the Fracture Cube: hp is all of its pieces together
-  warden: { hp: 950, r: 34, col: [1, 0.25, 0.4], boss: true },     // the Beam Warden
+  cube: { hp: 1000, r: 36, col: [1, 0.6, 0.2], boss: true },        // the Fracture Cube: hp is all of its pieces together
+  warden: { hp: 1050, r: 34, col: [1, 0.25, 0.4], boss: true },     // the Beam Warden
 };
 const BOSS_TINT = [0xff4f8b, 0xffb02e, 0x5fe8ff, 0xa56bff];
 const RARITY = ['Common', 'Rare', 'Prototype'];
@@ -701,12 +701,18 @@ const bossFor = n => BOSSES[(Math.round(n / BOSS_EVERY) - 1) % BOSSES.length];
 // 4 quarters: 0.4 + 2 × 0.15 + 4 × 0.075 = 1). size and r: model scale and hit radius. speed: how fast halves
 // and quarters drift. floor: how far down the screen they may come, as a share of its height, so they stay out
 // of the ship's rows. born: seconds a new piece cannot be hurt, so one shot cannot run through all three sizes.
-const CUBE = { share: [0.4, 0.15, 0.075], size: [1, 0.68, 0.46], r: [36, 25, 17], speed: [0, 62, 104], floor: 0.42, born: 0.35 };
+// gap: seconds between attacks for the whole cube, a half and a quarter. fan, ring, splitters: balls in its aimed
+// fan, balls in its ring and splitters it releases, the first time it is met; each grows on later visits.
+const CUBE = { share: [0.4, 0.15, 0.075], size: [1, 0.68, 0.46], r: [36, 25, 17], speed: [0, 62, 104], floor: 0.42, born: 0.35,
+  gap: [2.1, 2.5, 2.6], fan: 4, ring: 12, splitters: 3 };
 // Beam Warden. charge and fire: seconds its beams are aimed (thin lines) and then on. spread: the angle between
 // neighbouring beams, in radians. At the ship's rows that is about 170 apart, so every gap is far wider than
 // the ship and its shield. max: the most beams it ever fires at once. afterMissiles: seconds it waits after
-// launching missiles before its next attack.
-const WARDEN = { charge: 1.2, fire: 1.3, spread: 0.3, max: 5, afterMissiles: 3.6 };
+// launching missiles before its next attack. gap: seconds between its other attacks. darts: volleys of darts the
+// first time it is met. mites: mites it releases each time its beams come on, the first time it is met, and
+// mitesMore: how many more on each later visit (the owner asked for mites during the beams, and for more next
+// time). helpers: it releases no more while this many of its mites and wasps are still flying.
+const WARDEN = { charge: 1.2, fire: 1.3, spread: 0.3, max: 5, afterMissiles: 3.6, gap: 1.3, darts: 3, mites: 3, mitesMore: 2, helpers: 8 };
 const isBossWave = n => n > 0 && n % BOSS_EVERY === 0;
 // The wave each enemy, and each change to the formation, first appears. Tune arrivals here: buildWave() and
 // the formation-fire code read this table, and tools/smoke.js checks that the game follows it.
@@ -1021,15 +1027,15 @@ function updateCube(e, dt) {
   e.atkT -= dt;
   if (e.atkT > 0 || e.born > 0) return;
   if (e.gen === 0) {
-    e.atkT = 2.4 - 0.15 * lv;
+    e.atkT = CUBE.gap[0] - 0.15 * lv;
     const k = e.atk++ % 3;
-    if (k === 0) { const n = 3 + lv, a = aimAt(e.x, e.y + 24); for (let i = 0; i < n; i++) fireE(e.x, e.y + 24, a + (i - (n - 1) / 2) * 0.2, ebSpeed() * 0.9, 5); }
-    else if (k === 1) { const n = 10 + 2 * lv, o = rand(TAU); for (let i = 0; i < n; i++) fireE(e.x, e.y, o + i * TAU / n, ebSpeed() * 0.7); }
-    else { const n = Math.max(0, Math.min(2 + lv, 18 - G.enemies.length)); for (let i = 0; i < n; i++) diveToLane(spawnEnemy('splitter', null, null, { x: e.x, y: e.y + 20 }), W * (i + 0.5) / n, -50); }
+    if (k === 0) { const n = CUBE.fan + lv, a = aimAt(e.x, e.y + 24); for (let i = 0; i < n; i++) fireE(e.x, e.y + 24, a + (i - (n - 1) / 2) * 0.2, ebSpeed() * 0.9, 5); }
+    else if (k === 1) { const n = CUBE.ring + 2 * lv, o = rand(TAU); for (let i = 0; i < n; i++) fireE(e.x, e.y, o + i * TAU / n, ebSpeed() * 0.7); }
+    else { const n = Math.max(0, Math.min(CUBE.splitters + lv, 18 - G.enemies.length)); for (let i = 0; i < n; i++) diveToLane(spawnEnemy('splitter', null, null, { x: e.x, y: e.y + 20 }), W * (i + 0.5) / n, -50); }
   } else if (e.gen === 1) {   // a half: a small fan of balls
-    e.atkT = 2.9 - 0.2 * lv + rand(0.6); const a = aimAt(e.x, e.y + 14);
+    e.atkT = CUBE.gap[1] - 0.2 * lv + rand(0.6); const a = aimAt(e.x, e.y + 14);
     for (let i = -1; i <= 1; i++) fireE(e.x, e.y + 14, a + i * 0.22, ebSpeed() * 0.85, 4.5);
-  } else { e.atkT = 3.1 - 0.2 * lv + rand(1.2); fireDart(e.x, e.y + 8, aimAt(e.x, e.y + 8)); }   // a quarter: one dart
+  } else { e.atkT = CUBE.gap[2] - 0.2 * lv + rand(1.2); fireDart(e.x, e.y + 8, aimAt(e.x, e.y + 8)); }   // a quarter: one dart
   SFX.eshoot();
 }
 // A whole cube or a half has been destroyed: two pieces of the next size fly apart from where it was.
@@ -1048,7 +1054,7 @@ function splitCube(e) {
 // ---- Beam Warden ----
 // It glides across the top and eases to a stop to fire a fan of laser beams from its eye: thin lines first
 // (charge), then the beams (fire). Two fans alternate, the second filling the gaps of the first, so the safe
-// places swap. Between fans it fires darts and missiles.
+// places swap, and mites come down as the beams light. Between fans it fires darts and missiles.
 function wardenFan(e, n, charge) {
   const B = e.bm, tilt = rand(-0.07, 0.07);
   B.phase = 'charge'; B.t = charge; B.n = n;
@@ -1059,9 +1065,19 @@ function updateWarden(e, dt) {
   const B = e.bm, lv = bossLv(e), rage = e.hp < e.maxHp * 0.35;
   e.pv += ((B.phase === 'idle' ? 1 : 0) - e.pv) * Math.min(1, 5 * dt); e.t += dt * e.pv;
   e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y = 130 + Math.sin(e.t * 1.2) * 10;   // 130 is where the entrance ends, so it does not jump
-  if (B.phase !== 'idle') {   // nothing else happens while beams are aimed or on: one thing to read at a time
+  if (e.sum > 0) {   // mites leave one at a time, each bound for its own lane
+    e.sumT -= dt;
+    if (e.sumT <= 0) { diveToLane(spawnEnemy('mite', null, null, { x: e.x, y: e.y + 20 }), W * (e.sumN - e.sum + 0.5) / e.sumN, -50); e.sum--; e.sumT = 0.25; }
+  }
+  if (B.phase !== 'idle') {   // it fires nothing else of its own while beams are aimed or on, but mites come down as the beams light
     B.t -= dt;
-    if (B.phase === 'charge') { if (B.t <= 0) { B.phase = 'fire'; B.t = WARDEN.fire; SFX.beam(); shake(4); } }
+    if (B.phase === 'charge') {
+      if (B.t <= 0) {
+        B.phase = 'fire'; B.t = WARDEN.fire; SFX.beam(); shake(4);
+        let flying = 0; for (const o of G.enemies) if (!o.dead && !o.def.boss) flying++;
+        e.sumN = e.sum = Math.max(0, Math.min(WARDEN.mites + WARDEN.mitesMore * lv, WARDEN.helpers + 2 * lv - flying)); e.sumT = 0;
+      }
+    }
     else {
       const ey = e.y + WARDEN_EYE, reach = BEAM_HALF + (P.shieldUp ? SHIELD_R : 16);
       if (P.alive && P.y > ey) for (let i = 0; i < B.n; i++) if (Math.abs(P.x - e.x - B.tan[i] * (P.y - ey)) * B.cos[i] < reach) { hitPlayer(); break; }
@@ -1076,10 +1092,10 @@ function updateWarden(e, dt) {
   if (e.burst > 0) { e.burstT -= dt; if (e.burstT <= 0) { const a = aimAt(e.x, e.y + 20); for (let i = -1; i <= 1; i++) fireDart(e.x, e.y + 20, a + i * 0.16); e.burst--; e.burstT = 0.45; SFX.eshoot(); } return; }
   e.atkT -= dt * (rage ? 1.4 : 1);
   if (e.atkT > 0) return;
-  e.atkT = 1.5 - 0.1 * lv;
+  e.atkT = WARDEN.gap - 0.1 * lv;
   const k = e.atk++ % 4, wide = Math.min(WARDEN.max, 3 + 2 * Math.floor(lv / 2));   // 3 beams, 5 from its third visit on
   if (k === 0) wardenFan(e, wide, WARDEN.charge);
-  else if (k === 1) { e.burst = 2 + lv; e.burstT = 0; }
+  else if (k === 1) { e.burst = WARDEN.darts + lv; e.burstT = 0; }
   else if (k === 2) wardenFan(e, wide - 1, WARDEN.charge);
   else {
     fireMissile(e.x - 34, e.y + 6); fireMissile(e.x + 34, e.y + 6);
@@ -1471,12 +1487,12 @@ function updateGame(dt) {
 
 // ---------- cutscenes ----------
 // Three short scripted scenes: leaving the station, the booster shuttle pulling alongside, and flying back to
-// dock after a Hive Core. Only the launch can be skipped (with a tap): the other two always play out, since a
-// player steering by touch puts a finger down just as they begin.
+// dock after a boss. None can be skipped: a player steering by touch has a finger on the screen as each one
+// begins, so a tap that skipped would cut them short by accident. (The launch could be skipped once; the owner
+// asked for that to stop.)
 const easeIO = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-const CUTS = { launch: { dur: 2.4, skip: true }, shuttle: { dur: 2.3 }, dock: { dur: 2.8 } };   // seconds; skip: a tap or key ends it early
+const CUTS = { launch: { dur: 2.4 }, shuttle: { dur: 2.3 }, dock: { dur: 2.8 } };   // seconds
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
-function skipCut() { if (G.state === 'cut' && CUTS[G.cut.kind].skip) G.cut.t = G.cut.dur; }
 function startCut(kind, done) {
   FIN.on = FIN.toast = false;
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
@@ -1903,7 +1919,7 @@ addEventListener('keydown', e => {
   if (typing(e)) return;               // letters typed into the feedback box are not game keys
   audioInit(); const k = e.key.toLowerCase();
   if (k === 'arrowleft' || k === 'arrowright' || k === 'a' || k === 'd') { keys[k] = true; if (inPlay()) e.preventDefault(); }
-  else if (G.state === 'cut' && (k === ' ' || k === 'enter' || k === 'escape')) skipCut();
+  else if (G.state === 'cut') { /* a cutscene always plays out */ }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'm') toggleMute();
   else if (G.state === 'draft' && (k === '1' || k === '2' || k === '3')) choose(+k - 1);
@@ -1914,7 +1930,7 @@ let drag = null;
 const worldX = cx => clamp((cx - window.innerWidth / 2) * unitsPerPx + W / 2, 14, W - 14);
 addEventListener('pointerdown', e => {
   audioInit();
-  if (G.state === 'cut' && !(e.target.closest && e.target.closest('button, #fb'))) { skipCut(); return; }   // a tap skips the launch, not the other scenes
+  if (G.state === 'cut' && !(e.target.closest && e.target.closest('button, #fb'))) return;   // a touch during a cutscene does nothing: it neither skips the scene nor steers
   if (!inPlay() || (e.target.closest && e.target.closest('button, #fb'))) return;
   if (e.pointerType === 'mouse') P.target = worldX(e.clientX); else drag = { id: e.pointerId, sx: e.clientX, tx: P.x };
 });
