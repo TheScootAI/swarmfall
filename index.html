@@ -76,6 +76,8 @@ h2{font:700 1.5rem/1.1 var(--display);letter-spacing:.08em;text-transform:upperc
   font:700 1rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;clip-path:var(--chamfer)}
 .btn.primary{background:var(--arc);color:#04141c}
 .btn.quiet{background:transparent;color:var(--dim);min-height:44px;clip-path:none}
+.quietrow{gap:0 4px}.quietrow>.btn{flex:0 1 auto;padding-inline:14px}
+.btn.quiet.warn{color:var(--hot)}
 .btn:disabled{opacity:.45;cursor:default}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
 @media (hover:hover){.btn:not(:disabled):hover{filter:brightness(1.15)}.card:hover{background:var(--panel-hi)}}
@@ -170,7 +172,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Red dots are enemy shots.</p>
         <p class="fine" id="bestLine"></p>
-        <div><button id="btnSound" class="btn quiet">Sound on</button></div>
+        <div class="row quietrow"><button id="btnSound" class="btn quiet">Turn sound off</button><button id="btnReset" class="btn quiet">Start over</button></div>
       </div>
     </section>
 
@@ -195,9 +197,9 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Red dots are enemy shots.</p>
         <div class="row">
           <button id="btnResume" class="btn primary">Resume</button>
-          <button id="btnSound2" class="btn">Sound on</button>
+          <button id="btnSound2" class="btn">Turn sound off</button>
         </div>
-        <div><button id="btnQuit" class="btn quiet">End this run</button></div>
+        <div class="row quietrow"><button id="btnRestart" class="btn quiet">Restart run</button><button id="btnQuit" class="btn quiet">End this run</button></div>
       </div>
     </section>
 
@@ -273,15 +275,33 @@ const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta));
 const mlv = id => meta.up[id] || 0;
 
 // ---------- audio ----------
-let AC = null, master = null, noiseBuf = null;
+let AC = null, master = null, noiseBuf = null, hush = null;
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// A short silent clip. On iPhones and iPads the ring/silent switch mutes game audio unless the page counts as
+// "playing media"; looping this is the long-standing way to make it count where the newer setting is missing.
+function silentClip() {
+  const n = 2000, b = new Uint8Array(44 + n), v = new DataView(b.buffer), put = (o, t) => { for (let i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
+  put(0, 'RIFF'); v.setUint32(4, 36 + n, true); put(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); put(36, 'data'); v.setUint32(40, n, true); b.fill(128, 44);
+  let bin = ''; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+// Called on every tap, release and key press: browsers only let sound start from one of those, and phones
+// suspend it again whenever the page goes to the background.
 function audioInit() {
-  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
-  try {
-    const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-    AC = new C(); master = AC.createGain(); master.gain.value = 0.22; master.connect(AC.destination);
-    noiseBuf = AC.createBuffer(1, AC.sampleRate * 0.6, AC.sampleRate);
-    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  } catch (e) { AC = null; }
+  try { if (navigator.audioSession) navigator.audioSession.type = meta.mute ? 'ambient' : 'playback'; } catch (e) {}
+  if (!AC) {
+    try {
+      const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      AC = new C(); master = AC.createGain(); master.gain.value = 0.45; master.connect(AC.destination);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 0.6, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    } catch (e) { AC = null; return; }
+  }
+  if (AC.state !== 'running') { try { const r = AC.resume(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+  if (isIOS && !navigator.audioSession && !meta.mute && !hush) {
+    try { hush = new Audio(silentClip()); hush.loop = true; hush.setAttribute('playsinline', ''); const r = hush.play(); if (r && r.catch) r.catch(() => { hush = null; }); } catch (e) { hush = null; }
+  }
 }
 function tone(type, f0, f1, dur, vol = 0.5, delay = 0) {
   if (!AC || meta.mute) return;
@@ -300,11 +320,11 @@ function noise(dur, vol = 0.5, freq = 1400) {
 const sfxAt = {};
 const limited = (k, gap) => { const n = performance.now(); if (n - (sfxAt[k] || 0) < gap) return false; sfxAt[k] = n; return true; };
 const SFX = {
-  shoot() { if (limited('s', 80)) tone('square', 900, 420, 0.05, 0.1); },
+  shoot() { if (limited('s', 80)) tone('square', 980, 480, 0.05, 0.13); },
   hit() { if (limited('h', 50)) noise(0.05, 0.22, 3000); },
-  boom() { if (limited('b', 60)) { noise(0.22, 0.5, 1500); tone('triangle', 180, 50, 0.2, 0.3); } },
-  big() { noise(0.9, 0.9, 900); tone('sawtooth', 140, 30, 0.8, 0.5); },
-  hurt() { tone('sawtooth', 260, 50, 0.4, 0.5); noise(0.3, 0.5, 800); },
+  boom() { if (limited('b', 60)) { noise(0.24, 0.6, 3200); tone('triangle', 420, 110, 0.2, 0.35); } },
+  big() { noise(0.9, 0.9, 2600); tone('sawtooth', 330, 60, 0.8, 0.5); },
+  hurt() { tone('sawtooth', 520, 110, 0.4, 0.5); noise(0.3, 0.5, 2000); },
   pick() { if (limited('p', 40)) tone('sine', 880, 1500, 0.08, 0.25); },
   heal() { tone('sine', 520, 1040, 0.2, 0.3); },
   card() { tone('triangle', 520, 520, 0.1, 0.3); tone('triangle', 660, 660, 0.1, 0.3, 0.08); tone('triangle', 880, 880, 0.18, 0.3, 0.16); },
@@ -429,7 +449,7 @@ const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a, EB_COL = 0xf
 const ship = new THREE.Group();
 ship.add(part(geo.cone, M.hull, 7, 30, 6, 0, 2), part(geo.box, M.wing, 30, 5, 2.5, 0, -7), part(geo.box, M.wing, 3.5, 14, 3, -14, -3), part(geo.box, M.wing, 3.5, 14, 3, 14, -3), part(geo.oct, M.canopy, 3, 5, 3, 0, 3, 5));
 const flame = part(geo.cone, M.flame, 4, 12, 4, 0, -19, 0, Math.PI); ship.add(flame);
-const shieldMesh = part(geo.ico, M.shield, 24, 24, 24); ship.add(shieldMesh);
+const shieldMesh = part(geo.ico, M.shield, 23, 23, 23); ship.add(shieldMesh);
 scene.add(ship);
 // the space station: a hub with a docking port above and below, a slowly turning ring and two solar wings
 const stM = { hull: phong(0xcfd6ff, 0x1a2050), dark: phong(0x4a5490, 0x10143a), panel: phong(0x2a56d8, 0x0a1c70), port: phong(0xffc857, 0x6a4a00), light: basic(0x5fe8ff) };
@@ -754,9 +774,21 @@ function nova(d) {
   for (const b of G.eb) burst(b.x, b.y, [1, 0.5, 0.3], 2, 80, 0.3);
   G.eb.length = 0; ringFx(P.x, P.y, 20, 420, 0xc79bff, 0.6); areaDamage(P.x, P.y, 2000, d);
 }
+// Does a circle at (x, y) with radius r touch the ship? The shape follows the outline: the fuselage and the
+// wing bar. While a shield is up, the whole bubble is the target, so anything that touches it pops it.
+const SHIELD_R = 22;
+function shipHit(x, y, r) {
+  const dx = x - P.x, dy = y - P.y;
+  if (P.shieldUp) return dx * dx + dy * dy < (r + SHIELD_R) ** 2;
+  const fy = clamp(dy, -13, 11); if (dx * dx + (dy - fy) ** 2 < (r + 4) ** 2) return true;   // fuselage, nose to tail
+  const wx = clamp(dx, -12, 12); return (dx - wx) ** 2 + (dy - 5) ** 2 < (r + 4.5) ** 2;     // wings and their tip fins
+}
 function hitPlayer() {
   if (P.inv > 0 || !P.alive) return;
-  if (P.shieldUp) { P.shieldUp = false; P.shieldT = S.shieldCD; P.inv = 0.7; ringFx(P.x, P.y, 14, 70, 0xc79bff); SFX.shield(); clearShotsNear(P.x, P.y, 70); drawHud(); return; }
+  if (P.shieldUp) {   // the shield takes the hit and is gone until it recharges
+    P.shieldUp = false; P.shieldT = S.shieldCD; P.inv = 0.7; ringFx(P.x, P.y, SHIELD_R, 70, 0xc79bff); burst(P.x, P.y, [0.78, 0.6, 1], 26, 190, 0.5);
+    SFX.shield(); vibrate(30); clearShotsNear(P.x, P.y, 70); drawHud(); return;
+  }
   P.hp--; P.inv = 1.5; shake(10); SFX.hurt(); vibrate(70); burst(P.x, P.y, [1, 0.4, 0.5], 26, 230); clearShotsNear(P.x, P.y, 90);
   if (S.nova > 0) nova(45 * S.nova);
   if (P.hp <= 0) {
@@ -834,7 +866,7 @@ function updateShots(dt) {
   for (let i = G.eb.length - 1; i >= 0; i--) {
     const b = G.eb[i]; b.x += b.vx * dt; b.y += b.vy * dt;
     let gone = b.y > H + 20 || b.y < -30 || b.x < -30 || b.x > W + 30;
-    if (!gone && P.alive && (b.x - P.x) ** 2 + (b.y - P.y) ** 2 < (b.r + 6) ** 2) { gone = true; hitPlayer(); if (i >= G.eb.length) continue; }
+    if (!gone && P.alive && shipHit(b.x, b.y, b.r - 1)) { gone = true; hitPlayer(); if (i >= G.eb.length) continue; }
     if (gone && G.eb[i] === b) { G.eb[i] = G.eb[G.eb.length - 1]; G.eb.pop(); }
   }
 }
@@ -876,7 +908,7 @@ function updateEnemies(dt) {
     } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; formed.push(e); }
     else if (e.state === 'dive') { updateDive(e, dt); diving++; }
     else updateBoss(e, dt);
-    if (P.alive && e.z > -25 && (e.x - P.x) ** 2 + (e.y - P.y) ** 2 < (e.rad + 9) ** 2) { hitPlayer(); if (e.type !== 'boss') damageEnemy(e, 40); }
+    if (P.alive && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) { hitPlayer(); if (e.type !== 'boss') damageEnemy(e, 40); }
     if (e.dead) continue;
     // model
     const g = e.g; g.position.set(TX(e.x), TY(e.y), e.z);
@@ -1046,8 +1078,12 @@ function loadoutHtml() {
   const ids = Object.keys(G.up).filter(id => id !== 'patch');
   return ids.length ? ids.map(id => '<span>' + UPBY[id].n + ' <b>' + G.up[id] + '</b></span>').join('') : '<span>No boosters yet</span>';
 }
-function soundLabels() { $('btnSound').textContent = $('btnSound2').textContent = meta.mute ? 'Sound off' : 'Sound on'; }
-function toggleMute() { meta.mute = !meta.mute; save(); soundLabels(); }
+function soundLabels() { $('btnSound').textContent = $('btnSound2').textContent = meta.mute ? 'Turn sound on' : 'Turn sound off'; }
+function toggleMute() {
+  meta.mute = !meta.mute; save(); soundLabels();
+  if (meta.mute && hush) { try { hush.pause(); } catch (e) {} hush = null; }
+  audioInit(); if (!meta.mute) SFX.card();   // a chime confirms sound is on
+}
 
 function resetField() {
   for (const e of G.enemies) scene.remove(e.g);
@@ -1159,10 +1195,21 @@ function openHangar() { if (G.state !== 'title') { G.state = 'title'; titleScene
 
 $('btnPlay').onclick = startRun; $('btnAgain').onclick = startRun; $('btnHangarPlay').onclick = startRun;
 $('btnHangar').onclick = openHangar; $('btnDeadHangar').onclick = openHangar; $('btnHangarBack').onclick = showTitle;
-$('btnSound').onclick = $('btnSound2').onclick = () => { audioInit(); toggleMute(); };
+$('btnSound').onclick = $('btnSound2').onclick = toggleMute;
 $('btnPause').onclick = $('btnResume').onclick = togglePause;
 $('btnUndock').onclick = () => { if (G.state === 'station') { G.docked = false; $('hud').hidden = false; hudKey = ''; drawHud(); dockPose(); openDraft('boss'); } };
 $('btnQuit').onclick = () => { if (G.state === 'pause') { show(null); endRun(); } };
+// Restart: the run ends as usual (its scrap is banked) and a new one launches straight away.
+$('btnRestart').onclick = () => { if (G.state === 'pause') { endRun(); startRun(); } };
+// Start over: wipes scrap, modules and records. Asks for a second tap, since page dialogs are not available everywhere.
+let resetArmed = 0;
+const resetLabel = () => { const b = $('btnReset'); b.textContent = resetArmed ? 'Erase all progress? Tap again' : 'Start over'; b.classList.toggle('warn', !!resetArmed); };
+$('btnReset').onclick = () => {
+  if (!resetArmed) { resetArmed = setTimeout(() => { resetArmed = 0; resetLabel(); }, 5000); resetLabel(); return; }
+  clearTimeout(resetArmed); resetArmed = 0; resetLabel();
+  meta.scrap = 0; meta.best = 0; meta.runs = 0; meta.up = {}; meta.mods = START_MODS.slice(); save();
+  showTitle(); toast('PROGRESS ERASED', 'Back to a new ship and two modules');
+};
 $('btnReroll').onclick = () => { if (G.state === 'draft' && G.rerolls > 0) { G.rerolls--; G.cards = rollCards('wave'); drawDraft(); SFX.pick(); } };
 $('btnSkip').onclick = () => { if (G.state === 'draft') { G.run.scrap += 10; afterDraft(false); } };
 $('cards').onclick = e => { const b = e.target.closest('.card'); if (b) choose(+b.dataset.i); };
@@ -1324,6 +1371,7 @@ addEventListener('pointermove', e => {
 const endDrag = e => { if (drag && drag.id === e.pointerId) drag = null; };
 addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
+for (const ev of ['pointerup', 'touchend', 'click']) addEventListener(ev, audioInit, { capture: true, passive: true });   // releases count as gestures on phones; presses do not
 document.addEventListener('visibilitychange', () => { if (document.hidden && inPlay()) togglePause(); });
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
 if (finePointer) $('howto').textContent = 'Steer with the mouse, or ← → / A D. Your ship fires on its own. P pauses, M mutes.';

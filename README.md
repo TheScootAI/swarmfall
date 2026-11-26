@@ -12,6 +12,8 @@ Open `index.html` in a browser, or serve the folder with any static host (GitHub
 - **Mouse:** the ship follows the cursor.
 - **Keyboard:** ← → or A D to steer, 1 2 3 to pick a booster, P to pause, M to mute.
 
+"Restart run" on the pause screen ends the current run and launches a new one. "Start over" on the title screen erases all saved progress after a second tap.
+
 ## Feedback
 
 The speech-bubble button in the top-right corner opens a box for a bug or an idea. "Open on GitHub" is a link to this repository's new-issue page with the note filled in, plus one line about the run. Nothing is sent from the game; the note is posted only when the player presses GitHub's own button. During a run the box also offers a screenshot of the playfield to copy and paste into the issue.
