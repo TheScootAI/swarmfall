@@ -6,8 +6,8 @@ A roguelite swarm shooter played mostly on phones. The whole game is `index.html
 - **Game artifact:** https://claude.ai/artifact/WHbiJLyLcGYMiu2Bddz8s4 (the same game, built with `node tools/artifact.js`).
 - **Enemy guide artifact:** https://claude.ai/artifact/18YkQbSpHhSxGimJ2GmKNq (source in `artifacts/enemy-guide/`).
 - **Upgrade guide artifact:** https://claude.ai/artifact/EALugShxKLeMhoE6pxT3TC (every booster and station module; written by `node tools/upgrade-guide.js` into `artifacts/upgrade-guide/`).
-- **Repo:** `TheScootAI/swarmfall`. `main` is the live game.
-- **Branch `graphics-upgrade`:** the three.js r187 port and the new graphics (glow, reflections, nebula, energy shield, lights), for the owner to try before it goes live. It is staged at https://claude.ai/artifact/TDjavC3eeknZRiZyJmQsWR (built with `node tools/artifact.js <out.html> "Swarmfall Staging"`). Do not publish this branch to the live game artifact or merge it into `main` until the owner says so.
+- **Repo:** `TheScootAI/swarmfall`. `main` is the live game, and ordinary changes go straight onto it.
+- **Staging artifact:** https://claude.ai/artifact/TDjavC3eeknZRiZyJmQsWR. For a big change the owner should try before it goes live (the graphics upgrade was one), work on a branch, build with `node tools/artifact.js <out.html> "Swarmfall Staging"` and publish there. Merge into `main` only when the owner says so.
 
 The `swarmfall-dev` skill (`.claude/skills/swarmfall-dev/`) has the step-by-step workflow for a change. Use it.
 
@@ -59,7 +59,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 - **Tuning belongs in the tables**, not as `n >= 12` thresholds scattered through the code.
 - **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during the Hive Core's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
-- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `GFX`, `FIN`, `camera`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
+- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
 
 ## Graphics

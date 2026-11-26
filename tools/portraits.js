@@ -12,10 +12,11 @@ const SHOTS = [['mite', 4.2, {}], ['wasp', 3.6, {}], ['weaver', 4, {}], ['splitt
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })).newPage();
   await page.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
-  await page.goto('file://' + GAME); await page.waitForTimeout(500);
+  await page.goto('file://' + GAME + '?gfx=high'); await page.waitForTimeout(500);   // every effect on, as a player on a good phone sees it
   await page.tap('#btnPlay'); await page.waitForTimeout(300); await page.touchscreen.tap(195, 400);
   await page.waitForFunction(() => window.__swarmfall.G.state === 'play');
-  await page.evaluate(() => { document.getElementById('ui').style.display = 'none'; });
+  // hide the HUD, and the nebula and far rocks: a portrait sits on a plain dark ground
+  await page.evaluate(() => { document.getElementById('ui').style.display = 'none'; for (const o of window.__swarmfall.scene.children) if (o.position.z < -800) o.visible = false; });
   fs.mkdirSync(OUT, { recursive: true });
   for (const [name, scale, opt] of SHOTS) {
     // one enemy alone, then freeze the game (pause draws one frame) and pose the model in the middle of the screen
