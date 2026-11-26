@@ -164,7 +164,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:-5px}
       <div class="inner">
         <p class="eyebrow">Roguelite swarm shooter</p>
         <h1>SWARM<b>FALL</b></h1>
-        <p class="lede">One hit destroys a new ship. A supply shuttle brings a booster after every third wave. Destroy a Hive Core to dock at the station for a new module, upgraded with the scrap you salvage.</p>
+        <p class="lede">One hit destroys a new ship. A booster shuttle arrives after every third wave. Destroy a Hive Core to dock at the station for a new module, upgraded with the scrap you salvage.</p>
         <div class="row">
           <button id="btnPlay" class="btn primary">Launch</button>
           <button id="btnHangar" class="btn">Station</button>
@@ -326,6 +326,8 @@ const SFX = {
   big() { noise(0.9, 0.9, 2600); tone('sawtooth', 330, 60, 0.8, 0.5); },
   hurt() { tone('sawtooth', 520, 110, 0.4, 0.5); noise(0.3, 0.5, 2000); },
   pick() { if (limited('p', 40)) tone('sine', 880, 1500, 0.08, 0.25); },
+  dive() { if (limited('d', 170)) tone('sine', 760, 360, 0.17, 0.07); },
+  split() { if (limited('d', 170)) { tone('triangle', 520, 980, 0.09, 0.1); tone('triangle', 660, 1240, 0.1, 0.08, 0.06); } },
   heal() { tone('sine', 520, 1040, 0.2, 0.3); },
   card() { tone('triangle', 520, 520, 0.1, 0.3); tone('triangle', 660, 660, 0.1, 0.3, 0.08); tone('triangle', 880, 880, 0.18, 0.3, 0.16); },
   shield() { tone('sine', 1200, 300, 0.25, 0.35); },
@@ -370,6 +372,7 @@ const M = {
   wasp: phong(0xffb02e, 0x4a2a00), waspWing: phong(0xfff1c0, 0x40381a),
   weaver: phong(0xa56bff, 0x24104a), splitA: phong(0xff7a3c, 0x4a1c08), splitB: phong(0xffd23c, 0x4a3a08),
   beetle: phong(0x2ed6b5, 0x06382f), shell: phong(0x127a6b, 0x03201b),
+  trip: phong(0x3d7bff, 0x0c1f66),
   lancer: phong(0xff3355, 0x5a0a18), lancerShell: phong(0x3a1638, 0x12061a), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(0xff2f45, 0.85), beamCore: glowMat(0xffffff, 0.95),
   eye: basic(0xffffff), elite: basic(0xff2f45), flash: basic(0xffffff),
   scrap: phong(0xffd257, 0x9a6a00), heart: phong(0x35f06e, 0x0c6a2c), halo: glowMat(0x5fe8ff, 0.85), drone: phong(0xc7b0ff, 0x2a1a5a),
@@ -467,7 +470,7 @@ stRing.add(part(geo.band, stM.hull, 62, 62, 62)); for (let i = 0; i < 4; i++) st
 stRing.rotation.x = 1.15; station.add(stRing);
 const stLights = [[0, 59, 5], [0, -59, 5], [-118, 0, 2], [118, 0, 2]].map(([x, y, z]) => { const m = part(geo.sph, stM.light, 2.4, 2.4, 2.4, x, y, z); station.add(m); return m; });
 station.visible = false; scene.add(station);
-// the supply shuttle that brings a booster after every third wave
+// the booster shuttle that arrives after every third wave
 const shuttle = new THREE.Group();
 shuttle.add(part(geo.box, stM.hull, 12, 20, 9), part(geo.cone, stM.hull, 6.5, 9, 5, 0, 14.5), part(geo.box, stM.dark, 24, 5, 3, 0, -6));
 const shPod = part(geo.box, stM.port, 8, 8, 8, 0, 0, 8); shuttle.add(shPod);
@@ -498,6 +501,7 @@ const ET = {
   wasp: { hp: 20, r: 11, speed: 165, scrap: 0.45, col: [1, 0.69, 0.18] },
   weaver: { hp: 16, r: 11, speed: 135, scrap: 0.4, col: [0.65, 0.42, 1] },
   splitter: { hp: 28, r: 12, speed: 230, scrap: 0.5, col: [1, 0.48, 0.24] },
+  triplet: { hp: 36, r: 13, speed: 205, scrap: 0.35, col: [0.24, 0.48, 1] },
   beetle: { hp: 70, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71] },
   lancer: { hp: 34, r: 12, speed: 0, scrap: 0.7, col: [1, 0.25, 0.35] },
   boss: { hp: 950, r: 34, speed: 0, scrap: 0, col: [1, 0.31, 0.55] },
@@ -589,6 +593,7 @@ function buildEnemy(type, tint) {
   if (type === 'mite') { add(geo.oct, M.mite, 9, 11, 9); add(geo.tet, M.miteFin, 5, 5, 5, -10, 2); add(geo.tet, M.miteFin, 5, 5, 5, 10, 2); }
   else if (type === 'wasp') { add(geo.cone, M.wasp, 7, 22, 7, 0, 0, 0, Math.PI); add(geo.box, M.waspWing, 13, 3, 2, -9, 6, 0, 0.45); add(geo.box, M.waspWing, 13, 3, 2, 9, 6, 0, -0.45); add(geo.oct, M.eye, 2.5, 2.5, 2.5, 0, 3, 6); }
   else if (type === 'weaver') { add(geo.torus, M.weaver, 9, 9, 9); add(geo.ico, M.eye, 3.4, 3.4, 3.4); }
+  else if (type === 'triplet') { for (let k = 0; k < 3; k++) { const a = Math.PI / 2 + k * TAU / 3; add(geo.cone, M.trip, 6, 11, 6, Math.cos(a) * 7, Math.sin(a) * 7, 0, a - Math.PI / 2); } add(geo.ico, M.eye, 3.6, 3.6, 3.6); }
   else if (type === 'splitter') { add(geo.box, M.splitA, 10, 10, 10, -5, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 10, 10, 10, 5, 0, 0, Math.PI / 4); }
   else if (type === 'lancer') { add(geo.oct, M.lancer, 8, 16, 8); add(geo.box, M.lancerShell, 4, 18, 5, -9, -2); add(geo.box, M.lancerShell, 4, 18, 5, 9, -2); g.userData.eye = add(geo.sph, M.eye, 3, 3, 3, 0, -13, 4); }
   else if (type === 'beetle') { add(geo.ico, M.beetle, 15, 13, 11); add(geo.box, M.shell, 25, 5, 8, 0, 5, 5); add(geo.oct, M.eye, 2.4, 2.4, 2.4, -5, -5, 9); add(geo.oct, M.eye, 2.4, 2.4, 2.4, 5, -5, 9); }
@@ -635,6 +640,19 @@ function startEnter(e, tpl, mirror) {
 function startReturn(e) {
   const s = slotPos(e), x0 = clamp(s.x + rand(-70, 70), 20, W - 20);
   e.p0 = { x: x0, y: -40 }; e.p1 = { x: x0, y: 20 }; e.p2 = { x: s.x, y: s.y - 50 }; e.state = 'enter'; e.u = 0; e.dur = 1.5; e.z0 = -240;
+}
+// An enemy leaves its place in the formation. A triplet does not dive itself: it breaks into three smaller
+// copies that fan out into the left, middle and right thirds of the field.
+function launchDive(e) {
+  if (e.type !== 'triplet') { SFX.dive(); startDive(e); return; }
+  e.dead = true; restoreMats(e); scene.remove(e.g);   // not a kill: no scrap, no credit
+  SFX.split(); ringFx(e.x, e.y, 6, 34, 0x3d7bff, 0.3); burst(e.x, e.y, e.def.col, 12, 140, 0.4);
+  for (let i = 0; i < 3; i++) {
+    const m = spawnEnemy('triplet', null, null, { x: e.x + (i - 1) * 12, y: e.y, hpMul: 0.45 });
+    m.g.scale.setScalar(0.62); m.rad = e.def.r * 0.62; startDive(m);
+    m.lane = W * (i + 0.5) / 3; m.vx = clamp((m.lane - m.x) * 2, -320, 320); m.vy = -40;
+  }
+  if (meta.runs < 6 && !G.hint.triplet) { G.hint.triplet = true; toast('TRIPLET', 'Splits into three when it attacks. Shoot it while it sits'); }
 }
 function startDive(e) {
   e.state = 'dive'; e.t = 0; e.z = 0;
@@ -748,7 +766,7 @@ function buildWave(n) {
   if (n >= 3) shapes.push((c, r) => r <= (rows - 1) * (1 - Math.abs(c - mid) / (mid + 0.5)) + 0.5, c => c % 3 !== 2);
   if (rows >= 3) shapes.push((c, r) => (c + r) % 2 === 0 || r === 0);
   const shape = shapes[(Math.random() * shapes.length) | 0];
-  const pWeaver = n >= 3 ? Math.min(0.3, 0.1 + n * 0.012) : 0, pSplit = n >= 4 ? Math.min(0.2, 0.06 + n * 0.01) : 0, pElite = n >= 4 ? Math.min(0.09, 0.02 + n * 0.005) : 0;
+  const pWeaver = n >= 3 ? Math.min(0.3, 0.1 + n * 0.012) : 0, pSplit = n >= 4 ? Math.min(0.2, 0.06 + n * 0.01) : 0, pTrip = n >= 5 ? Math.min(0.15, 0.06 + n * 0.008) : 0, pElite = n >= 4 ? Math.min(0.09, 0.02 + n * 0.005) : 0;
   let elites = 0, group = 0; const specs = [];
   for (let r = 0; r < rows; r++) {
     for (const side of [0, 1]) {
@@ -757,8 +775,8 @@ function buildWave(n) {
         const c = side ? cols - 1 - k : k;
         if ((side ? c < cols / 2 : c >= cols / 2) || !shape(c, r)) continue;
         let type = r === 0 ? (n >= 7 || (n >= 4 && Math.random() < 0.3) ? 'beetle' : n >= 2 ? 'wasp' : 'mite') : r === 1 && n >= 3 ? 'wasp' : 'mite';
-        const roll = Math.random(); if (roll < pWeaver) type = 'weaver'; else if (roll < pWeaver + pSplit) type = 'splitter';
-        const elite = elites < 3 && Math.random() < pElite; if (elite) elites++;
+        const roll = Math.random(); if (roll < pWeaver) type = 'weaver'; else if (roll < pWeaver + pSplit) type = 'splitter'; else if (roll < pWeaver + pSplit + pTrip) type = 'triplet';
+        const elite = type !== 'triplet' && elites < 3 && Math.random() < pElite;   // three elite copies would be too much if (elite) elites++;
         specs.push({ t: t0 + i++ * 0.15, type, c, r, elite, tpl, side }); any = true;
       }
       if (any) group++;
@@ -987,6 +1005,7 @@ function updateEnemies(dt) {
     else if (e.type === 'wasp') { g.rotation.y = Math.sin(t * 3) * 0.5; g.rotation.z = tilt; }
     else if (e.type === 'weaver') { g.rotation.x = t * 1.7; g.rotation.y = t * 2.3; }
     else if (e.type === 'splitter') { g.rotation.z = t * 2.5; g.rotation.y = Math.sin(t * 2) * 0.6; }
+    else if (e.type === 'triplet') { g.rotation.z = t * 1.6; g.rotation.y = Math.sin(t * 1.4) * 0.4; }
     else if (e.type === 'beetle') { g.rotation.y = Math.sin(t * 1.5) * 0.35; g.rotation.z = tilt * 0.5; }
     else { g.userData.core.rotation.y = t * 0.6; g.userData.core.rotation.x = t * 0.25; g.userData.ring.rotation.z = -t * (e.hp < e.maxHp * 0.35 ? 2.4 : 0.9); g.userData.ring.rotation.x = Math.sin(t * 0.8) * 0.5; }
     if (e.halo) { e.halo.rotation.x = t * 2; e.halo.rotation.y = t * 1.3; }
@@ -995,7 +1014,7 @@ function updateEnemies(dt) {
   const alive = G.enemies.length, maxDive = Math.min(6, 2 + Math.floor(G.wave / 3));
   G.diveT -= dt * (alive <= 4 ? 4 : 1);
   if (G.diveT <= 0 && formed.length && diving < maxDive) {
-    startDive(formed[(Math.random() * formed.length) | 0]);   // lancers are not in this list: they hold their place
+    launchDive(formed[(Math.random() * formed.length) | 0]);   // lancers are not in this list: they hold their place
     G.diveT = Math.max(0.45, 2.3 - G.wave * 0.12) * rand(0.6, 1.3);
   }
   if (G.wave >= 2 && !G.boss) {
@@ -1013,7 +1032,7 @@ function updateGame(dt) {
   updatePlayer(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt);
   if (G.enemies.some(e => e.dead)) G.enemies = G.enemies.filter(e => !e.dead);
   if (G.boss) $('bossbar').firstElementChild.style.transform = 'scaleX(' + clamp(G.boss.hp / G.boss.maxHp, 0, 1) + ')';
-  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; const left = DRAFT_EVERY - G.wave % DRAFT_EVERY; toast(G.bossDown ? 'CORE DESTROYED' : 'WAVE CLEARED', G.bossDown ? 'Returning to the station' : left === DRAFT_EVERY ? 'Supply shuttle inbound' : left === 1 ? 'Booster after the next wave' : 'Booster in ' + left + ' waves'); }
+  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; const left = DRAFT_EVERY - G.wave % DRAFT_EVERY; toast(G.bossDown ? 'CORE DESTROYED' : 'WAVE CLEARED', G.bossDown ? 'Returning to the station' : left === DRAFT_EVERY ? 'Booster shuttle inbound' : left === 1 ? 'Booster shuttle arrives after the next wave' : 'Booster shuttle arrives in ' + left + ' waves'); }
   else if (G.state === 'clear') {
     G.clearT -= dt;
     // the upgrade screen waits until the last enemy shots have left the field, so nothing vanishes mid-flight
@@ -1023,8 +1042,9 @@ function updateGame(dt) {
 }
 
 // ---------- cutscenes ----------
-// Three short scripted scenes, each skippable with a tap: leaving the station, a supply shuttle
-// pulling alongside with a booster, and flying back to dock after a Hive Core.
+// Three short scripted scenes: leaving the station, the booster shuttle pulling alongside, and flying back to
+// dock after a Hive Core. Only the launch can be skipped (with a tap): the other two always play out, since a
+// player steering by touch puts a finger down just as they begin.
 const easeIO = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 function dockPose() { ST.on = true; ST.x = W / 2; ST.y = H - 79; P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function startCut(kind, dur, done) {
@@ -1224,7 +1244,7 @@ function drawDraft() {
 }
 function openDraft(kind) {
   G.state = 'draft'; G.draftKind = kind; G.eb.length = 0; G.em.length = 0; G.cards = rollCards(kind);
-  $('draftEyebrow').textContent = kind === 'head' ? 'Station workshop · head start' : kind === 'boss' ? 'Station workshop · rare booster' : 'Supply shuttle · wave ' + G.wave + ' cleared';
+  $('draftEyebrow').textContent = kind === 'head' ? 'Station workshop · head start' : kind === 'boss' ? 'Station workshop · rare booster' : 'Booster shuttle · wave ' + G.wave + ' cleared';
   drawDraft(); show('scrDraft');
 }
 // After a booster is fitted (or skipped): the shuttle drops back and the next wave begins, or the ship leaves the station.
@@ -1431,7 +1451,7 @@ addEventListener('keydown', e => {
   if (typing(e)) return;               // letters typed into the feedback box are not game keys
   audioInit(); const k = e.key.toLowerCase();
   if (k === 'arrowleft' || k === 'arrowright' || k === 'a' || k === 'd') { keys[k] = true; if (inPlay()) e.preventDefault(); }
-  else if (G.state === 'cut' && (k === ' ' || k === 'enter' || k === 'escape')) G.cut.t = G.cut.dur;
+  else if (G.state === 'cut' && (k === ' ' || k === 'enter' || k === 'escape')) { if (G.cut.kind === 'launch') G.cut.t = G.cut.dur; }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'm') toggleMute();
   else if (G.state === 'draft' && (k === '1' || k === '2' || k === '3')) choose(+k - 1);
@@ -1442,7 +1462,7 @@ let drag = null;
 const worldX = cx => clamp((cx - window.innerWidth / 2) * unitsPerPx + W / 2, 14, W - 14);
 addEventListener('pointerdown', e => {
   audioInit();
-  if (G.state === 'cut' && !(e.target.closest && e.target.closest('button, #fb'))) { G.cut.t = G.cut.dur; return; }   // a tap skips a cutscene
+  if (G.state === 'cut' && !(e.target.closest && e.target.closest('button, #fb'))) { if (G.cut.kind === 'launch') G.cut.t = G.cut.dur; return; }   // a tap skips the launch only
   if (!inPlay() || (e.target.closest && e.target.closest('button, #fb'))) return;
   if (e.pointerType === 'mouse') P.target = worldX(e.clientX); else drag = { id: e.pointerId, sx: e.clientX, tx: P.x };
 });
@@ -1477,7 +1497,7 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 resize(); soundLabels(); showTitle();
-window.__swarmfall = { G, P, S, ST, SH, UP, meta, spawnEnemy, fireMissile, startEnter, recalc, startRun, nextWave, choose, openDraft, issueUrl, spawnPick };
+window.__swarmfall = { G, P, S, ST, SH, UP, meta, spawnEnemy, launchDive, fireMissile, startEnter, recalc, startRun, nextWave, choose, openDraft, issueUrl, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

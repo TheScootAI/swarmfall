@@ -2,7 +2,7 @@
 
 A roguelite swarm shooter for phones and desktops, built with three.js in a single `index.html`.
 
-Enemy formations fly in, hold, and dive at you. You launch from a space station. After every third wave a supply shuttle pulls alongside with a choice of three boosters. Every sixth wave is a Hive Core boss; destroy it and you fly back to the station, dock, and have a new module fitted. Scrap you collect upgrades those modules, and it carries over when your ship is destroyed.
+Enemy formations fly in, hold, and dive at you. You launch from a space station. After every third wave a booster shuttle pulls alongside with a choice of three boosters. Every sixth wave is a Hive Core boss; destroy it and you fly back to the station, dock, and have a new module fitted. Scrap you collect upgrades those modules, and it carries over when your ship is destroyed.
 
 ## Play
 
@@ -22,10 +22,10 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 
 - **One hit ends the run.** A new ship has a single hull point. Everything that makes it stronger is a choice about where your scrap and booster picks go: weapons to kill faster, armor to take more hits, shields to block hits and recharge, or specials such as drones and homing missiles.
 - **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else is a hit, and all enemy fire is red: balls, darts, missiles and laser beams.
-- **Waves** grow in size and add enemy types: mites, wasps (fire fast darts while diving), weavers (zigzag), splitters (break into two mites), lancers (patrol above the top row from one side of the screen to the other, then stop, charge up and fire a laser beam down the screen that blocks a lane for a couple of seconds), beetles (armoured, launch homing missiles you can shoot down), and red-ringed elites (three times the health, extra scrap).
+- **Waves** grow in size and add enemy types: mites, wasps (fire fast darts while diving), weavers (zigzag), splitters (break into two mites when destroyed), triplets (from wave 5; break into three smaller copies that fan out across the screen when they leave the formation, so shoot them while they sit), lancers (patrol above the top row from one side of the screen to the other, then stop, charge up and fire a laser beam down the screen that blocks a lane for a couple of seconds), beetles (armoured, launch homing missiles you can shoot down), and red-ringed elites (three times the health, extra scrap).
 - **Boosters** last for one run. They come in three rarities and stack: fire rate, damage, extra barrels, piercing, ricochet, shields, drones, homing missiles, chain lightning, and more.
 - **Station modules** are permanent, upgraded with scrap, and saved in the browser's local storage. A new game has two, Tuned Cannons and Reinforced Hull. Each Hive Core you destroy earns the next one (`UNLOCK_ORDER`), fitted when you dock. Modules fall under Weapons, Armor, Shields and Specials, plus Salvage. You can spend scrap at the station between runs or while docked after a boss.
-- **Cutscenes** are short and a tap skips them: leaving the station at the start of a run, the shuttle arriving, and docking after a boss.
+- **Cutscenes** are short: leaving the station at the start of a run (a tap skips it), the booster shuttle arriving, and docking after a boss.
 
 ## Tuning
 
