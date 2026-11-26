@@ -75,8 +75,18 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   s = await waitFor(x => x.state === 'dead', 8000); check(s.state === 'dead', 'one hit with no hull to spare ends the run');
   check(s.scrap - banked < 60, 'scrap banked at the dock is not counted twice', banked + ' -> ' + s.scrap);
   await shot('06-dead');
+  await page.tap('#btnDeadStation'); s = await waitFor(x => x.state === 'browse', 3000);
+  check(s.state === 'browse', 'the dead screen opens the station');
   await page.reload(); await page.waitForTimeout(600);
   check((await st()).mods === 'dmg,hull,shield', 'station modules survive a reload');
+  await page.tap('#btnStation'); s = await waitFor(x => x.state === 'browse', 3000);
+  const fitted = await page.locator('#shop .item .nm').allTextContents();
+  check(s.state === 'browse' && fitted.length === 3 && await page.isHidden('#btnUndock'), 'the title opens the station: fitted modules listed, no Undock', fitted.join(' | '));
+  await shot('08-station-browse');
+  await page.tap('#btnStationBack'); s = await waitFor(x => x.state === 'title', 3000); check(s.state === 'title', 'Back returns to the title');
+  await page.tap('#btnStation'); await waitFor(x => x.state === 'browse', 3000);
+  await page.tap('#btnStationLaunch'); s = await waitFor(x => x.state === 'cut', 3000); check(s.cut === 'launch', 'Launch from the station starts a run');
+  await page.reload(); await page.waitForTimeout(600);
 
   // When each enemy first appears: build every wave 1-20 many times and record the first wave each type shows up.
   await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
@@ -111,9 +121,12 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
       if (performance.now() - t0 > 25000) { seen.kills = s.G.run.kills - k0; seen.waves = [...seen.waves].join(','); seen.state = G.state; res(seen); } else requestAnimationFrame(f); })(); }));
   check(stress.kills > 40, 'stress run: the ship keeps destroying enemies with every booster on', JSON.stringify(stress));
   check(stress.maxMissiles > 0, 'stress run: missiles flew', 'laser frames ' + stress.beams);
+  // a frame with Arc Coil lightning on screen, for the screenshot set
+  await page.evaluate(() => new Promise(res => { const s = window.__swarmfall; const t0 = performance.now(); (function f() { const e = s.G.enemies.filter(e => e.z > -60); if (e.length > 2) { const h = e[0]; s.G.pb.push({ x: h.x, y: h.y, vx: 0, vy: 0, dmg: 1, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); } if (performance.now() - t0 > 600) res(); else requestAnimationFrame(f); })(); }));
+  await shot('07-arc-coil');
   await page.tap('#btnPause').catch(() => {}); await page.waitForTimeout(300);
   check(await page.evaluate(() => window.__swarmfall.G.state) === 'pause', 'pause works');
-  await shot('07-paused');
+  await shot('09-paused');
 
   check(errors.length === 0, 'no page errors', errors.slice(0, 5).join(' | '));
   await browser.close();

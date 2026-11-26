@@ -1036,7 +1036,7 @@ function updateShots(dt) {
   sweepDead(G.eb); sweepDead(G.em);
 }
 function updatePicks(dt) {
-  const sweep = G.state === 'clear'; let got = false;
+  const sweep = G.state === 'clear'; let got = false, gotScrap = false;
   for (let i = G.picks.length - 1; i >= 0; i--) {
     const p = G.picks[i], dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy) || 1;
     if (P.alive && (sweep || d < S.magnet)) { const pull = sweep ? 900 : 520; p.vx = lerp(p.vx, dx / d * pull, Math.min(1, 8 * dt)); p.vy = lerp(p.vy, dy / d * pull, Math.min(1, 8 * dt)); }
@@ -1046,7 +1046,7 @@ function updatePicks(dt) {
     if (P.alive && d < 20) {
       gone = true;
       if (p.kind === 'heart') { repair(1); SFX.heal(); }
-      else { G.run.scrap += S.scrapMul; SFX.pick(); }
+      else { G.run.scrap += S.scrapMul; SFX.pick(); gotScrap = true; }
       burst(p.x, p.y, p.kind === 'heart' ? [0.5, 1, 0.7] : [1, 0.85, 0.35], 6, 90, 0.3);
       got = true;
     }
@@ -1057,7 +1057,8 @@ function updatePicks(dt) {
       const hs = 13 * (1 + Math.sin(G.time * 7 + p.ph) * 0.16); p.halo.scale.set(hs, hs, 1);
     }
   }
-  if (got) { drawHud(); popScrap(); }   // once a frame, however many were collected
+  if (got) drawHud();   // once a frame, however many were collected
+  if (gotScrap) popScrap();
 }
 const formed = [];   // enemies sitting in the formation this frame (reused every frame)
 function updateEnemies(dt) {
@@ -1588,7 +1589,7 @@ const endDrag = e => { if (drag && drag.id === e.pointerId) drag = null; };
 addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 for (const ev of ['pointerup', 'touchend', 'click']) addEventListener(ev, audioInit, { capture: true, passive: true });   // releases count as gestures on phones; presses do not
-document.addEventListener('visibilitychange', () => { if (document.hidden && inPlay()) togglePause(); });
+document.addEventListener('visibilitychange', () => { drewPaused = false; if (document.hidden && inPlay()) togglePause(); });   // a hidden tab may lose its canvas: redraw on return
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
 if (finePointer) $('howto').textContent = 'Steer with the mouse, or ← → / A D. Your ship fires on its own. P pauses, M mutes.';
 

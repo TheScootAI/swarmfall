@@ -17,7 +17,7 @@ This installs three.js r128 so the tests run offline; the sandbox often blocks c
 
 ## 2. Find the right place to change
 
-- **When an enemy first appears:** edit the `UNLOCK` table only. `buildWave()` and the formation-fire code read it, and the smoke test checks the game follows it. Wave 6, 12, 18 and so on are Hive Core waves with no regular enemies, so an enemy set to appear on one of those first shows up on the wave after. Say so when you report back.
+- **When an enemy first appears:** edit the `UNLOCK` table only. `buildWave()` and the formation-fire code read it, and the smoke test checks the game follows it. Wave 6, 12, 18 and so on are Hive Core waves with no regular enemies. If the owner asks for one of those, put the wave after it in `UNLOCK` (the smoke test checks the first wave each enemy is actually seen), and tell them why.
 - **Enemy stats** (health, speed, scrap chance): `ET`. Behaviour is in `updateDive()`, `updateLancer()`, `updateBoss()` and `launchDive()`.
 - **Boosters** (in-run picks): `UP`, plus `recalc()` for how they change stats. Any one-off effect at the moment of picking goes in `applyUpgrade()`.
 - **Station modules:** `SHOP` and `recalc()`. `UNLOCK_ORDER` sets which module each Hive Core earns, and `START_MODS` sets what a new save starts with. A module bought while docked applies at once in the `#shop` click handler.
