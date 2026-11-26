@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
 <style>
-/* Layout: one column in two halves. Boosters sit in three bands, one per rarity, coloured as their cards are in the game. Station modules hang off a rail in the order the Hive Cores earn them. Written by tools/upgrade-guide.js: edit that, not this file. */
+/* Layout: one column in two halves. Boosters sit in three bands, one per rarity, coloured as their cards are in the game. Station modules hang off a rail in the order the bosses earn them. Written by tools/upgrade-guide.js: edit that, not this file. */
 :root{
   --void:#080b1f; --panel:#121844; --panel-hi:#1b2260; --line:#2f3880;
   --ink:#eef0ff; --dim:#a8b0e2;
@@ -106,8 +106,8 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     <h1>Build the <b>ship</b></h1>
     <p class="lede">Everything that makes your ship stronger: all 20 boosters and all 14 station modules, with what each one really does in numbers.</p>
     <div class="kinds">
-      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every 3rd wave, and you get a stronger choice each time you leave the station after a Hive Core. Passing on all three pays ◆ 10.</p><p><a href="#boosters">20 boosters</a></p></div>
-      <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has 2; each Hive Core you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">14 modules</a></p></div>
+      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every 3rd wave, and you get a stronger choice each time you leave the station after a boss. Passing on all three pays ◆ 10.</p><p><a href="#boosters">20 boosters</a></p></div>
+      <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has 2; each boss you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">14 modules</a></p></div>
     </div>
   </header>
 
@@ -123,7 +123,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
           <tr><th scope="row">Shuttle after wave 3<small>The first one you meet</small></th><td class="common">54%</td><td class="rare">35%</td><td class="proto">11%</td></tr>
           <tr><th scope="row">Shuttle after wave 9<small>Prototypes are creeping up</small></th><td class="common">51%</td><td class="rare">33%</td><td class="proto">16%</td></tr>
           <tr><th scope="row">Shuttle after wave 15 and later<small>Prototypes stop getting more likely here</small></th><td class="common">51%</td><td class="rare">32%</td><td class="proto">17%</td></tr>
-          <tr><th scope="row">Leaving the station after a Hive Core<small>After waves 6, 12, 18 and so on</small></th><td class="common">never</td><td class="rare">60%</td><td class="proto">40%</td></tr>
+          <tr><th scope="row">Leaving the station after a boss<small>After waves 6, 12, 18 and so on</small></th><td class="common">never</td><td class="rare">60%</td><td class="proto">40%</td></tr>
           <tr><th scope="row">Head Start<small>The free pick before wave 1, if you own that module</small></th><td class="common">70%</td><td class="rare">30%</td><td class="proto">never</td></tr>
         </tbody>
       </table>
@@ -180,7 +180,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
     <section class="band rare" aria-labelledby="h-r1">
       <div class="band-head"><h3 id="h-r1">Rare</h3><span>8 boosters</span></div>
-      <p class="note">New weapons and systems. These are what the Hive Core booster is mostly made of.</p>
+      <p class="note">New weapons and systems. These are what the booster after a boss is mostly made of.</p>
       <div class="grid">
         <article class="item rare" id="booster-twin">
           <div class="top"><h4>Split Barrel</h4><span class="tag">Weapons</span></div>
@@ -274,7 +274,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   <section class="part" id="modules" aria-labelledby="h-modules">
     <div class="part-head">
       <h2 id="h-modules">Station modules</h2>
-      <p class="note">In the order you get them. Hive Cores count across all your runs: the first one you ever destroy fits the first module, whichever wave it was on. Buying every level of everything costs <b>◆ 3,590</b>.</p>
+      <p class="note">In the order you get them. Bosses count across all your runs: the first one you ever destroy fits the first module, whichever boss and whichever wave it was. Buying every level of everything costs <b>◆ 3,590</b>.</p>
     </div>
     <div class="timeline">
       <div class="stop start">
@@ -302,144 +302,144 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>1</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>1</div></div>
         <div class="body">
           <article class="item module" id="module-shield">
             <div class="top"><h4>Aegis Generator</h4><span class="tag">Shields</span></div>
             <p class="says">Start each run with a shield that absorbs one hit, then recharges in 15 seconds.</p>
-            <div class="stats"><span>Fitted after your <b>1st</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>70</b></span></div>
+            <div class="stats"><span>Fitted after your <b>1st</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>70</b></span></div>
             
             <p class="detail">The same shield as the Aegis Shell booster. With both, the recharge is 3.5 seconds shorter.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>2</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>2</div></div>
         <div class="body">
           <article class="item module" id="module-rate">
             <div class="top"><h4>Feed Mechanism</h4><span class="tag">Weapons</span></div>
             <p class="says">+6% fire rate.</p>
-            <div class="stats"><span>Fitted after your <b>2nd</b> Hive Core</span><span><b>5</b> levels</span><span class="gold">◆ <b>440</b> in all</span></div>
+            <div class="stats"><span>Fitted after your <b>2nd</b> boss</span><span><b>5</b> levels</span><span class="gold">◆ <b>440</b> in all</span></div>
             <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 15</li><li><small>Level 2</small>◆ 35</li><li><small>Level 3</small>◆ 70</li><li><small>Level 4</small>◆ 120</li><li><small>Level 5</small>◆ 200</li></ol>
             <p class="detail">+6% fire rate per level: +30% with all 5.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>3</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>3</div></div>
         <div class="body">
           <article class="item module" id="module-speed">
             <div class="top"><h4>Mass Driver</h4><span class="tag">Weapons</span></div>
             <p class="says">+8% bullet speed.</p>
-            <div class="stats"><span>Fitted after your <b>3rd</b> Hive Core</span><span><b>5</b> levels</span><span class="gold">◆ <b>440</b> in all</span></div>
+            <div class="stats"><span>Fitted after your <b>3rd</b> boss</span><span><b>5</b> levels</span><span class="gold">◆ <b>440</b> in all</span></div>
             <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 15</li><li><small>Level 2</small>◆ 35</li><li><small>Level 3</small>◆ 70</li><li><small>Level 4</small>◆ 120</li><li><small>Level 5</small>◆ 200</li></ol>
             <p class="detail">+8% bullet speed per level: +40% with all 5.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>4</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>4</div></div>
         <div class="body">
           <article class="item module" id="module-drone">
             <div class="top"><h4>Drone Bay</h4><span class="tag">Specials</span></div>
             <p class="says">Start each run with a wing drone that fires with you.</p>
-            <div class="stats"><span>Fitted after your <b>4th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
+            <div class="stats"><span>Fitted after your <b>4th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
             
             <p class="detail">One drone from the first wave. It fires every 0.7 seconds for half your shot damage. Wing Drone boosters add more, up to 3.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>5</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>5</div></div>
         <div class="body">
           <article class="item module" id="module-scrap">
             <div class="top"><h4>Salvage Rig</h4><span class="tag">Salvage</span></div>
             <p class="says">+20% scrap from every run.</p>
-            <div class="stats"><span>Fitted after your <b>5th</b> Hive Core</span><span><b>3</b> levels</span><span class="gold">◆ <b>300</b> in all</span></div>
+            <div class="stats"><span>Fitted after your <b>5th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>300</b> in all</span></div>
             <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 170</li></ol>
             <p class="detail">+20% scrap per level: +60% with all 3.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>6</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>6</div></div>
         <div class="body">
           <article class="item module" id="module-charge">
             <div class="top"><h4>Fast Recharge</h4><span class="tag">Shields</span></div>
             <p class="says">Shields recharge 2 seconds sooner.</p>
-            <div class="stats"><span>Fitted after your <b>6th</b> Hive Core</span><span><b>3</b> levels</span><span class="gold">◆ <b>290</b> in all</span></div>
+            <div class="stats"><span>Fitted after your <b>6th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>290</b> in all</span></div>
             <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 160</li></ol>
             <p class="detail">2 seconds off the shield's recharge per level: 15 seconds down to 9 with all 3.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>7</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>7</div></div>
         <div class="body">
           <article class="item module" id="module-twin">
             <div class="top"><h4>Twin Mount</h4><span class="tag">Weapons</span></div>
             <p class="says">Start each run with a second barrel.</p>
-            <div class="stats"><span>Fitted after your <b>7th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>200</b></span></div>
+            <div class="stats"><span>Fitted after your <b>7th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>200</b></span></div>
             
             <p class="detail">Every volley is 2 shots from the first wave. Split Barrel boosters add to it.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>8</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>8</div></div>
         <div class="body">
           <article class="item module" id="module-magnet">
             <div class="top"><h4>Tractor Coil</h4><span class="tag">Salvage</span></div>
             <p class="says">Wider scrap pickup range.</p>
-            <div class="stats"><span>Fitted after your <b>8th</b> Hive Core</span><span><b>2</b> levels</span><span class="gold">◆ <b>70</b> in all</span></div>
+            <div class="stats"><span>Fitted after your <b>8th</b> boss</span><span><b>2</b> levels</span><span class="gold">◆ <b>70</b> in all</span></div>
             <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 20</li><li><small>Level 2</small>◆ 50</li></ol>
             <p class="detail">Pickup reach grows from 42 to 64, then 86.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>9</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>9</div></div>
         <div class="body">
           <article class="item module" id="module-missile">
             <div class="top"><h4>Seeker Rack</h4><span class="tag">Specials</span></div>
             <p class="says">Start each run with homing missiles.</p>
-            <div class="stats"><span>Fitted after your <b>9th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>220</b></span></div>
+            <div class="stats"><span>Fitted after your <b>9th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>220</b></span></div>
             
             <p class="detail">One homing missile every 1.7 seconds from the first wave. Seeker Pod boosters make them come faster.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>10</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>10</div></div>
         <div class="body">
           <article class="item module" id="module-reroll">
             <div class="top"><h4>Reroll Chips</h4><span class="tag">Salvage</span></div>
             <p class="says">+1 booster reroll each run.</p>
-            <div class="stats"><span>Fitted after your <b>10th</b> Hive Core</span><span><b>3</b> levels</span><span class="gold">◆ <b>230</b> in all</span></div>
+            <div class="stats"><span>Fitted after your <b>10th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>230</b> in all</span></div>
             <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 30</li><li><small>Level 2</small>◆ 70</li><li><small>Level 3</small>◆ 130</li></ol>
             <p class="detail">Each level is 1 more reroll per run. A reroll deals three new boosters of the same kind of offer.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>11</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>11</div></div>
         <div class="body">
           <article class="item module" id="module-head">
             <div class="top"><h4>Head Start</h4><span class="tag">Salvage</span></div>
             <p class="says">Pick a free booster before leaving the station.</p>
-            <div class="stats"><span>Fitted after your <b>11th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
+            <div class="stats"><span>Fitted after your <b>11th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
             
             <p class="detail">A free booster before the first wave. 70% of the cards are common and 30% rare; never a prototype.</p>
           </article>
         </div>
       </div>
       <div class="stop">
-        <div class="rail"><div class="mark"><small>CORE</small>12</div></div>
+        <div class="rail"><div class="mark"><small>BOSS</small>12</div></div>
         <div class="body">
           <article class="item module" id="module-revive">
             <div class="top"><h4>Emergency Reboot</h4><span class="tag">Armor</span></div>
             <p class="says">Once per run, survive a killing blow.</p>
-            <div class="stats"><span>Fitted after your <b>12th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>300</b></span></div>
+            <div class="stats"><span>Fitted after your <b>12th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>300</b></span></div>
             
             <p class="detail">The blow that would end the run leaves you on 1 hull instead, untouchable for 2.5 seconds, and blasts every enemy for 80 damage while wiping their shots.</p>
           </article>

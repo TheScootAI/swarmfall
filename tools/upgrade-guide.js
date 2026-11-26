@@ -11,7 +11,7 @@ const UP = table('UP'), SHOP = table('SHOP'), GROUPS = table('GROUPS'), START_MO
 const CATEGORY = (0, eval)('(' + src.match(/const CATEGORY = (\{[^}]*\});/)[1] + ')');
 const num = name => +src.match(new RegExp('\\b' + name + ' = (\\d+)'))[1];
 const DRAFT_EVERY = num('DRAFT_EVERY'), BOSS_EVERY = num('BOSS_EVERY'), SKIP_SCRAP = num('SKIP_SCRAP');
-// the odds line in rollCards(): [common, rare, prototype] weights for the Hive Core booster, Head Start, and the shuttle
+// the odds line in rollCards(): [common, rare, prototype] weights for the booster after a boss, Head Start, and the shuttle
 const W = src.match(/kind === 'boss' \? \[(\d+), (\d+), (\d+)\] : kind === 'head' \? \[(\d+), (\d+), (\d+)\] : \[(\d+), (\d+), (\d+) \+ Math\.min\((\d+), G\.wave\)\]/);
 if (!W) throw new Error('the odds line in rollCards() has changed: update the pattern in tools/upgrade-guide.js');
 const w = W.slice(1).map(Number), shuttleW = wave => [w[6], w[7], w[8] + Math.min(w[9], wave)];
@@ -73,7 +73,7 @@ const boosterCard = u => `
           <div class="stats"><span>${RARITY[u.r]}</span><span>${u.max >= 99 ? 'No limit' : 'Up to <b>' + u.max + '</b> ' + (u.max === 1 ? 'level' : 'levels')}</span></div>
           <p class="detail">${esc(NOTES[u.id])}</p>
         </article>`;
-const rarityBlurb = ['The everyday picks. Most cards you are offered are these.', 'New weapons and systems. These are what the Hive Core booster is mostly made of.', 'The strongest and strangest. Rare early, a little more likely each wave.'];
+const rarityBlurb = ['The everyday picks. Most cards you are offered are these.', 'New weapons and systems. These are what the booster after a boss is mostly made of.', 'The strongest and strangest. Rare early, a little more likely each wave.'];
 const boosters = [0, 1, 2].map(r => { const list = UP.filter(u => u.r === r); return `
     <section class="band ${rarClass[r]}" aria-labelledby="h-r${r}">
       <div class="band-head"><h3 id="h-r${r}">${RARITY[r]}</h3><span>${list.length} boosters</span></div>
@@ -85,12 +85,12 @@ const boosters = [0, 1, 2].map(r => { const list = UP.filter(u => u.r === r); re
 const order = START_MODS.map(id => ({ id, core: 0 })).concat(UNLOCK_ORDER.map((id, i) => ({ id, core: i + 1 })));
 const moduleCard = ({ id, core }) => { const m = SHOP.find(x => x.id === id), total = m.cost.reduce((a, b) => a + b, 0); return `
       <div class="stop${core ? '' : ' start'}">
-        <div class="rail"><div class="mark">${core ? '<small>CORE</small>' + core : '<small>FROM THE</small>Start'}</div></div>
+        <div class="rail"><div class="mark">${core ? '<small>BOSS</small>' + core : '<small>FROM THE</small>Start'}</div></div>
         <div class="body">
           <article class="item module" id="module-${m.id}">
             <div class="top"><h4>${esc(m.n)}</h4><span class="tag">${GROUP[m.g]}</span></div>
             <p class="says">${esc(m.d)}</p>
-            <div class="stats"><span>${core ? 'Fitted after your <b>' + ord(core) + '</b> Hive Core' : 'Fitted on a <b>new ship</b>'}</span><span>${m.cost.length === 1 ? '<b>1</b> level' : '<b>' + m.cost.length + '</b> levels'}</span><span class="gold">◆ <b>${total}</b>${m.cost.length > 1 ? ' in all' : ''}</span></div>
+            <div class="stats"><span>${core ? 'Fitted after your <b>' + ord(core) + '</b> boss' : 'Fitted on a <b>new ship</b>'}</span><span>${m.cost.length === 1 ? '<b>1</b> level' : '<b>' + m.cost.length + '</b> levels'}</span><span class="gold">◆ <b>${total}</b>${m.cost.length > 1 ? ' in all' : ''}</span></div>
             ${m.cost.length > 1 ? '<ol class="levels" aria-label="Cost of each level">' + m.cost.map((c, i) => '<li><small>Level ' + (i + 1) + '</small>◆ ' + c + '</li>').join('') + '</ol>' : ''}
             <p class="detail">${esc(NOTES['m:' + m.id])}</p>
           </article>
@@ -104,7 +104,7 @@ const html = `<title>Swarmfall Upgrade Guide</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
 <style>
-/* Layout: one column in two halves. Boosters sit in three bands, one per rarity, coloured as their cards are in the game. Station modules hang off a rail in the order the Hive Cores earn them. Written by tools/upgrade-guide.js: edit that, not this file. */
+/* Layout: one column in two halves. Boosters sit in three bands, one per rarity, coloured as their cards are in the game. Station modules hang off a rail in the order the bosses earn them. Written by tools/upgrade-guide.js: edit that, not this file. */
 :root{
   --void:#080b1f; --panel:#121844; --panel-hi:#1b2260; --line:#2f3880;
   --ink:#eef0ff; --dim:#a8b0e2;
@@ -208,8 +208,8 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     <h1>Build the <b>ship</b></h1>
     <p class="lede">Everything that makes your ship stronger: all ${UP.length} boosters and all ${SHOP.length} station modules, with what each one really does in numbers.</p>
     <div class="kinds">
-      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every ${ord(DRAFT_EVERY)} wave, and you get a stronger choice each time you leave the station after a Hive Core. Passing on all three pays ◆ ${SKIP_SCRAP}.</p><p><a href="#boosters">${UP.length} boosters</a></p></div>
-      <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has ${START_MODS.length}; each Hive Core you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">${SHOP.length} modules</a></p></div>
+      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every ${ord(DRAFT_EVERY)} wave, and you get a stronger choice each time you leave the station after a boss. Passing on all three pays ◆ ${SKIP_SCRAP}.</p><p><a href="#boosters">${UP.length} boosters</a></p></div>
+      <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has ${START_MODS.length}; each boss you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">${SHOP.length} modules</a></p></div>
     </div>
   </header>
 
@@ -223,7 +223,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
         <thead><tr><th scope="col" style="text-align:left">Chance for each card</th><th scope="col" class="common">${RARITY[0]}</th><th scope="col" class="rare">${RARITY[1]}</th><th scope="col" class="proto">${RARITY[2]}</th></tr></thead>
         <tbody>
           ${shuttleWaves.map((n, i) => oddsRow('Shuttle after wave ' + n + (i === shuttleWaves.length - 1 ? ' and later' : ''), i === 0 ? 'The first one you meet' : i === shuttleWaves.length - 1 ? 'Prototypes stop getting more likely here' : 'Prototypes are creeping up', shuttleW(n))).join('\n          ')}
-          ${oddsRow('Leaving the station after a Hive Core', 'After waves ' + BOSS_EVERY + ', ' + 2 * BOSS_EVERY + ', ' + 3 * BOSS_EVERY + ' and so on', w.slice(0, 3))}
+          ${oddsRow('Leaving the station after a boss', 'After waves ' + BOSS_EVERY + ', ' + 2 * BOSS_EVERY + ', ' + 3 * BOSS_EVERY + ' and so on', w.slice(0, 3))}
           ${oddsRow('Head Start', 'The free pick before wave 1, if you own that module', w.slice(3, 6))}
         </tbody>
       </table>
@@ -234,7 +234,7 @@ ${boosters}
   <section class="part" id="modules" aria-labelledby="h-modules">
     <div class="part-head">
       <h2 id="h-modules">Station modules</h2>
-      <p class="note">In the order you get them. Hive Cores count across all your runs: the first one you ever destroy fits the first module, whichever wave it was on. Buying every level of everything costs <b>◆ ${allCost.toLocaleString('en-US')}</b>.</p>
+      <p class="note">In the order you get them. Bosses count across all your runs: the first one you ever destroy fits the first module, whichever boss and whichever wave it was. Buying every level of everything costs <b>◆ ${allCost.toLocaleString('en-US')}</b>.</p>
     </div>
     <div class="timeline">${order.map(moduleCard).join('')}
     </div>

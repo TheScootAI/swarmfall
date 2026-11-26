@@ -6,7 +6,7 @@ const GAME = path.join(__dirname, '..', 'index.html');
 const OUT = process.argv[2] || path.join(__dirname, '..', 'artifacts', 'enemy-guide', 'img');
 // name, model scale for the picture, spawn options
 const SHOTS = [['mite', 4.2, {}], ['wasp', 3.6, {}], ['weaver', 4, {}], ['splitter', 3.6, {}], ['beetle', 3, {}], ['elite', 3, { elite: true }],
-  ['triplet', 3.4, {}], ['lancer', 3, {}], ['boss', 1.4, { tint: 0xff4f8b }]];
+  ['triplet', 3.4, {}], ['lancer', 3, {}], ['boss', 1.4, { tint: 0xff4f8b }], ['cube', 1.5, {}], ['warden', 1.6, {}]];
 
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -25,9 +25,9 @@ const SHOTS = [['mite', 4.2, {}], ['wasp', 3.6, {}], ['weaver', 4, {}], ['splitt
       s.P.inv = 99; s.G.form = { cols: 1, top: 96 }; const e = s.spawnEnemy(name === 'elite' ? 'wasp' : name, 0, 0, opt); e.state = 'form'; window.__e = e; }, [name, opt]);
     await page.waitForTimeout(120);
     await page.evaluate(sc => { const s = window.__swarmfall, e = window.__e; s.G.state = 'pause'; e.g.position.set(0, 0, 0); e.g.scale.setScalar(sc * (e.elite ? 1.25 : 1));
-      if (e.type === 'boss') e.g.rotation.set(0, 0, 0); else e.g.rotation.set(0.25, e.type === 'mite' || e.type === 'weaver' ? 0.6 : 0.35, 0); }, scale);
+      if (e.type === 'boss' || e.type === 'warden') e.g.rotation.set(0, 0, 0); else if (e.type === 'cube') e.g.rotation.set(0.2, 0.3, 0.35); else e.g.rotation.set(0.25, e.type === 'mite' || e.type === 'weaver' ? 0.6 : 0.35, 0); }, scale);
     await page.waitForTimeout(250);
-    const box = name === 'boss' ? 260 : 170;
+    const box = name === 'boss' || name === 'cube' || name === 'warden' ? 260 : 170;
     await page.screenshot({ path: path.join(OUT, name + '.png'), clip: { x: 195 - box / 2, y: 422 - box / 2, width: box, height: box } });
     // a paused frame is only drawn once, so unpause before the next pose
     await page.evaluate(() => { window.__swarmfall.G.state = 'play'; });

@@ -161,7 +161,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       <div class="inner">
         <p class="eyebrow">Roguelite swarm shooter</p>
         <h1>SWARM<b>FALL</b></h1>
-        <p class="lede">One hit destroys a new ship. A booster shuttle arrives after every third wave. Destroy a Hive Core to dock at the station for a new module, upgraded with the scrap you salvage.</p>
+        <p class="lede">One hit destroys a new ship. A booster shuttle arrives after every third wave. Destroy a boss to dock at the station for a new module, upgraded with the scrap you salvage.</p>
         <div class="row">
           <button id="btnPlay" class="btn primary">Launch</button>
           <button id="btnStation" class="btn">Station</button>
@@ -678,12 +678,32 @@ const ET = {
   triplet: { hp: 36, r: 13, speed: 205, scrap: 0.35, col: [0.24, 0.48, 1] },
   beetle: { hp: 70, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71] },
   lancer: { hp: 34, r: 12, scrap: 0.7, col: [1, 0.25, 0.35] },
-  boss: { hp: 950, r: 34, col: [1, 0.31, 0.55] },
+  boss: { hp: 950, r: 34, col: [1, 0.31, 0.55], boss: true },      // the Hive Core
+  cube: { hp: 900, r: 36, col: [1, 0.6, 0.2], boss: true },        // the Fracture Cube: hp is all of its pieces together
+  warden: { hp: 950, r: 34, col: [1, 0.25, 0.4], boss: true },     // the Beam Warden
 };
 const BOSS_TINT = [0xff4f8b, 0xffb02e, 0x5fe8ff, 0xa56bff];
 const RARITY = ['Common', 'Rare', 'Prototype'];
 const CATEGORY = { w: 'Weapons', a: 'Armor', h: 'Shields', s: 'Specials' };
-const DRAFT_EVERY = 3, BOSS_EVERY = 6;   // a booster after every 3rd wave; every 6th wave is a Hive Core, so its booster is the rare one
+const DRAFT_EVERY = 3, BOSS_EVERY = 6;   // a booster after every 3rd wave; every 6th wave is a boss, so its booster is the rare one
+// The bosses, in the order they are met: one on every BOSS_EVERY-th wave, round and round, tougher each time
+// (waves 6, 12, 18, then the Hive Core again on 24). tip is the line under the name when it arrives: a first-time
+// hint() would never show, since nobody reaches these waves in their first few runs.
+const BOSSES = [
+  { type: 'boss', name: 'Hive Core', down: 'CORE DESTROYED', tip: '' },
+  { type: 'cube', name: 'Fracture Cube', down: 'CUBE DESTROYED', tip: 'It breaks in two. So do the halves.' },
+  { type: 'warden', name: 'Beam Warden', down: 'WARDEN DESTROYED', tip: 'Thin red lines show where its beams will fire' },
+];
+const bossFor = n => BOSSES[(Math.round(n / BOSS_EVERY) - 1) % BOSSES.length];
+// Fracture Cube. share: the part of the whole fight's health each body has, by generation (1 whole, 2 halves,
+// 4 quarters: 0.4 + 2 × 0.15 + 4 × 0.075 = 1). size and r: model scale and hit radius. speed: how fast halves
+// and quarters drift. floor: how far down the screen they may come, as a share of its height, so they stay out
+// of the ship's rows. born: seconds a new piece cannot be hurt, so one shot cannot run through all three sizes.
+const CUBE = { share: [0.4, 0.15, 0.075], size: [1, 0.68, 0.46], r: [36, 25, 17], speed: [0, 62, 104], floor: 0.42, born: 0.35 };
+// Beam Warden. charge and fire: seconds its beams are aimed (thin lines) and then on. spread: the angle between
+// neighbouring beams, in radians. At the ship's rows that is about 170 apart, so every gap is far wider than
+// the ship and its shield. max: the most beams it ever fires at once.
+const WARDEN = { charge: 1.2, fire: 1.3, spread: 0.3, max: 5 };
 const isBossWave = n => n > 0 && n % BOSS_EVERY === 0;
 // The wave each enemy, and each change to the formation, first appears. Tune arrivals here: buildWave() and
 // the formation-fire code read this table, and tools/smoke.js checks that the game follows it.
@@ -698,11 +718,12 @@ const UNLOCK = {
   waspSecondRow: 9,
   beetle: 10,          // some top-row spots
   beetleTopRow: 13,    // the whole top row
-  triplet: 13,         // after the second Hive Core
+  triplet: 13,         // after the second boss
   lancer: [15, 20, 25] // the first, second and third lancer
 };
 const SKIP_SCRAP = 10;
-// The Hive Core's death scene: time slows and the camera pushes in on the explosion, then both ease back.
+// A boss's death scene (the Hive Core, the last piece of the Fracture Cube, the Beam Warden): time slows and
+// the camera pushes in on the explosion, then both ease back.
 // Times are real seconds. slow: how fast game time runs at its slowest. zoom: the share of its distance the
 // camera closes. pan: how far the centre of the view moves toward the core. blastEvery: gap between the
 // smaller blasts that follow the first. grace: how long the ship stays untouchable (and blinks) once the camera
@@ -739,7 +760,7 @@ const GROUPS = [
   ['specials', 'Specials', 'Extra systems that fight alongside you.'],
   ['salvage', 'Salvage', 'Earn more scrap and steer your boosters.'],
 ];
-// The station starts with two modules fitted. Each Hive Core destroyed earns the next one, in this order.
+// The station starts with two modules fitted. Each boss destroyed earns the next one, in this order.
 const START_MODS = ['dmg', 'hull'];
 const UNLOCK_ORDER = ['shield', 'rate', 'speed', 'drone', 'scrap', 'charge', 'twin', 'magnet', 'missile', 'reroll', 'head', 'revive'];
 const SHOP = [
@@ -767,7 +788,7 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
 // ---------- game state ----------
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
-  form: { cols: 6, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossDown: false, speed: 1, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
+  form: { cols: 6, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
@@ -799,6 +820,7 @@ function hint(key, maxRuns, big, small) { if (meta.runs < maxRuns && !G.hint[key
 function sweepDead(a) { let j = 0; for (const x of a) if (!x.dead) a[j++] = x; a.length = j; }
 const FORM_DX = 38, FORM_DY = 34;   // formation spacing between columns and rows
 const bossBody = {};                // Hive Core body materials, one per tint
+const WARDEN_EYE = 26;              // how far below the Beam Warden's centre its beams start
 function buildEnemy(type, tint) {
   const g = new THREE.Group(), add = (...a) => { const m = part(...a); g.add(m); return m; };
   if (type === 'mite') { add(geo.oct, M.mite, 9, 11, 9); add(geo.tet, M.miteFin, 5, 5, 5, -10, 2); add(geo.tet, M.miteFin, 5, 5, 5, 10, 2); }
@@ -808,7 +830,15 @@ function buildEnemy(type, tint) {
   else if (type === 'splitter') { add(geo.box, M.splitA, 10, 10, 10, -5, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 10, 10, 10, 5, 0, 0, Math.PI / 4); }
   else if (type === 'lancer') { add(geo.oct, M.lancer, 8, 16, 8); add(geo.box, M.lancerShell, 4, 18, 5, -9, -2); add(geo.box, M.lancerShell, 4, 18, 5, 9, -2); g.userData.eye = add(geo.sph, M.eye, 3, 3, 3, 0, -13, 4); }
   else if (type === 'beetle') { add(geo.ico, M.beetle, 15, 13, 11); add(geo.box, M.shell, 25, 5, 8, 0, 5, 5); add(geo.oct, M.eye, 2.4, 2.4, 2.4, -5, -5, 9); add(geo.oct, M.eye, 2.4, 2.4, 2.4, 5, -5, 9); }
-  else {
+  else if (type === 'cube') {   // the Fracture Cube: a giant splitter. Halves and quarters are the same model, scaled down
+    add(geo.box, M.splitA, 34, 34, 34, -15, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 34, 34, 34, 15, 0, 0, Math.PI / 4);
+    add(geo.box, M.coreRing, 35.5, 7, 35.5, -15, 0, 0, Math.PI / 4); add(geo.box, M.coreRing, 7, 35.5, 35.5, 15, 0, 0, Math.PI / 4);   // dark bands: the lines it will break along
+    add(geo.ico, M.eye, 8, 8, 6, 0, 0, 22);
+  } else if (type === 'warden') {   // the Beam Warden: a great lancer inside a ring. The group itself never turns, so its beams stay true
+    const body = new THREE.Group(); body.add(part(geo.oct, M.lancer, 17, 30, 17), part(geo.box, M.lancerShell, 8, 34, 9, -21, 2), part(geo.box, M.lancerShell, 8, 34, 9, 21, 2));
+    const ring = part(geo.hoop, M.coreRing, 38, 38, 38); g.add(body, ring); g.userData.body = body; g.userData.ring = ring;
+    g.userData.eye = add(geo.sph, M.eye, 5, 5, 5, 0, -WARDEN_EYE, 8);
+  } else {
     const body = bossBody[tint] || (bossBody[tint] = pbr(tint, 0x2a0a20, 0.6, 0.3)), dark = M.coreRing;
     g.userData.core = add(geo.ico, body, 30, 30, 26);
     const ring = new THREE.Group(); ring.add(part(geo.hoop, dark, 46, 46, 46));
@@ -948,14 +978,114 @@ function updateDive(e, dt) {
     else { e.y = -34; e.x = e.lane == null ? rand(40, W - 40) : e.lane; e.vx = 0; e.vy = 30; e.t = 0; }   // slotless enemies keep diving
   }
 }
+// How far round the list of bosses this one is: 0 the first time each is met, 1 the second, and so on.
+const bossLv = e => Math.min(4, Math.floor((e.tier - 1) / BOSSES.length));
 function spawnBoss(tier) {
-  const e = spawnEnemy('boss', null, null, { tint: BOSS_TINT[(tier - 1) % 4], boss: true, hpMul: (1 + 0.55 * (tier - 1)) * Math.pow(1.2, tier - 1) });
+  const B = bossFor(G.wave), mul = (1 + 0.55 * (tier - 1)) * Math.pow(1.2, tier - 1), cube = B.type === 'cube';
+  const e = spawnEnemy(B.type, null, null, { tint: BOSS_TINT[(tier - 1) % 4], boss: true, hpMul: mul * (cube ? CUBE.share[0] : 1) });
   e.state = 'boss'; e.tier = tier; e.intro = 2.6; e.atkT = 1.2; e.atk = 0; e.burst = 0; e.burstT = 0; e.sum = 0; e.sumN = 0; e.sumT = 0; e.x = W / 2; e.y = -90; e.z = -420;
-  G.boss = e; $('bossbar').hidden = false; SFX.warn();
+  e.after = 0;   // health still to come from the pieces it will break into (the Fracture Cube only)
+  if (cube) { e.gen = 0; e.born = 0; e.mul = mul; e.after = e.def.hp * mul * (1 - CUBE.share[0]); }
+  if (B.type === 'warden') {
+    e.pv = 1; e.bm = { phase: 'idle', t: 0, n: 0, again: false, ang: [0, 0, 0, 0, 0], tan: [0, 0, 0, 0, 0], cos: [1, 1, 1, 1, 1] };
+    e.beams = [];   // added after spawnEnemy listed the model's meshes, so the hit-flash leaves the beams alone
+    for (let i = 0; i < WARDEN.max; i++) { const a = part(geo.plane, M.beamAim, 1, 1, 1), c = part(geo.plane, M.beamCore, 1, 1, 1); a.visible = c.visible = false; e.g.add(a, c); e.beams.push({ a, c }); }
+  }
+  G.boss = e; G.bossMax = e.def.hp * mul; $('bossbar').hidden = false; SFX.warn();
 }
+// Health left in the whole boss fight: every body still alive, plus the pieces they have yet to break into.
+function bossLeft() { let h = 0; for (const e of G.enemies) if (!e.dead && e.def.boss) h += Math.max(0, e.hp) + (e.after || 0); return h; }
 function updateBoss(e, dt) {
-  // the sway clock starts only once the entrance is over, so the core glides out from the centre instead of jumping sideways
+  // every boss glides in from the top the same way. The sway clock starts only once the entrance is over, so it glides out from the centre instead of jumping sideways
   if (e.intro > 0) { e.intro -= dt; const k = smooth(clamp(1 - e.intro / 2.6, 0, 1)); e.x = W / 2; e.y = lerp(-90, 130, k); e.z = lerp(-420, 0, k); e.t = 0; return; }
+  if (e.type === 'cube') updateCube(e, dt); else if (e.type === 'warden') updateWarden(e, dt); else updateCore(e, dt);
+}
+
+// ---- Fracture Cube ----
+// The whole cube sways across the top like the Hive Core. Destroyed, it breaks into two halves, and each half
+// into two quarters; halves and quarters drift on their own, bouncing off the walls and the edges of their band.
+function updateCube(e, dt) {
+  e.t += dt; if (e.born > 0) e.born -= dt;
+  const lv = bossLv(e);
+  if (e.gen === 0) { e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y = 130 + Math.sin(e.t * 1.1) * 14; }
+  else {
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    const r = e.rad, low = H * CUBE.floor;
+    if (e.x < r) { e.x = r; e.vx = Math.abs(e.vx); } else if (e.x > W - r) { e.x = W - r; e.vx = -Math.abs(e.vx); }
+    if (e.y < 74) { e.y = 74; e.vy = Math.abs(e.vy); } else if (e.y > low) { e.y = low; e.vy = -Math.abs(e.vy); }
+  }
+  e.atkT -= dt;
+  if (e.atkT > 0 || e.born > 0) return;
+  if (e.gen === 0) {
+    e.atkT = 2.4 - 0.15 * lv;
+    const k = e.atk++ % 3;
+    if (k === 0) { const n = 3 + lv, a = aimAt(e.x, e.y + 24); for (let i = 0; i < n; i++) fireE(e.x, e.y + 24, a + (i - (n - 1) / 2) * 0.2, ebSpeed() * 0.9, 5); }
+    else if (k === 1) { const n = 10 + 2 * lv, o = rand(TAU); for (let i = 0; i < n; i++) fireE(e.x, e.y, o + i * TAU / n, ebSpeed() * 0.7); }
+    else { const n = Math.max(0, Math.min(2 + lv, 18 - G.enemies.length)); for (let i = 0; i < n; i++) diveToLane(spawnEnemy('splitter', null, null, { x: e.x, y: e.y + 20 }), W * (i + 0.5) / n, -50); }
+  } else if (e.gen === 1) {   // a half: a small fan of balls
+    e.atkT = 2.9 - 0.2 * lv + rand(0.6); const a = aimAt(e.x, e.y + 14);
+    for (let i = -1; i <= 1; i++) fireE(e.x, e.y + 14, a + i * 0.22, ebSpeed() * 0.85, 4.5);
+  } else { e.atkT = 3.1 - 0.2 * lv + rand(1.2); fireDart(e.x, e.y + 8, aimAt(e.x, e.y + 8)); }   // a quarter: one dart
+  SFX.eshoot();
+}
+// A whole cube or a half has been destroyed: two pieces of the next size fly apart from where it was.
+function splitCube(e) {
+  const gen = e.gen + 1, sp = CUBE.speed[gen];
+  for (const side of [-1, 1]) {
+    const c = spawnEnemy('cube', null, null, { boss: true, hpMul: e.mul * CUBE.share[gen], x: clamp(e.x + side * e.rad * 0.5, CUBE.r[gen], W - CUBE.r[gen]), y: e.y });
+    c.state = 'boss'; c.tier = e.tier; c.intro = 0; c.gen = gen; c.mul = e.mul; c.born = CUBE.born; c.atk = 0; c.atkT = rand(0.9, 2.2);
+    c.after = gen < 2 ? e.def.hp * e.mul * CUBE.share[2] * 2 : 0;
+    c.rad = CUBE.r[gen]; c.g.scale.setScalar(CUBE.size[gen]);
+    c.vx = side * sp * rand(0.85, 1.15); c.vy = -sp * rand(0.3, 0.8);
+    G.boss = c;
+  }
+}
+
+// ---- Beam Warden ----
+// It glides across the top and eases to a stop to fire a fan of laser beams from its eye: thin lines first
+// (charge), then the beams (fire). Two fans alternate, the second filling the gaps of the first, so the safe
+// places swap. Between fans it fires darts and missiles.
+function wardenFan(e, n, charge) {
+  const B = e.bm, tilt = rand(-0.07, 0.07);
+  B.phase = 'charge'; B.t = charge; B.n = n;
+  for (let i = 0; i < n; i++) { const a = (i - (n - 1) / 2) * WARDEN.spread + tilt; B.ang[i] = a; B.tan[i] = Math.tan(a); B.cos[i] = Math.cos(a); }
+  SFX.charge();
+}
+function updateWarden(e, dt) {
+  const B = e.bm, lv = bossLv(e), rage = e.hp < e.maxHp * 0.35;
+  e.pv += ((B.phase === 'idle' ? 1 : 0) - e.pv) * Math.min(1, 5 * dt); e.t += dt * e.pv;
+  e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y = 120 + Math.sin(e.t * 1.2) * 10;
+  if (B.phase !== 'idle') {   // nothing else happens while beams are aimed or on: one thing to read at a time
+    B.t -= dt;
+    if (B.phase === 'charge') { if (B.t <= 0) { B.phase = 'fire'; B.t = WARDEN.fire; SFX.beam(); shake(4); } }
+    else {
+      const ey = e.y + WARDEN_EYE, reach = BEAM_HALF + (P.shieldUp ? SHIELD_R : 16);
+      if (P.alive && P.y > ey) for (let i = 0; i < B.n; i++) if (Math.abs(P.x - e.x - B.tan[i] * (P.y - ey)) * B.cos[i] < reach) { hitPlayer(); break; }
+      if (B.t <= 0) {
+        // badly hurt, it follows a fan straight away with the other one, which fills the gaps of the first
+        if (rage && !B.again) { B.again = true; wardenFan(e, B.n % 2 ? B.n - 1 : B.n + 1, WARDEN.charge * 0.8); }
+        else { B.phase = 'idle'; B.again = false; }
+      }
+    }
+    return;
+  }
+  if (e.burst > 0) { e.burstT -= dt; if (e.burstT <= 0) { const a = aimAt(e.x, e.y + 20); for (let i = -1; i <= 1; i++) fireDart(e.x, e.y + 20, a + i * 0.16); e.burst--; e.burstT = 0.45; SFX.eshoot(); } return; }
+  e.atkT -= dt * (rage ? 1.4 : 1);
+  if (e.atkT > 0) return;
+  e.atkT = 1.5 - 0.1 * lv;
+  const k = e.atk++ % 4, wide = Math.min(WARDEN.max, 3 + 2 * Math.floor(lv / 2));   // 3 beams, 5 from its third visit on
+  if (k === 0) wardenFan(e, wide, WARDEN.charge);
+  else if (k === 1) { e.burst = 2 + lv; e.burstT = 0; }
+  else if (k === 2) wardenFan(e, wide - 1, WARDEN.charge);
+  else {
+    fireMissile(e.x - 34, e.y + 6); fireMissile(e.x + 34, e.y + 6);
+    const n = Math.max(0, Math.min(2 * lv, 18 - G.enemies.length));   // from its second visit it also sends wasps
+    for (let i = 0; i < n; i++) diveToLane(spawnEnemy('wasp', null, null, { x: e.x, y: e.y + 20 }), W * (i + 0.5) / n, -50);
+  }
+}
+
+// ---- Hive Core ----
+function updateCore(e, dt) {
   e.t += dt;
   e.x = W / 2 + Math.sin(e.t * 0.55) * (W / 2 - 64); e.y = 130 + Math.sin(e.t * 1.3) * 12;
   const rage = e.hp < e.maxHp * 0.35, t = Math.min(e.tier, 5);
@@ -1036,10 +1166,10 @@ function restoreMats(e) { for (const m of e.meshes) m.material = m.userData.base
 function despawn(e) { e.dead = true; restoreMats(e); scene.remove(e.g); }   // gone from the field; swept from G.enemies later
 function clearBoss() { G.boss = null; $('bossbar').hidden = true; bossFrac = -1; }
 function damageEnemy(e, d) {
-  if (e.dead) return;
+  if (e.dead || e.born > 0) return;   // a piece of the Fracture Cube cannot be hurt for a moment after it breaks off
   e.hp -= d;
-  // the boss is under constant fire, so it only blinks now and then instead of staying white
-  if (e.flash <= 0 && (e.type !== 'boss' || G.time - (e.blinkAt || 0) > 0.22)) { for (const m of e.meshes) m.material = M.flash; e.flash = 0.06; e.blinkAt = G.time; }
+  // a boss is under constant fire, so it only blinks now and then instead of staying white
+  if (e.flash <= 0 && (!e.def.boss || G.time - (e.blinkAt || 0) > 0.22)) { for (const m of e.meshes) m.material = M.flash; e.flash = 0.06; e.blinkAt = G.time; }
   SFX.hit();
   if (e.hp <= 0) killEnemy(e);
 }
@@ -1055,10 +1185,14 @@ function spawnPick(kind, x, y) {
 }
 function killEnemy(e) {
   despawn(e); G.run.kills++;
-  const boss = e.type === 'boss';
+  const boss = !!e.def.boss;
   flash(e.x, e.y, boss ? 600000 : e.elite ? 160000 : 70000);
   burst(e.x, e.y, e.def.col, boss ? 140 : e.elite ? 34 : 16, boss ? 380 : 210, boss ? 1.3 : 0.6); burst(e.x, e.y, FLASH_RGB, boss ? 60 : 5, 120, 0.4);
   if (boss) {
+    // A boss fight can have several bodies (the Fracture Cube). Only the last one to go ends the fight.
+    if (e.type === 'cube' && e.gen < 2) splitCube(e);
+    let more = false; for (const o of G.enemies) if (!o.dead && o.def.boss) { more = true; G.boss = o; }
+    if (more) { SFX.big(); shake(9); vibrate(80); ringFx(e.x, e.y, 14, 130, 0xffffff, 0.5); return; }
     SFX.core(); shake(16); vibrate(200); ringFx(e.x, e.y, 20, 240, 0xffffff, 0.7); finaleStart(e);
     G.bossDown = true; clearBoss();   // its shots already in flight finish their course
     for (const o of G.enemies) if (!o.dead && o !== e) killEnemy(o);
@@ -1086,9 +1220,9 @@ function areaDamage(x, y, r, d, skip) {
 
 // ---------- player ----------
 function shake(a) { if (!reduceMotion) shakeAmt = Math.max(shakeAmt, a); }
-// ---- the Hive Core's death scene (numbers in FINALE) ----
+// ---- a boss's death scene (numbers in FINALE) ----
 const FIN = { on: false, t: 0, x: 0, y: 0, next: 0, col: FLASH_RGB, toast: false };
-const CORE_TOAST = () => toast('CORE DESTROYED', 'Returning to the station');
+const CORE_TOAST = () => toast(bossFor(G.wave).down, 'Returning to the station');
 function finaleStart(e) { if (reduceMotion) return; FIN.on = true; FIN.t = 0; FIN.x = e.x; FIN.y = e.y; FIN.next = FINALE.blastEvery; FIN.col = e.def.col; }
 // Moves the scene on by real time and returns how fast game time runs this frame (1 is normal speed).
 function finaleStep(real) {
@@ -1257,7 +1391,7 @@ function updateEnemies(dt) {
     } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; if (e.laser) updateLancer(e, dt); else formed.push(e); }
     else if (e.state === 'dive') { updateDive(e, dt); diving++; }
     else updateBoss(e, dt);
-    if (P.alive && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) { hitPlayer(); if (e.type !== 'boss') damageEnemy(e, 40); }
+    if (P.alive && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) { hitPlayer(); if (!e.def.boss) damageEnemy(e, 40); }
     if (e.dead) continue;
     // model
     const g = e.g; g.position.set(TX(e.x), TY(e.y), e.z);
@@ -1279,6 +1413,20 @@ function updateEnemies(dt) {
     else if (e.type === 'splitter') { g.rotation.z = t * 2.5; g.rotation.y = Math.sin(t * 2) * 0.6; }
     else if (e.type === 'triplet') { g.rotation.z = t * 1.6; g.rotation.y = Math.sin(t * 1.4) * 0.4; }
     else if (e.type === 'beetle') { g.rotation.y = Math.sin(t * 1.5) * 0.35; g.rotation.z = tilt * 0.5; }
+    else if (e.type === 'cube') { g.rotation.z = t * (0.5 + 0.5 * (e.gen || 0)); g.rotation.y = Math.sin(t * 1.3) * 0.4; }
+    else if (e.type === 'warden') {
+      const B = e.bm, on = !!B && B.phase !== 'idle', fire = on && B.phase === 'fire', k = on && !fire ? 1 - B.t / WARDEN.charge : 1, eye = g.userData.eye;
+      g.userData.body.rotation.y = Math.sin(t * 1.1) * 0.35; g.userData.ring.rotation.z = t * (B && e.hp < e.maxHp * 0.35 ? 2 : 0.7); g.userData.ring.rotation.x = Math.sin(t * 0.7) * 0.35;
+      const es = !on ? 5 : fire ? 11 + Math.sin(G.time * 45) : 5 + clamp(k, 0, 1) * 6; eye.scale.set(es, es, es);
+      if (B) for (let i = 0; i < WARDEN.max; i++) {
+        const bm = e.beams[i], show = on && i < B.n; bm.a.visible = show; bm.c.visible = show && fire;
+        if (!show) continue;
+        const a = B.ang[i], len = (H + 90 - e.y) / B.cos[i], w = fire ? BEAM_HALF * 2 + 2 + Math.sin(G.time * 45) * 2 : 1 + clamp(k, 0, 1) * 2.5 + (Math.random() < 0.4 ? 1.5 : 0);
+        const cx = Math.sin(a) * len / 2, cy = -WARDEN_EYE - Math.cos(a) * len / 2;
+        bm.a.material = fire ? M.beamOn : M.beamAim; bm.a.scale.set(w, len, 1); bm.a.rotation.z = a; bm.a.position.set(cx, cy, 0);
+        bm.c.scale.set(4.5, len, 1); bm.c.rotation.z = a; bm.c.position.set(cx, cy, 0.5);
+      }
+    }
     else { g.userData.core.rotation.y = t * 0.6; g.userData.core.rotation.x = t * 0.25; g.userData.ring.rotation.z = -t * (e.hp < e.maxHp * 0.35 ? 2.4 : 0.9); g.userData.ring.rotation.x = Math.sin(t * 0.8) * 0.5; }
     if (e.halo) { e.halo.rotation.x = t * 2; e.halo.rotation.y = t * 1.3; }
   }
@@ -1309,7 +1457,7 @@ function updateGame(dt) {
   G.waveT += dt;
   updatePlayer(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt);
   sweepDead(G.enemies);
-  if (G.boss) { const f = Math.round(clamp(G.boss.hp / G.boss.maxHp, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
+  if (G.boss) { const f = Math.round(clamp(bossLeft() / G.bossMax, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
   if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; clearedToast(); }
   else if (G.state === 'clear') {
     G.clearT -= dt;
@@ -1369,7 +1517,7 @@ function updateCut(dt) {
   if (c.t >= c.dur) { const done = c.done; G.cut = null; done(); }
 }
 const unbanked = () => Math.floor(G.run.scrap) - G.run.banked;   // scrap collected this run and not yet added to the station's total
-// Docked after a Hive Core: the next module is fitted, the run's scrap is banked, and the station shop opens.
+// Docked after a boss: the next module is fitted, the run's scrap is banked, and the station shop opens.
 function arriveStation() {
   const id = nextMod(); G.newMod = id || null; if (id) meta.mods.push(id);
   const add = unbanked(); if (add > 0) { meta.scrap += add; G.run.banked += add; }
@@ -1477,7 +1625,7 @@ function drawHud() {
     hudEl.hull.innerHTML = h; hudEl.hull.setAttribute('aria-label', 'Hull ' + P.hp + ' of ' + S.maxHp);
   }
   if (sc !== hudWas.scrap) { hudWas.scrap = sc; hudEl.scrap.textContent = '◆ ' + sc; }
-  if (G.wave !== hudWas.wave) { hudWas.wave = G.wave; hudEl.wave.textContent = isBossWave(G.wave) ? 'HIVE CORE' : 'WAVE ' + Math.max(1, G.wave); }
+  if (G.wave !== hudWas.wave) { hudWas.wave = G.wave; hudEl.wave.textContent = isBossWave(G.wave) ? bossFor(G.wave).name.toUpperCase() : 'WAVE ' + Math.max(1, G.wave); }
 }
 function popScrap() { const el = hudEl.scrap; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
 function loadoutHtml() {
@@ -1521,7 +1669,7 @@ function startRun() {
 }
 function nextWave() {
   G.wave++; buildWave(G.wave); G.state = 'play'; show(null); drawHud();
-  if (isBossWave(G.wave)) toast('HIVE CORE', 'Wave ' + G.wave);
+  if (isBossWave(G.wave)) { const b = bossFor(G.wave); toast(b.name.toUpperCase(), b.tip || 'Wave ' + G.wave); }
   else toast('WAVE ' + G.wave, G.wave === 1 && !meta.runs ? (finePointer ? 'Move the mouse to steer' : 'Drag to steer') : '');
 }
 function rollCards(kind) {
@@ -1582,9 +1730,9 @@ function endRun() {
 }
 function drawShop() {
   const docked = G.state === 'station', next = nextMod(), nm = G.newMod && SHOPBY[G.newMod];
-  $('stEyebrow').textContent = docked ? 'Docked · Hive Core destroyed' : 'Space station';
+  $('stEyebrow').textContent = docked ? 'Docked · ' + bossFor(G.wave).name + ' destroyed' : 'Space station';
   $('stTitle').textContent = docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
-  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach Hive Core you destroy earns a new module.';
+  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach boss you destroy earns a new module.';
   $('btnUndock').hidden = !docked; $('btnStationLaunch').hidden = $('btnStationBack').hidden = docked;
   $('bank').textContent = '◆ ' + meta.scrap + ' scrap';
   $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => {
@@ -1596,7 +1744,7 @@ function drawShop() {
         '<button class="btn" data-i="' + i + '"' + (lv >= max || cost > meta.scrap ? ' disabled' : '') + '>' + (lv >= max ? (max > 1 ? 'Maxed' : 'Owned') : '◆ ' + cost) + '</button></div>';
     }).join('');
     return rows ? '<h3 class="grp">' + name + ' <span>' + blurb + '</span></h3>' + rows : '';
-  }).join('') + '<p class="fine locked">' + (next ? 'Next module: ' + SHOPBY[next].n + '. Destroy a Hive Core and the station will fit it. ' + (SHOP.length - meta.mods.length) + ' still to earn.' : 'Every module is fitted.') + '</p>';
+  }).join('') + '<p class="fine locked">' + (next ? 'Next module: ' + SHOPBY[next].n + '. Destroy a boss and the station will fit it. ' + (SHOP.length - meta.mods.length) + ' still to earn.' : 'Every module is fitted.') + '</p>';
 }
 // The station between runs: browsing and upgrading modules ('browse'), as opposed to docking mid-run ('station').
 function openStation() { if (G.state !== 'title') { titleScene(); $('hud').hidden = true; } G.state = 'browse'; drawShop(); show('scrStation', 'btnStationLaunch'); }
@@ -1812,7 +1960,7 @@ function frame(now) {
 }
 resize(); soundLabels(); gfxLabels(); showTitle();
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

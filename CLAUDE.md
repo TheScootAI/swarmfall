@@ -19,10 +19,11 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **One hit ends a new ship's run.** Hull, shields and everything else are bought with scrap (station modules) or picked as boosters.
 - **Colours carry meaning.** All enemy fire is the same red (`ENEMY_RED`), and nothing good is red. Anything good to grab sits in a pulsing blue halo: gold rings are scrap, green crosses repair hull.
 - **Mites are the pawns.** They are the largest group in every wave and hold the front two rows. Stronger enemies sit behind them.
-- **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a Hive Core boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
+- **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
+- **Three bosses take turns** (`BOSSES`): the Hive Core on wave 6, the Fracture Cube on 12, the Beam Warden on 18, then round again, tougher. The laser boss comes third because the owner set lancers to arrive at wave 15, so players have met lasers first.
 - **Cutscenes.** Only the launch can be skipped with a tap. The shuttle and docking scenes always play out, because a player steering by touch puts a finger down just as they start.
-- **The Hive Core dies big.** Its death is a scene of about 2.5 seconds (`FINALE`): game time slows to a fifth, the camera pushes in on the core, smaller blasts follow the first, and a long deep boom plays (`SFX.core`). The ship cannot be hit during it, nor for a blink afterwards (`FINALE.grace`), because the camera may leave the ship out of view. The core's shots are not removed: they carry on afterwards.
-- **Sound.** Firing is silent on purpose, since a constant shooting sound was annoying. New sounds should be short and soft. The one long sound is the Hive Core's death, which the owner asked to be longer and deeper.
+- **A boss dies big.** Its death is a scene of about 2.5 seconds (`FINALE`): game time slows to a fifth, the camera pushes in on it, smaller blasts follow the first, and a long deep boom plays (`SFX.core`). The ship cannot be hit during it, nor for a blink afterwards (`FINALE.grace`), because the camera may leave the ship out of view. The core's shots are not removed: they carry on afterwards.
+- **Sound.** Firing is silent on purpose, since a constant shooting sound was annoying. New sounds should be short and soft. The one long sound is a boss's death, which the owner asked to be longer and deeper.
 - **How the owner tunes the game.** They leave comments on the guide artifacts ("start at wave 15"). When you change the game, update the tables, the guides and the README together.
 
 ## Where things are in `index.html`
@@ -36,9 +37,9 @@ The script is split into sections, each marked with a `// ---------- name ------
 | three.js stage | Renderer, lights and the reflection environment, `geo` and `M` (shared geometries and materials), the nebula backdrop, stars, particles (`burst`), effect pools (`ringFx`, `zapFx`), instanced shots, the player ship, station and shuttle models, post-processing (`draw()`, `GFX`), `resize()`. |
 | game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`. |
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
-| enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the Hive Core, and `buildWave()`. |
+| enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the three bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`), and `buildWave()`. |
 | player | Ship hit shape (`shipHit`), shields, shots, seekers, picking up scrap. |
-| cutscenes | `CUTS` (durations and which can be skipped), `startCut`, `updateCut`, docking at the station. The Hive Core's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, `finaleZoom`, next to `shake()`. |
+| cutscenes | `CUTS` (durations and which can be skipped), `startCut`, `updateCut`, docking at the station. A boss's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, `finaleZoom`, next to `shake()`. |
 | drawing | `syncScene()`: copies game state into the three.js scene once a frame. |
 | UI | HUD, screens, booster choice (draft), the station shop, buttons. |
 | feedback | The speech-bubble button that opens a prefilled GitHub issue. |
@@ -57,7 +58,14 @@ The script is split into sections, each marked with a `// ---------- name ------
   - `repair(k)` restores hull; `clearEnemyFire()` and `clearShotsNear()` remove enemy fire.
   - `pick()`, `turnToward()` and `wrapAngle()` are small maths helpers.
 - **Tuning belongs in the tables**, not as `n >= 12` thresholds scattered through the code.
-- **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during the Hive Core's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
+- **Bosses.** A boss is any enemy type whose `ET` entry has `boss: true`; test `e.def.boss`, never the type name.
+  - A fight may have several bodies (the Fracture Cube's pieces). `G.boss` is any one live body, `bossLeft()` adds up the health of the whole fight for the bar, and `killEnemy()` runs the death scene, the scrap shower and `G.bossDown` only when the last body goes.
+  - `bossLv(e)` is 0 the first time a boss is met, 1 the second, and so on: scale attacks by it, not by `e.tier`, which is already 2 or 3 at a later boss's first meeting. Health scales by tier.
+  - A first-time `hint()` never shows on a late wave (nobody reaches wave 12 in their first runs). Put the one-line tip in the boss's `tip` in `BOSSES`; it shows under the name when the boss arrives.
+  - Design rules the owner's preferences imply: one thing to read at a time; every attack leaves a safe place reachable within its warning time at base steering speed (240 a second); gaps between beams must clear the ship and its shield (`BEAM_HALF + SHIELD_R` each side); bodies stay out of the ship's rows; the model must look as wide as its hit circle (`e.rad`).
+  - A new boss needs: an `ET` entry, a line in `BOSSES`, a model branch in `buildEnemy()`, set-up in `spawnBoss()`, an `update…` function called from `updateBoss()`, a branch in the model-motion chain in `updateEnemies()`, checks in `smoke.js`, pictures in `shots.js`, a portrait, and a card in the enemy guide.
+  - The Beam Warden's beams are `e.bm` and `e.beams`, not `e.laser`: that field marks a lancer everywhere.
+- **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during a boss's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
 - **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
@@ -96,9 +104,10 @@ node shots.js <dir> "gfx=high"   # nine fixed pictures for judging the look by e
 `smoke.js` uses headless Chromium in a phone viewport with software WebGL. It covers:
 
 - A full run: launch, booster shuttle, Hive Core, docking, the station, death and reload.
+- The Fracture Cube and the Beam Warden: each arrives on its wave, every attack happens, the cube breaks 1 to 2 to 4 with the bar following, a gap between beams is safe and a beam is not, and destroying each leads to docking and a new module.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
 - A stress run with every booster on, and pause.
-- The Hive Core's death scene: slow motion and the camera push happen, the ship cannot be hit during it, and speed and camera are normal again before docking.
+- A boss's death scene: slow motion and the camera push happen, the ship cannot be hit during it, and speed and camera are normal again before docking.
 - Graphics: the setting button, that a real picture reaches the screen with every effect on, and that `auto` steps down on a slow device.
 
 The main run uses `?gfx=low`, because software rendering makes the effects very slow. Frame rate on a real phone cannot be measured here; say so when it matters.

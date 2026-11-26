@@ -116,6 +116,56 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   for (const [t, w] of Object.entries(expected)) check(first[t] === w, t + ' first appears on wave ' + w + ' (UNLOCK)', 'seen first on ' + first[t]);
   const lancersAt = await page.evaluate(L => L.map(w => { const s = window.__swarmfall; for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0; return s.G.enemies.filter(e => e.type === 'lancer').length; }), U.lancer);
   check(lancersAt.join() === '1,2,3', 'lancers: 1, 2 and 3 from waves ' + U.lancer.join(', '), 'got ' + lancersAt.join(','));
+  // the bosses take turns, in the order of the BOSSES table: one every 6th wave
+  const order = await page.evaluate(() => window.__swarmfall.BOSSES.map(b => b.type));
+  check(order.every((type, i) => first[type] === 6 * (i + 1)) && order.length === 3, 'bosses arrive in turn on waves 6, 12 and 18', order.map(type => type + ' ' + first[type]).join(', '));
+
+  // ---- the Fracture Cube and the Beam Warden ----
+  // Each fight is watched for about 20 seconds of game time with the ship safe, to see every attack happen.
+  // Then the boss is destroyed, which must end in the death scene, docking and a new module.
+  for (const b of [{ wave: 12, type: 'cube', name: 'FRACTURE CUBE' }, { wave: 18, type: 'warden', name: 'BEAM WARDEN' }]) {
+    await page.reload(); await page.waitForTimeout(500);
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
+    const mods0 = (await st()).mods.split(',').length;
+    const seen = await page.evaluate(wave => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P; G.wave = wave - 1; s.nextWave();
+      const w = { type: null, hud: '', balls: 0, darts: false, missiles: false, helpers: {}, beamFrames: 0, gapSafe: null, beamHurts: null, fans: {} }, g0 = G.time, t0 = performance.now(); let test = 0, hp0 = 0;
+      (function f() {
+        const e = G.boss, B = e && e.bm;
+        if (e) { w.type = e.type; w.hud = document.getElementById('wave').textContent; }
+        w.balls = Math.max(w.balls, G.eb.filter(x => !x.kind).length); if (G.eb.some(x => x.kind === 1)) w.darts = true; if (G.em.length) w.missiles = true;
+        for (const o of G.enemies) if (!o.def.boss) w.helpers[o.type] = true;
+        if (B && B.phase === 'fire') {   // stand in a gap between two beams, then on a beam, with the ship's protection off
+          w.beamFrames++; w.fans[B.n] = true; G.eb.length = 0; G.em.length = 0;
+          const ey = e.y + 26, at = a => e.x + Math.tan(a) * (P.y - ey);
+          if (test === 0 && B.t > 0.9) { test = 1; P.x = (at(B.ang[0]) + at(B.ang[1])) / 2; P.inv = 0; P.shieldUp = false; P.hp = hp0 = 5; }
+          else if (test === 1 && B.t < 0.8) { w.gapSafe = P.hp === hp0; test = 2; P.x = Math.max(14, Math.min(346, at(B.ang[1]))); P.inv = 0; }
+          else if (test === 2 && B.t < 0.5) { w.beamHurts = P.hp < hp0; test = 3; }
+          if (test === 1 || test === 2) { P.target = P.x; P.vx = 0; }
+        } else { P.inv = 9; P.hp = Math.max(P.hp, 5); }
+        G.revive = 1;
+        if (G.time - g0 > 21 || performance.now() - t0 > 90000) res(w); else requestAnimationFrame(f); })(); }), b.wave);
+    check(seen.type === b.type && seen.hud === b.name, 'wave ' + b.wave + ' is the ' + b.name + ', named on the HUD', seen.type + ' / ' + seen.hud);
+    if (b.type === 'cube') check(seen.balls >= 10 && seen.helpers.splitter, b.name + ': fans, rings and splitters all happen', JSON.stringify(seen));
+    else {
+      check(seen.beamFrames > 20 && seen.fans[3] && seen.fans[2] && seen.darts && seen.missiles, b.name + ': both beam fans, darts and missiles all happen', JSON.stringify(seen));
+      check(seen.gapSafe === true && seen.beamHurts === true, b.name + ': the gap between two beams is safe and a beam is not', 'gap safe ' + seen.gapSafe + ', beam hurts ' + seen.beamHurts);
+    }
+    const bodies = () => page.evaluate(() => { const s = window.__swarmfall; return { n: s.G.enemies.filter(e => !e.dead && e.def.boss).length, bar: +(document.querySelector('#bossbar i').style.transform.match(/[\d.]+/) || [1])[0], down: s.G.bossDown }; });
+    const smash = () => page.evaluate(() => { const s = window.__swarmfall; s.P.inv = 9; s.G.eb.length = 0; s.G.em.length = 0; for (const e of s.G.enemies) if (e.def.boss) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); });
+    if (b.type === 'cube') {   // one body, then two halves, then four quarters; the bar falls as the health of the whole fight does
+      const steps = [];
+      for (const want of [2, 4]) { await smash(); await page.waitForFunction(n => window.__swarmfall.G.enemies.filter(e => !e.dead && e.def.boss).length === n, want, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(700); steps.push(await bodies()); }
+      check(steps[0].n === 2 && steps[1].n === 4 && !steps[1].down, b.name + ': breaks into two halves, then four quarters', JSON.stringify(steps));
+      check(Math.abs(steps[0].bar - 0.6) < 0.03 && Math.abs(steps[1].bar - 0.3) < 0.03, b.name + ': the bar shows the health left in all its pieces', steps.map(x => x.bar).join(' then '));
+    }
+    await smash();
+    s = await waitFor(x => x.state === 'cut' && x.cut === 'dock', 40000);
+    const after = await bodies(); check(s.state === 'cut' && after.down && after.n === 0, b.name + ': destroying it leads to docking', s.state + ' ' + JSON.stringify(after));
+    s = await waitFor(x => x.state === 'station', 20000);
+    const left = await page.evaluate(() => window.__swarmfall.G.enemies.length);
+    check(s.state === 'station' && s.mods.split(',').length === mods0 + 1 && left === 0, b.name + ': a new module is fitted and nothing is left on the field', s.mods + ', enemies left ' + left);
+    await shot(b.type === 'cube' ? '11-after-cube' : '12-after-warden');
+  }
 
   // Every system at once: all boosters on, late waves with lasers, missiles and triplets, while the ship
   // keeps firing. This exercises the effect pools (rings, lightning, particles), missiles being shot down,

@@ -1,10 +1,11 @@
 // Takes a fixed set of screenshots for judging the game's look by eye: colours, glow, readability.
-//   cd tools && node shots.js <out-dir> [query]      e.g.  node shots.js /tmp/look "gfx=high"
+//   cd tools && node shots.js <out-dir> [query] [bosses]      e.g.  node shots.js /tmp/look "gfx=high"
 // The checks in smoke.js cannot see colour. Run this after any change to rendering and look at the pictures:
 // enemy fire must read red, pickup halos blue, scrap gold, and nothing good may look red.
 const { chromium, devices } = require('playwright');
 const fs = require('fs'), path = require('path');
 const OUT = process.argv[2] || path.join(__dirname, 'out', 'shots'), QUERY = process.argv[3] ? '?' + process.argv[3] : '';
+const BOSSES_ONLY = process.argv[4] === 'bosses';   // only the last five pictures, of the Fracture Cube and the Beam Warden
 const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
 
 (async () => {
@@ -24,7 +25,9 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
     (function f() { s.P.inv = 0; s.P.hp = s.S.maxHp; s.G.revive = 9; s.P.target = x; if (window.__tick) window.__tick(s); if ((s.G.time - g0) * 1000 > ms || performance.now() - t0 > ms * 12) r(); else requestAnimationFrame(f); })(); }), [ms, x]);
   const snap = (page, name) => page.screenshot({ path: path.join(OUT, name + '.png') });
 
-  let page = await open();
+  let page;
+  if (!BOSSES_ONLY) {
+  page = await open();
   await snap(page, '1-title');
   await page.tap('#btnPlay'); await page.waitForTimeout(1300); await snap(page, '2-launch');
 
@@ -56,6 +59,26 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   page = await open(); await start(page); await hold(page, 1500);
   await page.evaluate(() => { document.getElementById('btnPause').click(); }); await page.waitForTimeout(600); await snap(page, '9-pause');
 
-  console.log('wrote 9 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
+  }
+
+  // the Fracture Cube: whole and firing, then broken into quarters
+  const safe = page => page.evaluate(() => { const s = window.__swarmfall; (function k() { s.P.inv = 9; s.P.target = 150; s.G.revive = 9; requestAnimationFrame(k); })(); });
+  const smash = page => page.evaluate(() => { const s = window.__swarmfall; for (const e of s.G.enemies) if (e.def.boss) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); });
+  const bodies = (page, n) => page.waitForFunction(n => window.__swarmfall.G.enemies.filter(e => !e.dead && e.def.boss).length === n, n, { timeout: 60000 });
+  page = await open(); await start(page); await safe(page);
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 11; s.nextWave(); window.__tick = s => { s.P.inv = 9; }; });
+  await hold(page, 9000, 150); await snap(page, '10-fracture-cube');
+  await smash(page); await bodies(page, 2); await hold(page, 900, 150);
+  await smash(page); await bodies(page, 4); await hold(page, 3200, 150); await snap(page, '11-cube-quarters');
+
+  // the Beam Warden: its beams aimed (thin lines), then on
+  page = await open(); await start(page); await safe(page);
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 17; s.nextWave(); });
+  const phase = (ph, below) => page.waitForFunction(([ph, below]) => { const b = window.__swarmfall.G.boss; return b && b.bm && b.bm.phase === ph && b.bm.t < below; }, [ph, below], { timeout: 180000 });
+  await phase('charge', 0.35); await snap(page, '12-warden-aim');
+  await phase('fire', 0.9); await snap(page, '13-warden-beams');
+  await phase('idle', 9); await phase('charge', 9); await phase('fire', 0.9); await snap(page, '14-warden-second-fan');
+
+  console.log('wrote 14 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
   await browser.close();
 })();
