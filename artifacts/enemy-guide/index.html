@@ -1,0 +1,205 @@
+<title>Swarmfall Enemy Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column read top to bottom as the waves arrive; a rail on the left marks each wave, and the enemies it introduces hang off it. */
+:root{
+  --void:#080b1f; --panel:#121844; --panel-hi:#1b2260; --line:#2f3880;
+  --ink:#eef0ff; --dim:#a8b0e2;
+  --arc:#5fe8ff; --core:#ff4f8b; --gold:#ffc857; --danger:#ff2f45;
+  --display:'Chakra Petch','Trebuchet MS',system-ui,sans-serif;
+  --body:'Barlow','Segoe UI',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--void);color:var(--ink);font:400 16px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:36px}
+h1,h2,h3,p{margin:0}
+.eyebrow{font:700 .78rem/1 var(--display);letter-spacing:.2em;text-transform:uppercase;color:var(--arc)}
+h1{font:700 clamp(2rem,8vw,3rem)/1 var(--display);letter-spacing:.04em;text-wrap:balance}
+h1 b{color:var(--core);font-weight:700}
+h2{font:700 1.15rem/1.2 var(--display);letter-spacing:.12em;text-transform:uppercase}
+.lede{color:var(--dim);max-width:60ch}
+header{display:flex;flex-direction:column;gap:14px}
+
+/* summary strip: every wave 1-20 and what turns up */
+.strip-wrap{overflow-x:auto;margin-inline:-4px;padding:4px}
+.strip{display:grid;grid-template-columns:repeat(26,minmax(30px,1fr));gap:3px;min-width:800px}
+.strip div{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px;background:var(--panel);font:700 .8rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--dim)}
+.strip div.core{background:color-mix(in srgb,var(--core) 26%,var(--panel));color:var(--ink)}
+.strip div.new{color:var(--ink)}
+.strip i{display:block;width:8px;height:8px;background:var(--arc);transform:rotate(45deg)}
+.strip div.core i{background:var(--core)}
+.strip div:not(.new):not(.core) i{visibility:hidden}
+.key{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--dim);font-size:.85rem}
+.key span{display:inline-flex;align-items:center;gap:7px}
+.key i{width:8px;height:8px;transform:rotate(45deg);background:var(--arc)}
+.key i.c{background:var(--core)}
+
+/* the timeline */
+.timeline{display:flex;flex-direction:column}
+.stop{display:grid;grid-template-columns:64px minmax(0,1fr);gap:0 16px}
+.rail{display:flex;flex-direction:column;align-items:center}
+.wave{width:64px;padding:8px 0 7px;text-align:center;background:var(--panel-hi);font:700 1.35rem/1 var(--display);font-variant-numeric:tabular-nums}
+.wave small{display:block;margin-bottom:4px;font:700 .6rem/1 var(--display);letter-spacing:.16em;color:var(--dim)}
+.stop.boss .wave{background:var(--core);color:#22061a}
+.stop.boss .wave small{color:#22061a}
+.rail::after{content:"";flex:1;width:2px;background:var(--line);margin-top:6px}
+.stop:last-child .rail::after{background:linear-gradient(var(--line),transparent)}
+.body{display:flex;flex-direction:column;gap:12px;padding-bottom:30px;min-width:0}
+.body > h3{font:700 .8rem/1.2 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--dim);padding-top:9px}
+.note{color:var(--dim);font-size:.95rem;max-width:62ch}
+.note b{color:var(--ink);font-weight:600}
+
+.foe{display:grid;grid-template-columns:96px minmax(0,1fr);gap:16px;align-items:start;padding:14px;background:var(--panel)}
+.foe img{width:96px;height:96px;display:block;background:var(--void)}
+.foe.boss{grid-template-columns:128px minmax(0,1fr)}
+.foe.boss img{width:128px;height:128px}
+.foe-text{display:flex;flex-direction:column;gap:8px;min-width:0}
+.foe h4{margin:0;font:700 1.25rem/1.1 var(--display);letter-spacing:.03em}
+.foe .role{color:var(--dim);font-size:.95rem}
+.stats{display:flex;flex-wrap:wrap;gap:6px}
+.stats span{padding:4px 8px;background:var(--panel-hi);font:500 .78rem/1.2 var(--display);letter-spacing:.04em;color:var(--dim);font-variant-numeric:tabular-nums}
+.stats b{color:var(--ink);font-weight:700}
+.stats .gold b{color:var(--gold)}
+.foe dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;font-size:.95rem}
+.foe dt{font:700 .7rem/1.6 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--danger);padding-top:2px}
+.foe dt.beat{color:var(--arc)}
+.foe dd{margin:0}
+.foe ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+
+/* what hurts you */
+.fire{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.fire div{display:flex;flex-direction:column;gap:8px;padding:14px;background:var(--panel)}
+.fire .art{height:40px;display:flex;align-items:center;justify-content:center}
+.fire h4{margin:0;font:700 1rem/1.1 var(--display);letter-spacing:.04em}
+.fire p{color:var(--dim);font-size:.9rem}
+.ball{width:13px;height:13px;border-radius:50%;background:var(--danger)}
+.dart{width:4px;height:22px;border-radius:2px;background:var(--danger);transform:rotate(18deg)}
+.missile{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:24px solid var(--danger);filter:drop-shadow(0 -6px 0 color-mix(in srgb,var(--danger) 45%,transparent))}
+.beam{width:12px;height:40px;background:linear-gradient(90deg,var(--danger) 0 30%,#fff 30% 70%,var(--danger) 70%)}
+.ram{width:26px;height:26px;border:2px dashed var(--danger);transform:rotate(45deg)}
+footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);padding-top:16px}
+
+@media (max-width:480px){
+  .stop{grid-template-columns:52px minmax(0,1fr);gap:0 12px}
+  .wave{width:52px;font-size:1.15rem}
+  .foe,.foe.boss{grid-template-columns:72px minmax(0,1fr);gap:12px;padding:12px}
+  .foe img,.foe.boss img{width:72px;height:72px}
+  .foe dl{grid-template-columns:minmax(0,1fr)}
+  .foe dt{padding-top:6px}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Swarmfall · field guide</p>
+    <h1>Know the <b>swarm</b></h1>
+    <p class="lede">Every enemy in the game, the wave where it first shows up, and how to deal with it. Hit counts are for a ship with no damage upgrades, at the wave the enemy first appears. Enemies get about 5% tougher each wave after that, with a bigger jump at wave 12.</p>
+  </header>
+
+  <section aria-labelledby="h-strip" style="display:flex;flex-direction:column;gap:12px">
+    <h2 id="h-strip">Waves 1 to 26 at a glance</h2>
+    <div class="strip-wrap">
+      <div class="strip" role="list">
+        <div class="new" role="listitem">1<i></i></div><div class="new" role="listitem">2<i></i></div><div role="listitem">3<i></i></div><div role="listitem">4<i></i></div><div class="new" role="listitem">5<i></i></div><div class="core" role="listitem">6<i></i></div><div class="new" role="listitem">7<i></i></div><div class="new" role="listitem">8<i></i></div><div role="listitem">9<i></i></div><div class="new" role="listitem">10<i></i></div><div role="listitem">11<i></i></div><div class="core" role="listitem">12<i></i></div><div class="new" role="listitem">13<i></i></div><div role="listitem">14<i></i></div><div class="new" role="listitem">15<i></i></div><div role="listitem">16<i></i></div><div role="listitem">17<i></i></div><div class="core" role="listitem">18<i></i></div><div role="listitem">19<i></i></div><div class="new" role="listitem">20<i></i></div><div role="listitem">21<i></i></div><div role="listitem">22<i></i></div><div role="listitem">23<i></i></div><div class="core" role="listitem">24<i></i></div><div class="new" role="listitem">25<i></i></div><div role="listitem">26<i></i></div>
+      </div>
+    </div>
+    <div class="key"><span><i></i>Something new arrives</span><span><i class="c"></i>Hive Core boss wave</span></div>
+  </section>
+
+  <section aria-labelledby="h-time" style="display:flex;flex-direction:column;gap:18px">
+    <h2 id="h-time">In the order you meet them</h2>
+    <div class="timeline">
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>1</div></div>
+        <div class="body"><h3>First contact</h3>
+          <article class="foe"><img src="img/mite.png" alt="Mite: a pink crystal with two small white fins">
+            <div class="foe-text"><h4>Mite</h4><p class="role">The pawns. Always the biggest group, and they hold the front two rows to screen the stronger enemies behind them.</p>
+              <div class="stats"><span>Hits to destroy <b>1</b></span><span class="gold">Scrap <b>30%</b></span></div>
+              <dl><dt>Threat</dt><dd>Dives at you and rams, wobbling side to side on the way down. Does not shoot until wave 7.</dd><dt class="beat">Beat it</dt><dd>One shot. Clear the bottom row first so divers have less room.</dd></dl></div></article>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>2</div></div>
+        <div class="body"><h3>The formation starts shooting</h3>
+          <article class="foe"><img src="img/wasp.png" alt="Wasp: a gold cone with white wings">
+            <div class="foe-text"><h4>Wasp</h4><p class="role">Holds the middle of the top row from wave 2, the whole top row from wave 5, and a second row from wave 9.</p>
+              <div class="stats"><span>Hits to destroy <b>3</b></span><span class="gold">Scrap <b>45%</b></span></div>
+              <dl><dt>Threat</dt><dd>Fires fast red darts aimed at you: two per dive, three after wave 8. Also fires darts from the formation.</dd><dt class="beat">Beat it</dt><dd>Darts fly straight. Sidestep once they leave the wasp, then shoot it on its way down.</dd></dl></div></article>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>5</div></div>
+        <div class="body"><h3>Something harder to track</h3>
+          <article class="foe"><img src="img/weaver.png" alt="Weaver: a purple ring with a white core">
+            <div class="foe-text"><h4>Weaver</h4><p class="role">Mixed into any row from wave 5 on.</p>
+              <div class="stats"><span>Hits to destroy <b>2</b></span><span class="gold">Scrap <b>40%</b></span></div>
+              <dl><dt>Threat</dt><dd>Zigzags side to side as it dives, so it is hard to line up with or dodge.</dd><dt class="beat">Beat it</dt><dd>Shoot it while it sits. Once it dives, wait where its weave crosses the middle.</dd></dl></div></article>
+        </div></div>
+      <div class="stop boss"><div class="rail"><div class="wave"><small>BOSS</small>6</div></div>
+        <div class="body"><h3>Hive Core · returns on waves 12, 18 and 24</h3>
+          <article class="foe boss"><img src="img/boss.png" alt="Hive Core: a large pink crystal inside a turning blue ring with four pods">
+            <div class="foe-text"><h4>Hive Core</h4><p class="role">The whole wave is just the core. It sweeps side to side near the top and cycles through four attacks.</p>
+              <div class="stats"><span>Hits to destroy <b>95</b></span><span class="gold">Scrap <b>14</b></span><span>Repair <b>always</b></span></div>
+              <dl><dt>Threat</dt><dd><ul><li>A fan of seven balls spread across the screen.</li><li>A burst of four aimed balls plus two homing missiles.</li><li>Five ships released one at a time into separate lanes.</li><li>A ring of fourteen balls in every direction.</li></ul></dd>
+              <dt class="beat">Beat it</dt><dd>Below about a third of its health it attacks half again as fast, so save nothing for the end. Its shots in flight keep coming after it dies.</dd></dl>
+              <p class="note">Each later core is tougher, adds more balls to the fan and ring, and releases one more ship. From the second core, some of its ships are weavers. Destroying a core takes you to the station for a new module.</p></div></article>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>7</div></div>
+        <div class="body"><h3>After the first core</h3>
+          <p class="note">From wave 7, <b>any enemy in the formation can fire</b> at you, not only wasps.</p>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>8</div></div>
+        <div class="body"><h3>Two new problems</h3>
+          <article class="foe"><img src="img/splitter.png" alt="Splitter: an orange cube and a yellow cube joined at a corner">
+            <div class="foe-text"><h4>Splitter</h4><p class="role">Mixed into any row from wave 8 on.</p>
+              <div class="stats"><span>Hits to destroy <b>4</b></span><span class="gold">Scrap <b>50%</b></span></div>
+              <dl><dt>Threat</dt><dd>Fast diver. When destroyed it breaks into two mites that dive out to either side.</dd><dt class="beat">Beat it</dt><dd>Kill it high up so its two mites have farther to fall.</dd></dl></div></article>
+          <article class="foe"><img src="img/elite.png" alt="Elite: a wasp circled by a red ring">
+            <div class="foe-text"><h4>Elite</h4><p class="role">Any ordinary enemy can turn up as an elite from wave 8, up to three per wave. Marked by a spinning red ring.</p>
+              <div class="stats"><span>Health <b>3×</b></span><span class="gold">Scrap <b>3 every time</b></span><span>Repair drop <b>30%</b></span></div>
+              <dl><dt>Threat</dt><dd>Same moves as the enemy underneath, but takes three times as many hits.</dd><dt class="beat">Beat it</dt><dd>Worth the effort: it always pays out scrap, and often a green repair cross if you are damaged.</dd></dl></div></article>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>10</div></div>
+        <div class="body"><h3>Missiles</h3>
+          <article class="foe"><img src="img/beetle.png" alt="Beetle: a teal armoured shell with white eyes">
+            <div class="foe-text"><h4>Beetle</h4><p class="role">Takes some top-row spots from wave 10, and replaces the wasps in the top row from wave 13.</p>
+              <div class="stats"><span>Hits to destroy <b>11</b></span><span class="gold">Scrap <b>2 every time</b></span></div>
+              <dl><dt>Threat</dt><dd>Armoured and slow. It stops partway down the screen, launches two homing missiles, then dives fast. You hear a beeping alarm while a missile is homing in.</dd><dt class="beat">Beat it</dt><dd>Shoot the missiles down, or lead them sideways and let them overshoot. Missiles stop turning once they are level with you.</dd></dl></div></article>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>13</div></div>
+        <div class="body"><h3>After the second core</h3>
+          <article class="foe"><img src="img/triplet.png" alt="Triplet: a blue three-pointed star">
+            <div class="foe-text"><h4>Triplet</h4><p class="role">Mixed into any row from wave 13 on. Never an elite.</p>
+              <div class="stats"><span>Hits to destroy <b>8</b></span><span>Each copy <b>4</b></span><span class="gold">Scrap <b>35% per copy</b></span></div>
+              <dl><dt>Threat</dt><dd>When it leaves the formation it breaks into three smaller copies that fan out to the left, middle and right of the screen.</dd><dt class="beat">Beat it</dt><dd>Shoot it while it sits. Destroyed in the formation, it never splits.</dd></dl></div></article>
+          <p class="note">Also from wave 13: <b>beetles replace the wasps in the top row</b>.</p>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>15</div></div>
+        <div class="body"><h3>Lasers</h3>
+          <article class="foe"><img src="img/lancer.png" alt="Lancer: a tall red crystal between two dark plates, with a white emitter below">
+            <div class="foe-text"><h4>Lancer</h4><p class="role">Patrols a line above the top row, from one side of the screen to the other, with the swarm shielding it. Never dives.</p>
+              <div class="stats"><span>Hits to destroy <b>8</b></span><span class="gold">Scrap <b>70%</b></span></div>
+              <dl><dt>Threat</dt><dd>Stops, charges for 1.3 seconds while a thin red line marks its lane, then fires a beam down the whole screen for 1.7 seconds. Cools down for 3 to 5 seconds and moves on.</dd><dt class="beat">Beat it</dt><dd>Leave the lane as soon as the thin line appears. Destroying it cuts the beam off instantly. No more than two charge or fire at the same time.</dd></dl></div></article>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>20</div></div>
+        <div class="body"><h3>Two lancers</h3>
+          <p class="note">A second lancer joins every regular wave.</p>
+        </div></div>
+      <div class="stop"><div class="rail"><div class="wave"><small>WAVE</small>25</div></div>
+        <div class="body"><h3>Three lancers</h3>
+          <p class="note">A third lancer joins. Waves keep growing after this, but no new enemy types arrive.</p>
+        </div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-fire" style="display:flex;flex-direction:column;gap:14px">
+    <h2 id="h-fire">What hurts you</h2>
+    <p class="note">All enemy fire is red. A new ship has one hull point, so any of these ends the run unless you have added hull or a shield is up.</p>
+    <div class="fire">
+      <div><div class="art"><span class="ball"></span></div><h4>Ball</h4><p>Slow and round. Fired by the Hive Core from wave 6, and by any enemy in the formation from wave 7.</p></div>
+      <div><div class="art"><span class="dart"></span></div><h4>Dart</h4><p>A thin streak, 40% faster than a ball. Fired by wasps from wave 2.</p></div>
+      <div><div class="art"><span class="missile"></span></div><h4>Missile</h4><p>Homes in, with an alarm while it does. From the Hive Core at wave 6 and beetles from wave 10. Can be shot down.</p></div>
+      <div><div class="art"><span class="beam"></span></div><h4>Laser beam</h4><p>Blocks one lane for 1.7 seconds. From lancers at wave 15.</p></div>
+      <div><div class="art"><span class="ram"></span></div><h4>Collision</h4><p>Any enemy that touches your ship hurts it, from wave 1.</p></div>
+    </div>
+  </section>
+
+  <footer>Taken from the game as of its latest version. Pictures are the in-game models.</footer>
+</div>

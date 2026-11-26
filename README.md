@@ -29,4 +29,28 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 
 ## Tuning
 
-All the numbers live near the top of the script in `index.html`: `ET` (enemy stats), `UP` (boosters), `SHOP` (station modules and costs), `GROUPS` (module categories), `recalc()` (how upgrades turn into ship stats), `buildWave()` (wave size and enemy mix), and `DRAFT_EVERY` / `BOSS_EVERY` (how often boosters and bosses come).
+All the numbers live in the "game data" section of the script in `index.html`:
+
+- `UNLOCK`: the wave each enemy, and each change to the formation, first appears.
+- `ET`: enemy stats.
+- `UP`: boosters.
+- `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER`: station modules, their costs and the order they are earned.
+- `DRAFT_EVERY` and `BOSS_EVERY`: how often boosters and bosses come.
+- `SKIP_SCRAP`: scrap for passing up a booster.
+
+`recalc()` turns upgrades into ship stats, and `buildWave()` builds each formation. Cutscene timings are in `CUTS`.
+
+## Development
+
+There is no build. Edit `index.html` and open it in a browser.
+
+```
+cd tools && npm install
+node smoke.js [screenshot-dir]   # plays a full run in a headless phone browser; exits 1 on failure
+node artifact.js [out.html]      # the copy of the game published as a claude.ai artifact
+node portraits.js                # re-renders the enemy pictures for the guide
+```
+
+- `artifacts/enemy-guide/` is the source of the enemy guide page.
+- `CLAUDE.md` has the code map and conventions.
+- `.claude/skills/swarmfall-dev/` has the change, test and publish workflow.
