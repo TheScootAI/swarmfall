@@ -5,13 +5,12 @@
 // -> undock -> rare booster -> launch -> death -> reload, then builds every wave 1-20 many times to check
 // when each enemy first appears (as set by the game's UNLOCK table).
 //
-// three.js is served from tools/node_modules when it is installed (the sandbox may block cdnjs); otherwise
-// the page loads it from cdnjs as normal. WebGL runs on SwiftShader, so it works without a GPU.
+// The game loads three.js from vendor/three.min.js, so nothing is fetched. WebGL runs on SwiftShader, so it
+// works without a GPU.
 const { chromium, devices } = require('playwright');
 const fs = require('fs'), path = require('path');
 const GAME = path.join(__dirname, '..', 'index.html');
 const OUT = process.argv[2];
-const THREE_LOCAL = path.join(__dirname, 'node_modules/three/build/three.min.js');
 
 
 let failures = 0;
@@ -23,7 +22,6 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   const errors = [];
   page.on('pageerror', e => errors.push(e.message + ' ' + ((e.stack || '').split('\n')[1] || '')));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  if (fs.existsSync(THREE_LOCAL)) { const lib = fs.readFileSync(THREE_LOCAL); await page.route('**/three.min.js', r => r.fulfill({ body: lib, contentType: 'application/javascript' })); }
   await page.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
   const shot = async name => { if (OUT) { fs.mkdirSync(OUT, { recursive: true }); await page.screenshot({ path: path.join(OUT, name + '.png') }); } };
 

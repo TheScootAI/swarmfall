@@ -242,7 +242,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 </div>
 <div id="nogl" hidden><p>Swarmfall needs WebGL, and this browser could not start it. Try another browser or device.</p></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="vendor/three.min.js"></script>
 <script>
 (() => {
 'use strict';
@@ -352,8 +352,8 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x080b1f, 1000, 2000);
 const FOV = 38;
 const camera = new THREE.PerspectiveCamera(FOV, 1, 10, 4000);
-scene.add(new THREE.AmbientLight(0x9aa4e0, 0.75));
-const sun = new THREE.DirectionalLight(0xffffff, 0.95); sun.position.set(-0.5, 0.7, 1); scene.add(sun);
+const ambient = new THREE.AmbientLight(0x9aa4e0, 2.2); scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffffff, 3.2); sun.position.set(-0.5, 0.7, 1); scene.add(sun);
 
 let unitsPerPx = 1, shakeAmt = 0, drewPaused = false;
 const phong = (c, e = 0) => new THREE.MeshPhongMaterial({ color: c, emissive: e, flatShading: true, shininess: 50 });
@@ -387,11 +387,14 @@ function part(g, m, sx, sy, sz, x = 0, y = 0, z = 0, rz = 0) {
 }
 const TX = x => x - W / 2, TY = y => H / 2 - y;   // game coords (y down) to three coords
 
+// Colours typed in this file are sRGB, as on screen. three.js converts material colours itself, but values
+// written straight into a buffer (particles, stars) must be made linear first.
+const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 // soft round sprite for particles and stars
 const dotTex = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d');
   const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.4, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c);
+  g.fillStyle = gr; g.fillRect(0, 0, 32, 32); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
 function pointCloud(max, size) {
   const g = new THREE.BufferGeometry();
@@ -409,7 +412,7 @@ for (let i = 0; i < STARS; i++) {
   const z = -rand(60, 1500), spread = 1 + -z / 700;
   stars.pos[i * 3] = rand(-420, 420) * spread; stars.pos[i * 3 + 1] = rand(-520, 520) * spread; stars.pos[i * 3 + 2] = z;
   const b = rand(0.35, 1), tint = Math.random();
-  stars.col[i * 3] = b * (tint < 0.2 ? 1 : 0.75); stars.col[i * 3 + 1] = b * 0.82; stars.col[i * 3 + 2] = b * (tint > 0.8 ? 0.7 : 1);
+  stars.col[i * 3] = lin(b * (tint < 0.2 ? 1 : 0.75)); stars.col[i * 3 + 1] = lin(b * 0.82); stars.col[i * 3 + 2] = lin(b * (tint > 0.8 ? 0.7 : 1));
   starV[i] = rand(50, 90);
 }
 stars.g.attributes.color.needsUpdate = true;
@@ -424,9 +427,10 @@ const wallL = part(geo.plane, M.wall, 1.5, 1, 1), wallR = wallL.clone(); scene.a
 // particles
 const PMAX = 700, sparks = pointCloud(PMAX, 16), parts = [], spareParts = [];   // dead particles are reused, not left to the garbage collector
 function burst(x, y, c, n, sp, life = 0.6) {
+  const cr = lin(c[0]), cg = lin(c[1]), cb = lin(c[2]);
   for (let i = 0; i < n && parts.length < PMAX; i++) {
     const a = rand(TAU), v = sp * rand(0.25, 1), l = life * rand(0.5, 1), p = spareParts.pop() || {};
-    p.x = x; p.y = y; p.z = 0; p.vx = Math.cos(a) * v; p.vy = Math.sin(a) * v; p.vz = rand(-1, 1) * sp * 0.5; p.l = p.m = l; p.r = c[0]; p.g = c[1]; p.b = c[2];
+    p.x = x; p.y = y; p.z = 0; p.vx = Math.cos(a) * v; p.vy = Math.sin(a) * v; p.vz = rand(-1, 1) * sp * 0.5; p.l = p.m = l; p.r = cr; p.g = cg; p.b = cb;
     parts.push(p);
   }
 }
@@ -460,15 +464,16 @@ const dummy = new THREE.Object3D(), tmpC = new THREE.Color();
 // One draw call per kind of shot. With a colour, every instance shares it; without, each instance gets its own.
 function instanced(g, max, color) {
   const im = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: color == null ? 0xffffff : color, fog: false }), max);
-  // (three r128 sizes the colour buffer from the instance count at the first setColorAt, so colour before count = 0)
   if (color == null) for (let i = 0; i < max; i++) im.setColorAt(i, tmpC.set(0xffffff));
   im.frustumCulled = false; im.count = 0; scene.add(im);
   return im;
 }
+// send only the first `count` values of a buffer to the graphics card
+function uploadFirst(attr, count) { attr.clearUpdateRanges(); attr.addUpdateRange(0, count); attr.needsUpdate = true; }
 // upload only the instances in use this frame
 function commitInst(im, n) {
-  im.count = n; im.instanceMatrix.updateRange.count = n * 16; im.instanceMatrix.needsUpdate = true;
-  if (im.instanceColor) { im.instanceColor.updateRange.count = n * 3; im.instanceColor.needsUpdate = true; }
+  im.count = n; if (!n) return;
+  uploadFirst(im.instanceMatrix, n * 16); if (im.instanceColor) uploadFirst(im.instanceColor, n * 3);
 }
 const heading = (vx, vy) => Math.atan2(-vy, vx) - Math.PI / 2;   // rotation that points a model along its velocity
 const PB_MAX = 180, EB_MAX = 240, EM_MAX = 24;
@@ -1250,7 +1255,7 @@ function syncScene(dt) {
     sparks.col[n * 3] = p.r * k; sparks.col[n * 3 + 1] = p.g * k; sparks.col[n * 3 + 2] = p.b * k; n++;
   }
   const sa = sparks.g.attributes;
-  sparks.g.setDrawRange(0, n); sa.position.updateRange.count = sa.color.updateRange.count = n * 3; sa.position.needsUpdate = sa.color.needsUpdate = true;
+  sparks.g.setDrawRange(0, n); if (n) { uploadFirst(sa.position, n * 3); uploadFirst(sa.color, n * 3); }
   for (const r of rings) {
     if (r.t <= 0) continue;
     r.t -= dt; if (r.t <= 0) { r.m.visible = false; continue; }

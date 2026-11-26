@@ -4,7 +4,6 @@ const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const GAME = path.join(__dirname, '..', 'index.html');
 const OUT = process.argv[2] || path.join(__dirname, '..', 'artifacts', 'enemy-guide', 'img');
-const THREE_LOCAL = path.join(__dirname, 'node_modules/three/build/three.min.js');
 // name, model scale for the picture, spawn options
 const SHOTS = [['mite', 4.2, {}], ['wasp', 3.6, {}], ['weaver', 4, {}], ['splitter', 3.6, {}], ['beetle', 3, {}], ['elite', 3, { elite: true }],
   ['triplet', 3.4, {}], ['lancer', 3, {}], ['boss', 1.4, { tint: 0xff4f8b }]];
@@ -12,7 +11,6 @@ const SHOTS = [['mite', 4.2, {}], ['wasp', 3.6, {}], ['weaver', 4, {}], ['splitt
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })).newPage();
-  if (fs.existsSync(THREE_LOCAL)) { const lib = fs.readFileSync(THREE_LOCAL); await page.route('**/three.min.js', r => r.fulfill({ body: lib, contentType: 'application/javascript' })); }
   await page.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
   await page.goto('file://' + GAME); await page.waitForTimeout(500);
   await page.tap('#btnPlay'); await page.waitForTimeout(300); await page.touchscreen.tap(195, 400);
