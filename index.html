@@ -1284,7 +1284,7 @@ function drawShop() {
   const docked = G.docked, next = nextMod(), nm = G.newMod && SHOPBY[G.newMod];
   $('stEyebrow').textContent = docked ? 'Docked · Hive Core destroyed' : 'Space station';
   $('stTitle').textContent = docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
-  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade. ' : '') + 'Scrap from this run is banked. Spend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach Hive Core you destroy earns a new module.';
+  $('stNote').textContent = docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach Hive Core you destroy earns a new module.';
   $('btnUndock').hidden = !docked; $('btnHangarPlay').hidden = $('btnHangarBack').hidden = docked;
   $('bank').textContent = '◆ ' + meta.scrap + ' scrap';
   $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => {
