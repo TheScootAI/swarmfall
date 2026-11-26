@@ -206,6 +206,12 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
     s = await waitFor(x => x.state === 'station', 20000);
     const left = await page.evaluate(() => window.__swarmfall.G.enemies.length);
     check(s.state === 'station' && s.mods.split(',').length === mods0 + 1 && left === 0, b.name + ': a new module is fitted and nothing is left on the field', s.mods + ', enemies left ' + left);
+    if (b.type === 'triad') {   // by now the list of modules is far longer than the screen
+      const bar = () => page.evaluate(() => { const el = document.getElementById('scrStation'), u = document.getElementById('btnUndock').getBoundingClientRect(); return { undockInView: u.top >= 0 && u.bottom <= innerHeight, more: !document.getElementById('stMore').hidden, toGo: el.scrollHeight - el.clientHeight - el.scrollTop }; });
+      const top = await bar(); await page.tap('#stMore'); await page.waitForTimeout(900); const mid = await bar();
+      await page.evaluate(() => { const el = document.getElementById('scrStation'); el.scrollTop = el.scrollHeight; }); await page.waitForTimeout(300); const end = await bar();
+      check(top.undockInView && top.more && top.toGo > 100 && mid.toGo < top.toGo && mid.undockInView && end.undockInView && !end.more, 'station: Undock stays on screen while the list scrolls, and "More below" shows until its end', JSON.stringify([top, mid, end]));
+    }
     await shot('1' + (b.wave / 6 - 1) + '-after-' + b.type);
   }
 

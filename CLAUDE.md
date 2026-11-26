@@ -16,6 +16,7 @@ The `swarmfall-dev` skill (`.claude/skills/swarmfall-dev/`) has the step-by-step
 These came from playtesting feedback; keep them unless the owner says otherwise.
 
 - **Phone first.** Drag anywhere to steer and the ship fires on its own. Every screen must work at about 390px wide.
+- **The station's main button never scrolls away.** Undock (or Launch and Back) sits in a bar fixed to the bottom of the station screen (`.dockbar`), and a "More below" tab on it shows until the module list has been scrolled to its end (`moreHint()`). The owner asked for both after missing modules below the fold.
 - **One hit ends a new ship's run.** Hull, shields and everything else are bought with scrap (station modules) or picked as boosters.
 - **Colours carry meaning.** All enemy fire is the same red (`ENEMY_RED`), and nothing good is red. Anything good to grab sits in a pulsing blue halo: gold rings are scrap, green crosses repair hull.
 - **Mites are the pawns.** They are the largest group in every wave and hold the front two rows. Stronger enemies sit behind them.
@@ -109,6 +110,7 @@ node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by
 - The four bosses after the Hive Core: each arrives on its wave, every attack happens, and destroying each leads to docking and a new module. Also: the cube breaks 1 to 2 to 4 with the bar following; a gap between the Warden's beams is safe and a beam is not; the Siege Beetle's shell lets 40% of a hit through shut and all of it open; losing a Triad core does not end the fight.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
 - A stress run with every booster on, and pause.
+- The station: Undock stays on screen while the list scrolls, and "More below" shows until its end.
 - A boss's death scene: slow motion happens and the camera stays put, the ship cannot be hit during it, and speed is normal again before docking.
 - Graphics: the setting button, that a real picture reaches the screen with every effect on, and that `auto` steps down on a slow device.
 

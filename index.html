@@ -73,6 +73,17 @@ h2{font:700 1.5rem/1.1 var(--display);letter-spacing:.08em;text-transform:upperc
 .lede.lines{white-space:pre-line;max-width:none;font-size:.95rem}   /* one point per line */
 .fine{color:var(--dim);font-size:.9rem}
 .row{display:flex;flex-wrap:wrap;gap:10px}
+/* Station: the Undock (or Launch) row stays at the bottom of the screen while the list of modules scrolls under
+   it, behind a fade. The "More below" tab sits on its top edge until the list has been scrolled to its end. */
+.dockbar{position:sticky;bottom:-24px;z-index:2;flex-wrap:nowrap;margin:0 calc(-1 * var(--gut-r)) -24px calc(-1 * var(--gut-l));
+  padding:46px var(--gut-r) calc(16px + env(safe-area-inset-bottom, 0px)) var(--gut-l);pointer-events:none;
+  background:linear-gradient(rgba(8,11,31,0),var(--void) 38px)}
+.dockbar > *{pointer-events:auto}
+.dockbar > .btn{flex:1 1 0;min-width:0}   /* Launch and Back share one row even on a narrow phone, so the bar stays short */
+.more{position:absolute;left:50%;top:4px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;min-height:34px;padding:0 16px;border:0;   /* in the faded strip, so it never covers a price */
+  background:var(--panel);box-shadow:0 0 0 1.5px var(--arc) inset;color:var(--arc);font:700 .78rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+.more::after{content:"";width:8px;height:8px;margin-top:-5px;border-right:2px solid;border-bottom:2px solid;transform:rotate(45deg);animation:nudge 1.1s ease-in-out infinite}
+@keyframes nudge{50%{transform:translateY(4px) rotate(45deg)}}
 .row>.btn{flex:1 1 140px}
 .btn{min-height:52px;padding:0 18px;border:0;background:var(--panel-hi);color:var(--ink);cursor:pointer;
   font:700 1rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;clip-path:var(--chamfer)}
@@ -143,7 +154,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 .fb-row .btn{min-height:44px;padding:0 14px;font-size:.85rem;display:inline-grid;place-items:center;text-decoration:none}
 #fbSend[aria-disabled="true"]{opacity:.45;cursor:default}
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;background:var(--void)}
-@media (prefers-reduced-motion:reduce){#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}}
+@media (prefers-reduced-motion:reduce){#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}.more::after{animation:none}}
 </style>
 </head>
 <body>
@@ -222,7 +233,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <p class="lede lines" id="stNote"></p>
         <p class="bank" id="bank">◆ 0</p>
         <div class="shop" id="shop"></div>
-        <div class="row">
+        <div class="row dockbar">
+          <button id="stMore" class="more" type="button" hidden>More below</button>
           <button id="btnUndock" class="btn primary" hidden>Undock</button>
           <button id="btnStationLaunch" class="btn primary">Launch</button>
           <button id="btnStationBack" class="btn">Back</button>
@@ -667,6 +679,7 @@ function resize() {
   const showWalls = visW > W + 10; wallL.visible = wallR.visible = showWalls;
   wallL.position.set(-W / 2 - 3, 0, 0); wallR.position.set(W / 2 + 3, 0, 0); wallL.scale.y = wallR.scale.y = visH;
   drewPaused = false;   // resizing clears the canvas, so a paused frame must be drawn again
+  moreHint();
 }
 addEventListener('resize', resize);
 
@@ -1747,9 +1760,12 @@ function syncScene(dt) {
 
 // ---------- UI ----------
 const screens = ['scrTitle', 'scrDraft', 'scrPause', 'scrDead', 'scrStation'];
+// The station's list of modules is longer than a phone screen. "More below" shows until it has been scrolled to its end.
+function moreHint() { const el = $('scrStation'); $('stMore').hidden = el.hidden || el.scrollHeight - el.scrollTop - el.clientHeight < 40; }
 function show(id, focus) {
   for (const s of screens) $(s).hidden = s !== id;
   if (id) $(id).scrollTop = 0;
+  moreHint();
   if (focus) $(focus).focus({ preventScroll: true }); else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }
 function toast(big, small) {
@@ -1888,6 +1904,7 @@ function drawShop() {
     }).join('');
     return rows ? '<h3 class="grp">' + name + ' <span>' + blurb + '</span></h3>' + rows : '';
   }).join('') + '<p class="fine locked">' + (next ? 'Next module: ' + SHOPBY[next].n + '. Destroy a boss and the station will fit it. ' + (SHOP.length - meta.mods.length) + ' still to earn.' : 'Every module is fitted.') + '</p>';
+  moreHint();
 }
 // The station between runs: browsing and upgrading modules ('browse'), as opposed to docking mid-run ('station').
 function openStation() { if (G.state !== 'title') { titleScene(); $('hud').hidden = true; } G.state = 'browse'; drawShop(); show('scrStation', 'btnStationLaunch'); }
@@ -1901,6 +1918,8 @@ $('btnGfx').onclick = () => {
   save(); GFX.slow = 0; GFX.ema = 16; resize(); gfxLabels();
 };
 $('btnPause').onclick = $('btnResume').onclick = togglePause;
+$('scrStation').addEventListener('scroll', moreHint, { passive: true });
+$('stMore').onclick = () => { const el = $('scrStation'); el.scrollBy({ top: el.clientHeight * 0.6, behavior: reduceMotion ? 'auto' : 'smooth' }); };
 $('btnUndock').onclick = () => { if (G.state === 'station') { $('hud').hidden = false; drawHud(); dockPose(); openDraft('boss'); } };
 $('btnQuit').onclick = () => { if (G.state === 'pause') { show(null); endRun(); } };
 // Restart: the run ends as usual (its scrap is banked) and a new one launches straight away.
