@@ -720,6 +720,7 @@ function updateDive(e, dt) {
     if (e.lane != null) e.vx += (clamp((e.lane + clamp(P.x - e.lane, -28, 28) - e.x) * 3.5, -320, 320) - e.vx) * Math.min(1, 5 * dt);   // hold the lane, lean a little toward the player
     else if (steer && k) e.vx += (clamp((P.x - e.x) * k, -170, 170) - e.vx) * Math.min(1, 2.6 * dt);
     if (e.type === 'weaver') e.x += Math.cos(e.t * 4.6 + e.ph) * 150 * dt;
+    else if (e.type === 'mite' && e.lane == null) e.x += Math.sin(e.t * 3.4 + e.ph) * 62 * dt;   // a gentle side-to-side wobble all the way down
     if (e.shots > 0 && e.y > 110 && e.y < H * 0.6) { e.shootT -= dt; if (e.shootT <= 0) { fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
@@ -764,11 +765,12 @@ function updateBoss(e, dt) {
 function buildWave(n) {
   G.queue = []; G.waveT = 0; G.diveT = 2.6; G.shootT = 3; G.boss = null; G.bossDown = false; $('bossbar').hidden = true;
   if (n % BOSS_EVERY === 0) { G.form = { cols: 1, rows: 1, dx: 38, dy: 34, top: 96 }; G.queue.push({ t: 0.9, fn: () => spawnBoss(n / BOSS_EVERY) }); return; }
-  const cols = Math.min(8, 4 + Math.ceil(n / 2)), rows = Math.min(5, 2 + Math.floor(n / 3)), mid = (cols - 1) / 2;
+  const cols = Math.min(8, 4 + Math.ceil(n / 2)), rows = n === 1 ? 2 : Math.min(5, 3 + Math.floor(n / 4)), mid = (cols - 1) / 2;   // extra rows of mites screen the stronger enemies behind them
   G.form = { cols, rows, dx: 38, dy: 34, top: 96 };
   const shapes = [() => true];
-  if (n >= 3) shapes.push((c, r) => r <= (rows - 1) * (1 - Math.abs(c - mid) / (mid + 0.5)) + 0.5, c => c % 3 !== 2);
-  if (rows >= 3) shapes.push((c, r) => (c + r) % 2 === 0 || r === 0);
+  // gapped formations only from wave 5: the opening waves are solid blocks of mites
+  if (n >= 5) shapes.push((c, r) => r <= (rows - 1) * (1 - Math.abs(c - mid) / (mid + 0.5)) + 0.5, c => c % 3 !== 2);
+  if (n >= 5 && rows >= 3) shapes.push((c, r) => (c + r) % 2 === 0 || r === 0);
   const shape = shapes[(Math.random() * shapes.length) | 0];
   const pWeaver = n >= 5 ? Math.min(0.3, 0.1 + n * 0.012) : 0, pSplit = n >= 8 ? Math.min(0.2, 0.06 + n * 0.01) : 0, pTrip = n >= 7 ? Math.min(0.15, 0.06 + n * 0.008) : 0,   /* triplets: only once the first Hive Core (wave 6) is down */ pElite = n >= 8 ? Math.min(0.09, 0.02 + n * 0.005) : 0;
   let elites = 0, group = 0; const specs = [];
@@ -778,9 +780,11 @@ function buildWave(n) {
       for (let k = 0; k < cols; k++) {
         const c = side ? cols - 1 - k : k;
         if ((side ? c < cols / 2 : c >= cols / 2) || !shape(c, r)) continue;
-        let type = r === 0 ? (n >= 13 || (n >= 10 && Math.random() < 0.3) ? 'beetle' : n >= 2 ? 'wasp' : 'mite') : r === 1 && n >= 3 ? 'wasp' : 'mite';
-        const roll = Math.random(); if (roll < pWeaver) type = 'weaver'; else if (roll < pWeaver + pSplit) type = 'splitter'; else if (roll < pWeaver + pSplit + pTrip) type = 'triplet';
-        const elite = type !== 'triplet' && elites < 3 && Math.random() < pElite;   // three elite copies would be too much if (elite) elites++;
+        // mites are the pawns: they fill every row but the top. Before wave 5 only the middle of the top row is wasps; a second row of wasps comes at wave 9
+        let type = r === 0 ? (n >= 13 || (n >= 10 && Math.random() < 0.3) ? 'beetle' : n >= 5 || (n >= 2 && Math.abs(c - mid) <= 1.5) ? 'wasp' : 'mite') : r === 1 && n >= 9 ? 'wasp' : 'mite';
+        // the front two rows stay mites, screening the stronger enemies behind them
+        const roll = r >= rows - 2 ? 1 : Math.random(); if (roll < pWeaver) type = 'weaver'; else if (roll < pWeaver + pSplit) type = 'splitter'; else if (roll < pWeaver + pSplit + pTrip) type = 'triplet';
+        const elite = type !== 'triplet' && elites < 3 && Math.random() < pElite; if (elite) elites++;   // triplets are never elite: three elite copies would be too much
         specs.push({ t: t0 + i++ * 0.15, type, c, r, elite, tpl, side }); any = true;
       }
       if (any) group++;
