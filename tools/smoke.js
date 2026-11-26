@@ -58,7 +58,21 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   await page.tap('.card'); s = await waitFor(x => x.state === 'play'); check(s.wave === 4, 'wave 4 starts after picking a booster');
 
   await page.evaluate(() => { window.__swarmfall.G.run.scrap += 60; });
-  s = await playTo(x => x.state === 'cut' && x.cut === 'dock'); check(s.wave === 6, 'Hive Core on wave 6 leads to docking', 'wave ' + s.wave);
+  // watch the Hive Core's death scene from inside the page: slowest game speed, closest camera, and hull lost during it
+  await page.evaluate(() => { const s = window.__swarmfall, w = window.__fin = { slowest: 1, closest: 1, far: s.camera.position.z, hp: null, hurt: false };
+    (function f() {
+      if (s.FIN.on && !w.done) {   // a shot is dropped on the ship every frame, with its usual protection taken away
+        w.slowest = Math.min(w.slowest, s.G.speed); w.closest = Math.min(w.closest, s.camera.position.z / w.far);
+        if (w.hp === null) w.hp = s.P.hp; if (s.P.hp < w.hp || !s.P.alive) w.hurt = true;
+        if (w.slowest < 0.3 && s.G.speed > 0.5) { w.done = true; s.G.eb.length = 0; s.P.inv = 9; }   // the scene is easing out: stop, so no test shot is left on the ship when it ends
+        else { s.P.inv = 0; s.G.eb.push({ x: s.P.x, y: s.P.y, vx: 0, vy: 0, r: 5, kind: 0, dead: false }); }
+      }
+      if (s.G.state !== 'station') requestAnimationFrame(f); })(); });
+  s = await playTo(x => x.state === 'cut' && x.cut === 'dock'); check(s.wave === 6 && s.state === 'cut', 'Hive Core on wave 6 leads to docking', 'wave ' + s.wave + ' ' + s.state);
+  const fin = await page.evaluate(() => { const s = window.__swarmfall; return { ...window.__fin, on: s.FIN.on, speed: s.G.speed, z: s.camera.position.z }; });
+  check(fin.slowest < 0.3 && fin.closest < 0.8, 'the Hive Core dies in slow motion with the camera pushing in', JSON.stringify(fin));
+  check(!fin.hurt, 'the ship cannot be hit during the core\'s death scene');
+  check(!fin.on && fin.speed === 1 && Math.abs(fin.z - fin.far) < 0.01, 'speed and camera are back to normal by the time docking starts', JSON.stringify(fin));
   s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);
   check(s.scrap >= 60, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
   await shot('05-station');
