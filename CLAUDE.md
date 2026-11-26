@@ -5,6 +5,7 @@ A roguelite swarm shooter played mostly on phones. The whole game is `index.html
 - **Live:** https://thescootai.github.io/swarmfall/ (GitHub Pages serves `main` as is; a push is a deploy).
 - **Game artifact:** https://claude.ai/artifact/WHbiJLyLcGYMiu2Bddz8s4 (the same game, built with `node tools/artifact.js`).
 - **Enemy guide artifact:** https://claude.ai/artifact/18YkQbSpHhSxGimJ2GmKNq (source in `artifacts/enemy-guide/`).
+- **Upgrade guide artifact:** https://claude.ai/artifact/EALugShxKLeMhoE6pxT3TC (every booster and station module; written by `node tools/upgrade-guide.js` into `artifacts/upgrade-guide/`).
 - **Repo:** `TheScootAI/swarmfall`. `main` is the live game.
 - **Branch `graphics-upgrade`:** the three.js r187 port and the new graphics (glow, reflections, nebula, energy shield, lights), for the owner to try before it goes live. It is staged at STAGING_URL (built with `node tools/artifact.js <out.html> "Swarmfall Staging"`). Do not publish this branch to the live game artifact or merge it into `main` until the owner says so.
 
@@ -20,8 +21,9 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **Mites are the pawns.** They are the largest group in every wave and hold the front two rows. Stronger enemies sit behind them.
 - **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a Hive Core boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
 - **Cutscenes.** Only the launch can be skipped with a tap. The shuttle and docking scenes always play out, because a player steering by touch puts a finger down just as they start.
-- **Sound.** Firing is silent on purpose, since a constant shooting sound was annoying. New sounds should be short and soft.
-- **How the owner tunes the game.** They leave comments on the enemy guide artifact ("start at wave 15"). When you change the game, update `UNLOCK`, the guide and the README together.
+- **The Hive Core dies big.** Its death is a scene of about 2.5 seconds (`FINALE`): game time slows to a fifth, the camera pushes in on the core, smaller blasts follow the first, and a long deep boom plays (`SFX.core`). The ship cannot be hit during it, because the camera may leave the ship out of view. The core's shots are not removed: they carry on afterwards.
+- **Sound.** Firing is silent on purpose, since a constant shooting sound was annoying. New sounds should be short and soft. The one long sound is the Hive Core's death, which the owner asked to be longer and deeper.
+- **How the owner tunes the game.** They leave comments on the guide artifacts ("start at wave 15"). When you change the game, update the tables, the guides and the README together.
 
 ## Where things are in `index.html`
 
@@ -36,7 +38,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
 | enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the Hive Core, and `buildWave()`. |
 | player | Ship hit shape (`shipHit`), shields, shots, seekers, picking up scrap. |
-| cutscenes | `CUTS` (durations and which can be skipped), `startCut`, `updateCut`, docking at the station. |
+| cutscenes | `CUTS` (durations and which can be skipped), `startCut`, `updateCut`, docking at the station. The Hive Core's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, `finaleZoom`, next to `shake()`. |
 | drawing | `syncScene()`: copies game state into the three.js scene once a frame. |
 | UI | HUD, screens, booster choice (draft), the station shop, buttons. |
 | feedback | The speech-bubble button that opens a prefilled GitHub issue. |
@@ -55,8 +57,9 @@ The script is split into sections, each marked with a `// ---------- name ------
   - `repair(k)` restores hull; `clearEnemyFire()` and `clearShotsNear()` remove enemy fire.
   - `pick()`, `turnToward()` and `wrapAngle()` are small maths helpers.
 - **Tuning belongs in the tables**, not as `n >= 12` thresholds scattered through the code.
+- **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during the Hive Core's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
-- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `GFX`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
+- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `GFX`, `FIN`, `camera`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
 
 ## Graphics
@@ -95,6 +98,7 @@ node shots.js <dir> "gfx=high"   # nine fixed pictures for judging the look by e
 - A full run: launch, booster shuttle, Hive Core, docking, the station, death and reload.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
 - A stress run with every booster on, and pause.
+- The Hive Core's death scene: slow motion and the camera push happen, the ship cannot be hit during it, and speed and camera are normal again before docking.
 - Graphics: the setting button, that a real picture reaches the screen with every effect on, and that `auto` steps down on a slow device.
 
 The main run uses `?gfx=low`, because software rendering makes the effects very slow. Frame rate on a real phone cannot be measured here; say so when it matters.
@@ -106,3 +110,4 @@ Passing tests cannot see colour or layout. After a change to rendering or UI, sa
 1. Commit and push to `main`. GitHub Pages redeploys within a minute.
 2. Rebuild and republish the game artifact: `node tools/artifact.js <dir>/swarmfall.html`, then publish that file to the game artifact URL above with `root` set to `<dir>` and `files` mapping `vendor/three.min.js` (the script writes it beside the page).
 3. If enemies, their timings or their numbers changed, update `artifacts/enemy-guide/index.html` and republish it with its `img/` files to the guide URL. Re-render the pictures with `node tools/portraits.js` if a model changed.
+4. If a booster or station module changed (`UP`, `SHOP`, `UNLOCK_ORDER`, `START_MODS`, the odds in `rollCards()`, or what one does in `recalc()` and elsewhere), update its note in `tools/upgrade-guide.js` if its numbers changed, run `node tools/upgrade-guide.js`, and republish `artifacts/upgrade-guide/index.html` to the upgrade guide URL.

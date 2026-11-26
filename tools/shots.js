@@ -44,7 +44,7 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   await hold(page, 800, 190); await snap(page, '5-hive-core');
   // the kill: big explosion and scrap shower
   await page.evaluate(() => { const s = window.__swarmfall; s.G.boss.hp = 1; });
-  await hold(page, 500, 190); await snap(page, '6-core-destroyed');
+  await hold(page, 300, 190); await snap(page, '6-core-destroyed');   // 300 ms of game time is about 1.5 real seconds into the slow-motion death scene, with the camera pushed in
 
   // a hit on the shield, then booster screen for UI over the scene
   page = await open(); await start(page);

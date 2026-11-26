@@ -21,7 +21,7 @@ This installs three.js and esbuild, which are only needed to rebuild `vendor/thr
 - **Enemy stats** (health, speed, scrap chance): `ET`. Behaviour is in `updateDive()`, `updateLancer()`, `updateBoss()` and `launchDive()`.
 - **Boosters** (in-run picks): `UP`, plus `recalc()` for how they change stats. Any one-off effect at the moment of picking goes in `applyUpgrade()`.
 - **Station modules:** `SHOP` and `recalc()`. `UNLOCK_ORDER` sets which module each Hive Core earns, and `START_MODS` sets what a new save starts with. A module bought while docked applies at once in the `#shop` click handler.
-- **Cutscene timing:** `CUTS`. Choreography is in `updateCut()`.
+- **Cutscene timing:** `CUTS`. Choreography is in `updateCut()`. The Hive Core's death scene (slow motion, camera push, follow-up blasts) is `FINALE` and the `finale…` functions.
 - **Anything drawn** (materials, glow, lights, backdrop, effects): read the Graphics section of `CLAUDE.md` first. A three.js name missing from the bundle goes in `tools/three-entry.js`, then `node tools/build-three.js`.
 - **Sounds:** the `SFX` table. Keep them short and quiet, and call them through `limited()` if they can fire many times a second.
 - **New enemy type:** it needs an entry in each of these, or it will throw every frame:
@@ -60,6 +60,7 @@ node -e "const s=require('fs').readFileSync('index.html','utf8');new Function(s.
 ## 5. Keep the docs in step
 
 - `README.md` covers how a run works, the enemy list with arrival waves, and the tuning tables.
+- `artifacts/upgrade-guide/index.html` lists every booster and station module. It is written by `node tools/upgrade-guide.js` from the game's tables; the sentence of numbers under each card is in `NOTES` in that script, so update the note when you change what an upgrade does. The script stops if a booster or module has no note.
 - `artifacts/enemy-guide/index.html` covers the timeline stops, the wave strip, hit counts and the "What hurts you" list.
   - **Hit counts:** `ceil(hp × (1 + 0.05 × (wave − 1)) × 1.3^floor(wave / 12) / 10)` at the wave the enemy first appears.
   - **Triplet copies:** 0.45 × the parent's health.
@@ -71,7 +72,8 @@ node -e "const s=require('fs').readFileSync('index.html','utf8');new Function(s.
 1. Commit on `main` with a message that says what changed for the player and why, then push. That is the deploy to https://thescootai.github.io/swarmfall/.
 2. Run `node tools/artifact.js <scratchpad>/swarmfall.html`, then publish that file to https://claude.ai/artifact/WHbiJLyLcGYMiu2Bddz8s4 with `root` set to its folder and `files` mapping `vendor/three.min.js`.
    - **A trial for the owner** goes on a branch and a separate artifact, never the live one: build to a different file with a title (`node tools/artifact.js <scratchpad>/staging/index.html "Swarmfall Staging"`) and publish it as its own artifact.
-3. If the guide changed, copy `artifacts/enemy-guide/` to the scratchpad and publish its `index.html` to https://claude.ai/artifact/18YkQbSpHhSxGimJ2GmKNq. Pass `root` set to that folder and `files` mapping each `img/*.png`. Publishing reads only from the working directory or the scratchpad.
+3. If a booster or module changed, run `node tools/upgrade-guide.js`, copy `artifacts/upgrade-guide/index.html` to the scratchpad and publish it to https://claude.ai/artifact/EALugShxKLeMhoE6pxT3TC.
+4. If the enemy guide changed, copy `artifacts/enemy-guide/` to the scratchpad and publish its `index.html` to https://claude.ai/artifact/18YkQbSpHhSxGimJ2GmKNq. Pass `root` set to that folder and `files` mapping each `img/*.png`. Publishing reads only from the working directory or the scratchpad.
 
 ## 7. Owner comments on an artifact
 

@@ -1,0 +1,468 @@
+<title>Swarmfall Upgrade Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column in two halves. Boosters sit in three bands, one per rarity, coloured as their cards are in the game. Station modules hang off a rail in the order the Hive Cores earn them. Written by tools/upgrade-guide.js: edit that, not this file. */
+:root{
+  --void:#080b1f; --panel:#121844; --panel-hi:#1b2260; --line:#2f3880;
+  --ink:#eef0ff; --dim:#a8b0e2;
+  --arc:#5fe8ff; --core:#ff4f8b; --gold:#ffc857; --violet:#c79bff;
+  --display:'Chakra Petch','Trebuchet MS',system-ui,sans-serif;
+  --body:'Barlow','Segoe UI',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--void);color:var(--ink);font:400 16px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:40px}
+h1,h2,h3,h4,p,ol{margin:0}
+.eyebrow{font:700 .78rem/1 var(--display);letter-spacing:.2em;text-transform:uppercase;color:var(--arc)}
+h1{font:700 clamp(2rem,8vw,3rem)/1 var(--display);letter-spacing:.04em;text-wrap:balance}
+h1 b{color:var(--gold);font-weight:700}
+h2{font:700 1.15rem/1.2 var(--display);letter-spacing:.12em;text-transform:uppercase}
+.lede{color:var(--dim);max-width:60ch}
+header,.part{display:flex;flex-direction:column;gap:14px}
+.part{gap:22px}
+.part-head{display:flex;flex-direction:column;gap:10px;border-top:2px solid var(--line);padding-top:22px}
+.note{color:var(--dim);font-size:.95rem;max-width:62ch}
+.note b{color:var(--ink);font-weight:600}
+
+/* the two kinds, side by side */
+.kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.kinds div{display:flex;flex-direction:column;gap:8px;padding:16px;background:var(--panel)}
+.kinds h3{font:700 1.05rem/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase}
+.kinds .b h3{color:var(--arc)} .kinds .m h3{color:var(--gold)}
+.kinds p{color:var(--dim);font-size:.95rem}
+.kinds a{color:var(--ink)}
+
+/* odds table */
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--line)}
+thead th{font:700 .72rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+th[scope=row]{text-align:left;font:600 1rem/1.25 var(--body)}
+th small{display:block;font:400 .85rem/1.3 var(--body);color:var(--dim)}
+td{font:700 1.05rem/1 var(--display)}
+.common{--tone:var(--ink)} .rare{--tone:var(--arc)} .proto{--tone:var(--gold)}
+td.common,td.rare,td.proto,thead th.common,thead th.rare,thead th.proto{color:var(--tone)}
+
+/* rarity bands and cards */
+.band{display:flex;flex-direction:column;gap:10px}
+.band-head{display:flex;align-items:baseline;gap:12px;border-left:4px solid var(--tone);padding-left:10px}
+.band-head h3{font:700 1.3rem/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--tone)}
+.band-head span{font:500 .8rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
+.item{display:flex;flex-direction:column;gap:9px;padding:14px;background:var(--panel);min-width:0}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.item h4{font:700 1.2rem/1.1 var(--display);letter-spacing:.03em;color:var(--tone,var(--ink))}
+.tag{font:700 .66rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.says{font-size:1rem}
+.stats{display:flex;flex-wrap:wrap;gap:6px}
+.stats span{padding:4px 8px;background:var(--panel-hi);font:500 .78rem/1.2 var(--display);letter-spacing:.04em;color:var(--dim);font-variant-numeric:tabular-nums}
+.stats b{color:var(--ink);font-weight:700}
+.stats .gold,.stats .gold b{color:var(--gold)}
+.detail{color:var(--dim);font-size:.93rem;border-top:1px solid var(--line);padding-top:9px}
+
+/* module rail */
+.timeline{display:flex;flex-direction:column}
+.stop{display:grid;grid-template-columns:72px minmax(0,1fr);gap:0 16px}
+.rail{display:flex;flex-direction:column;align-items:center}
+.mark{width:72px;padding:8px 0 7px;text-align:center;background:var(--core);color:#22061a;font:700 1.35rem/1 var(--display);font-variant-numeric:tabular-nums}
+.mark small{display:block;margin-bottom:4px;font:700 .58rem/1 var(--display);letter-spacing:.16em}
+.stop.start .mark{background:var(--panel-hi);color:var(--ink);font-size:1rem;letter-spacing:.06em;text-transform:uppercase}
+.stop.start .mark small{color:var(--dim)}
+.rail::after{content:"";flex:1;width:2px;background:var(--line);margin-top:6px}
+.stop:last-child .rail::after{background:linear-gradient(var(--line),transparent)}
+.body{padding-bottom:18px;min-width:0}
+.module h4{color:var(--ink)}
+.levels{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.levels li{padding:6px 10px 7px;border:1px solid var(--line);font:700 .95rem/1 var(--display);color:var(--gold);font-variant-numeric:tabular-nums}
+.levels small{display:block;margin-bottom:4px;font:500 .62rem/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+
+/* how they add up */
+.sums{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 16px;margin:0}
+.sums dt,.sums dd{padding:10px 0;border-bottom:1px solid var(--line);margin:0}
+.sums dt{font:700 .78rem/1.5 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--arc)}
+.sums dd{color:var(--dim)} .sums dd b{color:var(--ink);font-weight:600}
+footer{color:var(--dim);font-size:.85rem;border-top:1px solid var(--line);padding-top:16px}
+a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+@media (max-width:480px){
+  .stop{grid-template-columns:54px minmax(0,1fr);gap:0 12px}
+  .mark{width:54px;font-size:1.15rem}
+  .stop.start .mark{font-size:.8rem}
+  .item{padding:12px}
+  th,td{padding:10px 6px}
+  thead th{letter-spacing:.06em;font-size:.66rem}
+  td{font-size:.95rem}
+  .sums{grid-template-columns:minmax(0,1fr)}
+  .sums dt{border-bottom:0;padding-bottom:0}
+  .sums dd{padding-top:2px}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Swarmfall · field guide</p>
+    <h1>Build the <b>ship</b></h1>
+    <p class="lede">Everything that makes your ship stronger: all 20 boosters and all 14 station modules, with what each one really does in numbers.</p>
+    <div class="kinds">
+      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every 3rd wave, and you get a stronger choice each time you leave the station after a Hive Core. Passing on all three pays ◆ 10.</p><p><a href="#boosters">20 boosters</a></p></div>
+      <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has 2; each Hive Core you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">14 modules</a></p></div>
+    </div>
+  </header>
+
+  <section class="part" id="boosters" aria-labelledby="h-boosters">
+    <div class="part-head">
+      <h2 id="h-boosters">Boosters</h2>
+      <p class="note">Each of the three cards is drawn on its own, and the same booster never appears twice in one offer. A booster already at its top level is not offered again. If nothing of the drawn rarity is left, you get a card of another rarity.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col" style="text-align:left">Chance for each card</th><th scope="col" class="common">Common</th><th scope="col" class="rare">Rare</th><th scope="col" class="proto">Prototype</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Shuttle after wave 3<small>The first one you meet</small></th><td class="common">54%</td><td class="rare">35%</td><td class="proto">11%</td></tr>
+          <tr><th scope="row">Shuttle after wave 9<small>Prototypes are creeping up</small></th><td class="common">51%</td><td class="rare">33%</td><td class="proto">16%</td></tr>
+          <tr><th scope="row">Shuttle after wave 15 and later<small>Prototypes stop getting more likely here</small></th><td class="common">51%</td><td class="rare">32%</td><td class="proto">17%</td></tr>
+          <tr><th scope="row">Leaving the station after a Hive Core<small>After waves 6, 12, 18 and so on</small></th><td class="common">never</td><td class="rare">60%</td><td class="proto">40%</td></tr>
+          <tr><th scope="row">Head Start<small>The free pick before wave 1, if you own that module</small></th><td class="common">70%</td><td class="rare">30%</td><td class="proto">never</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <section class="band common" aria-labelledby="h-r0">
+      <div class="band-head"><h3 id="h-r0">Common</h3><span>7 boosters</span></div>
+      <p class="note">The everyday picks. Most cards you are offered are these.</p>
+      <div class="grid">
+        <article class="item common" id="booster-rapid">
+          <div class="top"><h4>Rapid Feed</h4><span class="tag">Weapons</span></div>
+          <p class="says">+20% fire rate.</p>
+          <div class="stats"><span>Common</span><span>Up to <b>8</b> levels</span></div>
+          <p class="detail">Each level adds 20% of your base fire rate. A new ship fires 2.75 volleys a second; all 8 levels make that 7.2.</p>
+        </article>
+        <article class="item common" id="booster-heavy">
+          <div class="top"><h4>Heavy Rounds</h4><span class="tag">Weapons</span></div>
+          <p class="says">+25% damage.</p>
+          <div class="stats"><span>Common</span><span>Up to <b>8</b> levels</span></div>
+          <p class="detail">Each level adds 25% of your base damage. A shot does 10; all 8 levels make that 30.</p>
+        </article>
+        <article class="item common" id="booster-thrust">
+          <div class="top"><h4>Side Thrusters</h4><span class="tag">Specials</span></div>
+          <p class="says">+15% steering speed.</p>
+          <div class="stats"><span>Common</span><span>Up to <b>4</b> levels</span></div>
+          <p class="detail">Each level adds 15% steering speed. All 4 make the ship 60% quicker side to side.</p>
+        </article>
+        <article class="item common" id="booster-plate">
+          <div class="top"><h4>Hull Plate</h4><span class="tag">Armor</span></div>
+          <p class="says">+1 max hull, so you can take 1 more hit. Repairs 1 now.</p>
+          <div class="stats"><span>Common</span><span>Up to <b>5</b> levels</span></div>
+          <p class="detail">Each level adds 1 hull and repairs 1 on the spot. All 5 let you take 5 more hits.</p>
+        </article>
+        <article class="item common" id="booster-velocity">
+          <div class="top"><h4>Rail Coils</h4><span class="tag">Weapons</span></div>
+          <p class="says">+25% shot speed and +10% damage.</p>
+          <div class="stats"><span>Common</span><span>Up to <b>4</b> levels</span></div>
+          <p class="detail">Each level adds 25% shot speed and 10% damage. All 4 double shot speed and add 40% damage.</p>
+        </article>
+        <article class="item common" id="booster-magnet">
+          <div class="top"><h4>Tractor Field</h4><span class="tag">Specials</span></div>
+          <p class="says">Pull scrap in from much farther away.</p>
+          <div class="stats"><span>Common</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">Pickup reach grows from 42 to 102, 162, then 222: about five times as far at level 3.</p>
+        </article>
+        <article class="item common" id="booster-patch">
+          <div class="top"><h4>Patch Kit</h4><span class="tag">Armor</span></div>
+          <p class="says">Repair 2 hull now.</p>
+          <div class="stats"><span>Common</span><span>No limit</span></div>
+          <p class="detail">Repairs 2 hull now and nothing else. Only offered while your hull is damaged. No limit on how often.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="band rare" aria-labelledby="h-r1">
+      <div class="band-head"><h3 id="h-r1">Rare</h3><span>8 boosters</span></div>
+      <p class="note">New weapons and systems. These are what the Hive Core booster is mostly made of.</p>
+      <div class="grid">
+        <article class="item rare" id="booster-twin">
+          <div class="top"><h4>Split Barrel</h4><span class="tag">Weapons</span></div>
+          <p class="says">+1 shot in every volley.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">Each level adds 1 shot to every volley, up to 4 shots (5 with the Twin Mount module).</p>
+        </article>
+        <article class="item rare" id="booster-pierce">
+          <div class="top"><h4>Piercing Core</h4><span class="tag">Weapons</span></div>
+          <p class="says">Shots pass through 1 more enemy.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">Each level lets a shot pass through 1 more enemy, up to 3. A shot bounces (Ricochet) only after its passes are used up.</p>
+        </article>
+        <article class="item rare" id="booster-shield">
+          <div class="top"><h4>Aegis Shell</h4><span class="tag">Shields</span></div>
+          <p class="says">A shield absorbs one hit, then recharges. More levels recharge faster.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">The first level gives a shield that absorbs one hit and comes back after 15 seconds. Each level after that takes 3.5 seconds off, as does owning the Aegis Generator module. Recharge never drops below 4 seconds.</p>
+        </article>
+        <article class="item rare" id="booster-drone">
+          <div class="top"><h4>Wing Drone</h4><span class="tag">Specials</span></div>
+          <p class="says">A drone orbits your ship and fires with you.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">Each level adds 1 drone, up to 3 drones counting the Drone Bay module. A drone fires every 0.7 seconds for half your shot damage.</p>
+        </article>
+        <article class="item rare" id="booster-crit">
+          <div class="top"><h4>Weak-Point Scanner</h4><span class="tag">Weapons</span></div>
+          <p class="says">+15% chance for a shot to deal 2.5× damage.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>4</b> levels</span></div>
+          <p class="detail">Each level adds 15%: 60% of shots at level 4. A critical shot does 2.5× damage. Homing missiles never crit.</p>
+        </article>
+        <article class="item rare" id="booster-blast">
+          <div class="top"><h4>Volatile Payload</h4><span class="tag">Weapons</span></div>
+          <p class="says">Destroyed enemies explode and damage their neighbours.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">A destroyed enemy damages everything within 40, 50, then 60 units, for 60%, 120%, then 180% of your shot damage.</p>
+        </article>
+        <article class="item rare" id="booster-rico">
+          <div class="top"><h4>Ricochet</h4><span class="tag">Weapons</span></div>
+          <p class="says">After a hit, shots bounce to another enemy.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>2</b> levels</span></div>
+          <p class="detail">Each level is 1 bounce to another enemy, up to 2 bounces per shot.</p>
+        </article>
+        <article class="item rare" id="booster-scav">
+          <div class="top"><h4>Scavenger</h4><span class="tag">Specials</span></div>
+          <p class="says">+50% scrap for the rest of this run.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>2</b> levels</span></div>
+          <p class="detail">Each level adds 50%: double scrap at level 2. It multiplies with the Salvage Rig module.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="band proto" aria-labelledby="h-r2">
+      <div class="band-head"><h3 id="h-r2">Prototype</h3><span>5 boosters</span></div>
+      <p class="note">The strongest and strangest. Rare early, a little more likely each wave.</p>
+      <div class="grid">
+        <article class="item proto" id="booster-missile">
+          <div class="top"><h4>Seeker Pod</h4><span class="tag">Specials</span></div>
+          <p class="says">Launch homing missiles that deal 2.5× damage in a small blast.</p>
+          <div class="stats"><span>Prototype</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">One missile every 1.7 seconds, then every 0.85, then every 0.57. Each does 2.5× your shot damage to its target and half of that to enemies close by.</p>
+        </article>
+        <article class="item proto" id="booster-chain">
+          <div class="top"><h4>Arc Coil</h4><span class="tag">Specials</span></div>
+          <p class="says">Hits have a 20% chance to arc lightning to 2 nearby enemies.</p>
+          <div class="stats"><span>Prototype</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">Each level adds 20%: 60% of hits at level 3. The lightning jumps to up to 2 enemies near the one you hit, for 70% of the shot's damage each.</p>
+        </article>
+        <article class="item proto" id="booster-over">
+          <div class="top"><h4>Overdrive</h4><span class="tag">Weapons</span></div>
+          <p class="says">+40% fire rate and +20% damage, but −1 max hull.</p>
+          <div class="stats"><span>Prototype</span><span>Up to <b>2</b> levels</span></div>
+          <p class="detail">Each level: +40% fire rate, +20% damage, and 1 less hull. Only offered while you have more than 1 hull.</p>
+        </article>
+        <article class="item proto" id="booster-slow">
+          <div class="top"><h4>Time Dilation</h4><span class="tag">Shields</span></div>
+          <p class="says">Enemy shots travel 20% slower.</p>
+          <div class="stats"><span>Prototype</span><span>Up to <b>2</b> levels</span></div>
+          <p class="detail">Each level slows enemy shots by 20%: 40% slower at level 2.</p>
+        </article>
+        <article class="item proto" id="booster-nova">
+          <div class="top"><h4>Reactive Nova</h4><span class="tag">Shields</span></div>
+          <p class="says">Taking a hit wipes every enemy shot and blasts the whole swarm.</p>
+          <div class="stats"><span>Prototype</span><span>Up to <b>2</b> levels</span></div>
+          <p class="detail">When your hull takes a hit, every enemy shot on screen is wiped and every enemy takes 45 damage per level. A mite has 10 health on wave 1.</p>
+        </article>
+      </div>
+    </section>
+  </section>
+
+  <section class="part" id="modules" aria-labelledby="h-modules">
+    <div class="part-head">
+      <h2 id="h-modules">Station modules</h2>
+      <p class="note">In the order you get them. Hive Cores count across all your runs: the first one you ever destroy fits the first module, whichever wave it was on. Buying every level of everything costs <b>◆ 3,590</b>.</p>
+    </div>
+    <div class="timeline">
+      <div class="stop start">
+        <div class="rail"><div class="mark"><small>FROM THE</small>Start</div></div>
+        <div class="body">
+          <article class="item module" id="module-dmg">
+            <div class="top"><h4>Tuned Cannons</h4><span class="tag">Weapons</span></div>
+            <p class="says">+10% damage.</p>
+            <div class="stats"><span>Fitted on a <b>new ship</b></span><span><b>5</b> levels</span><span class="gold">◆ <b>440</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 15</li><li><small>Level 2</small>◆ 35</li><li><small>Level 3</small>◆ 70</li><li><small>Level 4</small>◆ 120</li><li><small>Level 5</small>◆ 200</li></ol>
+            <p class="detail">+10% damage per level: +50% with all 5.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop start">
+        <div class="rail"><div class="mark"><small>FROM THE</small>Start</div></div>
+        <div class="body">
+          <article class="item module" id="module-hull">
+            <div class="top"><h4>Reinforced Hull</h4><span class="tag">Armor</span></div>
+            <p class="says">Start each run able to take 1 more hit.</p>
+            <div class="stats"><span>Fitted on a <b>new ship</b></span><span><b>3</b> levels</span><span class="gold">◆ <b>290</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 30</li><li><small>Level 2</small>◆ 80</li><li><small>Level 3</small>◆ 180</li></ol>
+            <p class="detail">+1 hull per level. With all 3, a new ship takes 3 hits and the 4th ends the run.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>1</div></div>
+        <div class="body">
+          <article class="item module" id="module-shield">
+            <div class="top"><h4>Aegis Generator</h4><span class="tag">Shields</span></div>
+            <p class="says">Start each run with a shield that absorbs one hit, then recharges in 15 seconds.</p>
+            <div class="stats"><span>Fitted after your <b>1st</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>70</b></span></div>
+            
+            <p class="detail">The same shield as the Aegis Shell booster. With both, the recharge is 3.5 seconds shorter.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>2</div></div>
+        <div class="body">
+          <article class="item module" id="module-rate">
+            <div class="top"><h4>Feed Mechanism</h4><span class="tag">Weapons</span></div>
+            <p class="says">+6% fire rate.</p>
+            <div class="stats"><span>Fitted after your <b>2nd</b> Hive Core</span><span><b>5</b> levels</span><span class="gold">◆ <b>440</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 15</li><li><small>Level 2</small>◆ 35</li><li><small>Level 3</small>◆ 70</li><li><small>Level 4</small>◆ 120</li><li><small>Level 5</small>◆ 200</li></ol>
+            <p class="detail">+6% fire rate per level: +30% with all 5.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>3</div></div>
+        <div class="body">
+          <article class="item module" id="module-speed">
+            <div class="top"><h4>Mass Driver</h4><span class="tag">Weapons</span></div>
+            <p class="says">+8% bullet speed.</p>
+            <div class="stats"><span>Fitted after your <b>3rd</b> Hive Core</span><span><b>5</b> levels</span><span class="gold">◆ <b>440</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 15</li><li><small>Level 2</small>◆ 35</li><li><small>Level 3</small>◆ 70</li><li><small>Level 4</small>◆ 120</li><li><small>Level 5</small>◆ 200</li></ol>
+            <p class="detail">+8% bullet speed per level: +40% with all 5.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>4</div></div>
+        <div class="body">
+          <article class="item module" id="module-drone">
+            <div class="top"><h4>Drone Bay</h4><span class="tag">Specials</span></div>
+            <p class="says">Start each run with a wing drone that fires with you.</p>
+            <div class="stats"><span>Fitted after your <b>4th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
+            
+            <p class="detail">One drone from the first wave. It fires every 0.7 seconds for half your shot damage. Wing Drone boosters add more, up to 3.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>5</div></div>
+        <div class="body">
+          <article class="item module" id="module-scrap">
+            <div class="top"><h4>Salvage Rig</h4><span class="tag">Salvage</span></div>
+            <p class="says">+20% scrap from every run.</p>
+            <div class="stats"><span>Fitted after your <b>5th</b> Hive Core</span><span><b>3</b> levels</span><span class="gold">◆ <b>300</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 170</li></ol>
+            <p class="detail">+20% scrap per level: +60% with all 3.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>6</div></div>
+        <div class="body">
+          <article class="item module" id="module-charge">
+            <div class="top"><h4>Fast Recharge</h4><span class="tag">Shields</span></div>
+            <p class="says">Shields recharge 2 seconds sooner.</p>
+            <div class="stats"><span>Fitted after your <b>6th</b> Hive Core</span><span><b>3</b> levels</span><span class="gold">◆ <b>290</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 160</li></ol>
+            <p class="detail">2 seconds off the shield's recharge per level: 15 seconds down to 9 with all 3.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>7</div></div>
+        <div class="body">
+          <article class="item module" id="module-twin">
+            <div class="top"><h4>Twin Mount</h4><span class="tag">Weapons</span></div>
+            <p class="says">Start each run with a second barrel.</p>
+            <div class="stats"><span>Fitted after your <b>7th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>200</b></span></div>
+            
+            <p class="detail">Every volley is 2 shots from the first wave. Split Barrel boosters add to it.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>8</div></div>
+        <div class="body">
+          <article class="item module" id="module-magnet">
+            <div class="top"><h4>Tractor Coil</h4><span class="tag">Salvage</span></div>
+            <p class="says">Wider scrap pickup range.</p>
+            <div class="stats"><span>Fitted after your <b>8th</b> Hive Core</span><span><b>2</b> levels</span><span class="gold">◆ <b>70</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 20</li><li><small>Level 2</small>◆ 50</li></ol>
+            <p class="detail">Pickup reach grows from 42 to 64, then 86.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>9</div></div>
+        <div class="body">
+          <article class="item module" id="module-missile">
+            <div class="top"><h4>Seeker Rack</h4><span class="tag">Specials</span></div>
+            <p class="says">Start each run with homing missiles.</p>
+            <div class="stats"><span>Fitted after your <b>9th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>220</b></span></div>
+            
+            <p class="detail">One homing missile every 1.7 seconds from the first wave. Seeker Pod boosters make them come faster.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>10</div></div>
+        <div class="body">
+          <article class="item module" id="module-reroll">
+            <div class="top"><h4>Reroll Chips</h4><span class="tag">Salvage</span></div>
+            <p class="says">+1 booster reroll each run.</p>
+            <div class="stats"><span>Fitted after your <b>10th</b> Hive Core</span><span><b>3</b> levels</span><span class="gold">◆ <b>230</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 30</li><li><small>Level 2</small>◆ 70</li><li><small>Level 3</small>◆ 130</li></ol>
+            <p class="detail">Each level is 1 more reroll per run. A reroll deals three new boosters of the same kind of offer.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>11</div></div>
+        <div class="body">
+          <article class="item module" id="module-head">
+            <div class="top"><h4>Head Start</h4><span class="tag">Salvage</span></div>
+            <p class="says">Pick a free booster before leaving the station.</p>
+            <div class="stats"><span>Fitted after your <b>11th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
+            
+            <p class="detail">A free booster before the first wave. 70% of the cards are common and 30% rare; never a prototype.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>CORE</small>12</div></div>
+        <div class="body">
+          <article class="item module" id="module-revive">
+            <div class="top"><h4>Emergency Reboot</h4><span class="tag">Armor</span></div>
+            <p class="says">Once per run, survive a killing blow.</p>
+            <div class="stats"><span>Fitted after your <b>12th</b> Hive Core</span><span><b>1</b> level</span><span class="gold">◆ <b>300</b></span></div>
+            
+            <p class="detail">The blow that would end the run leaves you on 1 hull instead, untouchable for 2.5 seconds, and blasts every enemy for 80 damage while wiping their shots.</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="part" aria-labelledby="h-sums">
+    <div class="part-head">
+      <h2 id="h-sums">How they add up</h2>
+      <p class="note">Modules and boosters that raise the same thing multiply each other.</p>
+    </div>
+    <dl class="sums">
+      <dt>Damage</dt><dd><b>10</b> a shot × Tuned Cannons × Heavy Rounds × Rail Coils × Overdrive</dd>
+      <dt>Fire rate</dt><dd><b>2.75</b> volleys a second × Feed Mechanism × Rapid Feed × Overdrive</dd>
+      <dt>Shot speed</dt><dd>Mass Driver × Rail Coils</dd>
+      <dt>Hull</dt><dd><b>1</b> + Reinforced Hull + Hull Plate − Overdrive, never less than 1</dd>
+      <dt>Shield</dt><dd><b>15</b> seconds to recharge, less 3.5 for each shield level past the first (Aegis Generator and Aegis Shell both count), less 2 for each Fast Recharge level, never under 4</dd>
+      <dt>Scrap</dt><dd>Salvage Rig × Scavenger</dd>
+      <dt>Shots per volley</dt><dd><b>1</b> + Twin Mount + Split Barrel</dd>
+    </dl>
+  </section>
+
+  <footer>Taken from the game's own tables as of its latest version.</footer>
+</div>

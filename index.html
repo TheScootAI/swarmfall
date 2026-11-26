@@ -317,12 +317,24 @@ function noise(dur, vol = 0.5, freq = 1400, attack = 0) {
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02);
 }
+// A long, deep explosion: a falling tone with a filter that keeps its overtones soft. The overtones are what a
+// phone speaker can play; the lowest notes alone would be nearly silent there.
+function deepBoom(dur, vol = 0.55) {
+  if (!AC || meta.mute) return;
+  const t = AC.currentTime, o = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(38, t + dur);
+  f.type = 'lowpass'; f.frequency.setValueAtTime(520, t); f.frequency.exponentialRampToValueAtTime(160, t + dur);
+  g.gain.setValueAtTime(0.001, t); g.gain.linearRampToValueAtTime(vol, t + 0.05); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+}
 const sfxAt = {};
 const limited = (k, gap) => { const n = performance.now(); if (n - (sfxAt[k] || 0) < gap) return false; sfxAt[k] = n; return true; };
 const SFX = {
   hit() { if (limited('h', 50)) noise(0.05, 0.22, 3000); },
   boom() { if (limited('b', 90)) { noise(0.2, 0.3, 1100, 0.012); tone('sine', 330, 120, 0.22, 0.3); } },
   big() { noise(0.9, 0.9, 2600); tone('sawtooth', 330, 60, 0.8, 0.5); },
+  core() { deepBoom(2.8); noise(3, 0.85, 800, 0.04); tone('sine', 220, 50, 0.9, 0.5); },   // the Hive Core going up: long and low
+  rumble() { if (limited('r', 120)) { noise(0.5, 0.3, 600, 0.02); tone('triangle', 170, 70, 0.4, 0.22); } },   // the smaller blasts that follow it
   hurt() { tone('sawtooth', 520, 110, 0.4, 0.5); noise(0.3, 0.5, 2000); },
   pick() { if (limited('p', 40)) tone('sine', 880, 1500, 0.08, 0.25); },
   dive() { if (limited('d', 170)) tone('sine', 860, 520, 0.16, 0.1); },
@@ -369,7 +381,7 @@ for (const l of [ambient, sun, shipLight, flashLight]) { l.layers.enable(GLOW); 
 try { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.5; pm.dispose(); }
 catch (e) { ambient.intensity = 2.2; }
 
-let unitsPerPx = 1, shakeAmt = 0, drewPaused = false;
+let unitsPerPx = 1, shakeAmt = 0, drewPaused = false, camBase = 1, camX = 0, realDt = 0;   // camBase: the camera's normal distance; realDt: this frame's length in real time
 // Faceted, glossy surfaces: physically based, so they catch the lights and mirror the environment.
 const pbr = (c, e = 0, metal = 0.3, rough = 0.45) => new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: 1.5, flatShading: true, metalness: metal, roughness: rough });
 const glowing = m => { m.userData.glow = true; return m; };   // part() puts meshes with such a material on the GLOW layer
@@ -647,7 +659,7 @@ function resize() {
     const gw = Math.max(2, Math.round(vw * pr / 2)), gh = Math.max(2, Math.round(vh * pr / 2)); glowRT.setSize(gw, gh); bloom.setSize(gw, gh);
   }
   const camDist = (visH / 2) / Math.tan(FOV * Math.PI / 360);
-  camera.aspect = asp; camera.position.set(0, 0, camDist); camera.updateProjectionMatrix();
+  camBase = camDist; camera.aspect = asp; camera.updateProjectionMatrix();   // syncScene() places the camera every frame
   scene.fog.near = camDist + 80; scene.fog.far = camDist + 900;
   const nd = camDist + 1700, nh = 2 * nd * Math.tan(FOV * Math.PI / 360) * 1.08; nebula.m.scale.set(nh * Math.max(asp, 0.5), nh, 1); nebula.tex.repeat.set(Math.max(1, asp * 2), 1);   // fill the view at its distance
   document.documentElement.style.setProperty('--colw', Math.min(vw, W / unitsPerPx) + 'px');
@@ -689,7 +701,13 @@ const UNLOCK = {
   triplet: 13,         // after the second Hive Core
   lancer: [15, 20, 25] // the first, second and third lancer
 };
-const SKIP_SCRAP = 10;   // scrap for passing up a booster
+const SKIP_SCRAP = 10;
+// The Hive Core's death scene: time slows and the camera pushes in on the explosion, then both ease back.
+// Times are real seconds. slow: how fast game time runs at its slowest. zoom: the share of its distance the
+// camera closes. pan: how far the centre of the view moves toward the core. blastEvery: gap between the
+// smaller blasts that follow the first.
+const FINALE = { dur: 2.5, slow: 0.2, easeIn: 0.25, easeOut: 0.6, zoom: 0.34, pan: 0.75, blastEvery: 0.2 };
+const FLASH_RGB = [1, 1, 0.8];   // scrap for passing up a booster
 const UP = [
   { id: 'rapid', c: 'w', n: 'Rapid Feed', r: 0, max: 8, d: '+20% fire rate.' },
   { id: 'heavy', c: 'w', n: 'Heavy Rounds', r: 0, max: 8, d: '+25% damage.' },
@@ -748,7 +766,7 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
 // ---------- game state ----------
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
-  form: { cols: 6, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossDown: false, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
+  form: { cols: 6, top: 96 }, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossDown: false, speed: 1, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
@@ -1038,9 +1056,9 @@ function killEnemy(e) {
   despawn(e); G.run.kills++;
   const boss = e.type === 'boss';
   flash(e.x, e.y, boss ? 600000 : e.elite ? 160000 : 70000);
-  burst(e.x, e.y, e.def.col, boss ? 140 : e.elite ? 34 : 16, boss ? 380 : 210, boss ? 1.3 : 0.6); burst(e.x, e.y, [1, 1, 0.8], boss ? 60 : 5, 120, 0.4);
+  burst(e.x, e.y, e.def.col, boss ? 140 : e.elite ? 34 : 16, boss ? 380 : 210, boss ? 1.3 : 0.6); burst(e.x, e.y, FLASH_RGB, boss ? 60 : 5, 120, 0.4);
   if (boss) {
-    SFX.big(); shake(16); vibrate(120); ringFx(e.x, e.y, 20, 240, 0xffffff, 0.7);
+    SFX.core(); shake(16); vibrate(200); ringFx(e.x, e.y, 20, 240, 0xffffff, 0.7); finaleStart(e);
     G.bossDown = true; clearBoss();   // its shots already in flight finish their course
     for (const o of G.enemies) if (!o.dead && o !== e) killEnemy(o);
     for (let i = 0; i < 10 + 4 * e.tier; i++) spawnPick('scrap', e.x + rand(-40, 40), e.y + rand(-30, 30));
@@ -1067,6 +1085,29 @@ function areaDamage(x, y, r, d, skip) {
 
 // ---------- player ----------
 function shake(a) { if (!reduceMotion) shakeAmt = Math.max(shakeAmt, a); }
+// ---- the Hive Core's death scene (numbers in FINALE) ----
+const FIN = { on: false, t: 0, x: 0, y: 0, next: 0, col: FLASH_RGB, toast: false };
+const CORE_TOAST = () => toast('CORE DESTROYED', 'Returning to the station');
+function finaleStart(e) { if (reduceMotion) return; FIN.on = true; FIN.t = 0; FIN.x = e.x; FIN.y = e.y; FIN.next = FINALE.blastEvery; FIN.col = e.def.col; }
+// Moves the scene on by real time and returns how fast game time runs this frame (1 is normal speed).
+function finaleStep(real) {
+  if (!FIN.on) return 1;
+  FIN.t += real; if (FIN.t >= FINALE.dur) { FIN.on = false; if (FIN.toast) { FIN.toast = false; CORE_TOAST(); } return 1; }
+  const out = FINALE.dur - FINALE.easeOut;
+  if (FIN.t >= out) return lerp(FINALE.slow, 1, smooth((FIN.t - out) / FINALE.easeOut));
+  if (FIN.t >= FIN.next) {   // the core keeps going up: smaller blasts around where it was
+    FIN.next += FINALE.blastEvery;
+    const a = rand(TAU), d = rand(8, 46), x = FIN.x + Math.cos(a) * d, y = FIN.y + Math.sin(a) * d;
+    burst(x, y, FIN.col, 18, 170, 1); burst(x, y, FLASH_RGB, 8, 90, 0.5); ringFx(x, y, 6, 58, 0xffffff, 0.45); flash(x, y, 140000); shake(4); SFX.rumble();
+  }
+  return lerp(1, FINALE.slow, smooth(Math.min(1, FIN.t / FINALE.easeIn)));
+}
+// How far the camera has pushed in, from 0 to 1: a slow push that eases to a stop, then a quicker pull back.
+function finaleZoom() {
+  if (!FIN.on) return 0;
+  const out = FINALE.dur - FINALE.easeOut, k = Math.min(1, FIN.t / out);
+  return FIN.t < out ? 1 - (1 - k) * (1 - k) : 1 - smooth((FIN.t - out) / FINALE.easeOut);
+}
 function clearShotsNear(x, y, r) { for (const a of [G.eb, G.em]) for (const b of a) if ((b.x - x) ** 2 + (b.y - y) ** 2 <= r * r) b.dead = true; }
 function clearEnemyFire() { for (const b of G.eb) b.dead = true; for (const m of G.em) m.dead = true; }
 const repair = k => { P.hp = Math.min(S.maxHp, P.hp + k); };
@@ -1084,7 +1125,7 @@ function shipHit(x, y, r) {
   const wx = clamp(dx, -12, 12); return (dx - wx) ** 2 + (dy - 5) ** 2 < (r + 4.5) ** 2;     // wings and their tip fins
 }
 function hitPlayer() {
-  if (P.inv > 0 || !P.alive) return;
+  if (P.inv > 0 || !P.alive || FIN.on) return;   // nothing can hit the ship during the core's death scene: the camera is on the core and the ship may be out of view
   if (P.shieldUp) {   // the shield takes the hit and is gone until it recharges
     P.shieldUp = false; P.shieldT = S.shieldCD; P.inv = 0.7; ringFx(P.x, P.y, SHIELD_R, 70, 0xc79bff); burst(P.x, P.y, [0.78, 0.6, 1], 26, 190, 0.5);
     SFX.shield(); vibrate(30); clearShotsNear(P.x, P.y, 70); drawHud(); return;
@@ -1259,7 +1300,7 @@ function updateEnemies(dt) {
 let bossFrac = -1;   // the boss bar's last drawn fill, so it is only restyled when it changes
 function clearedToast() {
   const left = DRAFT_EVERY - G.wave % DRAFT_EVERY;
-  if (G.bossDown) toast('CORE DESTROYED', 'Returning to the station');
+  if (G.bossDown) { if (FIN.on) FIN.toast = true; else CORE_TOAST(); }   // during the death scene the words would sit on top of the explosion: they wait for it to end
   else toast('WAVE CLEARED', left === DRAFT_EVERY ? 'Booster shuttle inbound' : left === 1 ? 'Booster shuttle arrives after the next wave' : 'Booster shuttle arrives in ' + left + ' waves');
 }
 function updateGame(dt) {
@@ -1289,6 +1330,7 @@ const CUTS = { launch: { dur: 2.4, skip: true }, shuttle: { dur: 2.3 }, dock: { 
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function skipCut() { if (G.state === 'cut' && CUTS[G.cut.kind].skip) G.cut.t = G.cut.dur; }
 function startCut(kind, done) {
+  FIN.on = FIN.toast = false;
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
   else if (kind === 'dock') { ST.on = true; toast('DOCKING'); }
@@ -1336,9 +1378,12 @@ function arriveStation() {
 // ---------- drawing ----------
 function syncScene(dt) {
   // camera: a little sideways drift with the ship for parallax, plus shake
-  shakeAmt = Math.max(0, shakeAmt - 40 * dt);
-  camera.position.x = lerp(camera.position.x, (P.x - W / 2) * 0.035, Math.min(1, 4 * dt)) + rand(-1, 1) * shakeAmt * 0.3;
-  camera.position.y = rand(-1, 1) * shakeAmt * 0.3;
+  // During the Hive Core's death scene it also pushes in toward the core. All of it is worked out afresh each
+  // frame from camBase, so a resize in the middle of the scene changes nothing.
+  shakeAmt = Math.max(0, shakeAmt - 40 * realDt);   // real time: shake must not drag on while game time runs slow
+  const zoom = finaleZoom(), pan = FINALE.pan * zoom;
+  camX = lerp(camX, (P.x - W / 2) * 0.035, Math.min(1, 4 * dt));
+  camera.position.set(camX + TX(FIN.x) * pan + rand(-1, 1) * shakeAmt * 0.3, TY(FIN.y) * pan + rand(-1, 1) * shakeAmt * 0.3, camBase * (1 - FINALE.zoom * zoom));
   // ship
   ship.position.set(TX(P.x), TY(P.y) + Math.sin(G.time * 3) * 1.2, 0);
   ship.rotation.y = clamp(P.vx / 420, -0.7, 0.7);
@@ -1347,7 +1392,7 @@ function syncScene(dt) {
   shieldMesh.visible = P.shieldUp; M.shield.uniforms.time.value = G.time;
   // lights: a cool glow that travels with the ship, and the fading flash of the last explosion
   shipLight.position.set(TX(P.x), TY(P.y) + 6, 34); shipLight.intensity = P.alive && G.state !== 'title' && G.state !== 'browse' ? 9000 : 0;
-  flashPower *= Math.max(0, 1 - 9 * dt); flashLight.intensity = flashPower;
+  flashPower *= Math.max(0, 1 - 9 * realDt); flashLight.intensity = flashPower;   // real time, so a flash does not linger while game time runs slow
   if (P.alive && G.state === 'play' && Math.random() < 0.5) burst(P.x + rand(-2, 2), P.y + 22, THRUST_RGB, 1, 26, 0.28);   // engine exhaust
   for (let i = 0; i < 3; i++) {
     const m = droneMeshes[i]; m.visible = P.alive && i < S.drones && G.state !== 'title';
@@ -1447,6 +1492,7 @@ function toggleMute() {
 }
 
 function resetField() {
+  FIN.on = FIN.toast = false;
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; clearBoss();
@@ -1747,22 +1793,25 @@ if (finePointer) $('howto').textContent = 'Steer with the mouse, or ← → / A 
 let last = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const real = now - last, dt = Math.min(0.034, real / 1000 || 0); last = now;
+  const ms = now - last, real = Math.min(0.034, ms / 1000 || 0); last = now;
   const paused = G.state === 'pause';
   if (paused && drewPaused) return;   // a paused frame never changes: draw it once
   drewPaused = paused;
   const frozen = G.state === 'pause' || G.state === 'draft' || G.state === 'station';
+  realDt = paused ? 0 : real;
+  G.speed = frozen ? 1 : finaleStep(real);   // below 1 only during the Hive Core's death scene
+  const dt = real * G.speed;
   if (!frozen) G.time += dt;
   if (inPlay() || G.state === 'dying') updateGame(dt);
   else if (G.state === 'cut') updateCut(dt);
   else if (!frozen) { if (G.state === 'title' || G.state === 'browse') dockPose(); else P.y = shipY(); updateEnemies(dt); sweepDead(G.enemies); }
   syncScene(paused ? 0 : dt);
   draw(dt);
-  if (G.state === 'play') gfxWatch(real);
+  if (G.state === 'play') gfxWatch(ms);
 }
 resize(); soundLabels(); gfxLabels(); showTitle();
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, GFX, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, UNLOCK, GFX, FIN, camera, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
