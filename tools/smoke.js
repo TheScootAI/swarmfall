@@ -366,9 +366,13 @@ const GROUPS = {
             out.wentHome = !home.dead && home.state === 'enter'; out.jump = +Math.hypot(home.x - hx, home.y - hy).toFixed(0);
             for (const c of s.clouds) { c.on = false; c.mesh.visible = false; }
           }
-          if (since() > 4) { for (const c of s.clouds) { c.on = false; c.mesh.visible = false; } G.up.gas = 1; s.recalc(); P.gasT = 0.05; go(4); }
+          // The second cloud's rammers finish off what was left of the formation, and the wave would end (in a shuttle, on wave 4).
+          // So the rest of the scene gets a fresh formation of its own, on a wave no shuttle follows.
+          if (since() > 2) { for (const c of s.clouds) { c.on = false; c.mesh.visible = false; } for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.wave = 2; s.nextWave(); G.flights = 0; go(3.9); }
+        } else if (step === 3.9) { if (G.waveT > 5 && formed.length >= 8) { G.up.gas = 1; s.recalc(); P.gasT = 0.05; go(4); }
         } else if (step === 4) {
           const mine = s.clouds.find(c => c.on && c.kind === 0); if (mine) { out.auto = true; out.cloudAbove = +(P.y - mine.ty).toFixed(0); out.belowFormation = mine.ty > Math.max(...formed.map(e => e.y), 0) + 30; }
+          if (!out.auto) out.why = { state: G.state, gas: s.S.gas, gasT: +P.gasT.toFixed(2), alive: P.alive, enemies: G.enemies.length, on: s.clouds.filter(c => c.on).length, wave: G.wave };   // what stood in the way, if no cloud came
           if (since() > 1) { G.up.gas = 0; s.recalc(); dart = { x: 60, y: 100, vx: 0, vy: 240, r: 3.4, kind: 1, turn: s.DART.total, dead: false }; G.eb.push(dart); go(5); }   // a dart fired straight down, far to the ship's left
         } else if (step === 5 && since() > 1.5) {
           out.dartVx = +dart.vx.toFixed(1); out.dartLean = +Math.atan2(dart.vx, dart.vy).toFixed(3);
@@ -382,7 +386,7 @@ const GROUPS = {
     check(cl.chased && cl.rammed && cl.targetLost >= 0.45 && !cl.newWeapon, 'Confusion Gas: a confused enemy chases the enemy furthest from it and rams it, with no new weapon', 'the rammer was destroyed; its target lost ' + Math.round(cl.targetLost * 100) + '% of its health');
     check(cl.cleared === false, 'Confusion Gas: one cloud does not clear the swarm', cl.left + ' enemies left');
     check(cl.wentHome === true && cl.jump < 60, 'Confusion Gas: an enemy whose 5 seconds run out flies home from where it is', 'moved ' + cl.jump + ' in the frame it gave up');
-    check(cl.auto === true && cl.belowFormation === true && cl.cloudAbove >= 150 && cl.cloudAbove <= 270, 'with the booster, the ship lobs a cloud into the open lanes below the formation', cl.cloudAbove + ' above the ship');
+    check(cl.auto === true && cl.belowFormation === true && cl.cloudAbove >= 150 && cl.cloudAbove <= 270, 'with the booster, the ship lobs a cloud into the open lanes below the formation', cl.cloudAbove + ' above the ship' + (cl.auto ? '' : ' ' + JSON.stringify(cl.why)));
     check(cl.dartVx > 5 && cl.dartLean > 0.05 && cl.dartLean <= 0.105, 'a dart bends a little toward the ship, and only so far', 'lean after 1.5 s: ' + cl.dartLean + ' radians (the limit is 0.1)');
     check(cl.sidestepClears === true, 'a sidestep still clears a dart aimed at the ship');
     await page.context().close();
