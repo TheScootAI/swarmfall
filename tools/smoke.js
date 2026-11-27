@@ -481,7 +481,7 @@ const GROUPS = {
     check(sg.fired && sg.inLane > 0 && sg.laneLost > sg.laneOf * 0.5 && sg.otherUntouched, 'Laser Drone: its beam burns every enemy in its lane and nothing outside it', sg.inLane + ' in the lane lost ' + sg.laneLost + ' of ' + sg.laneOf);
     await page.context().close();
   },
-  // The latcher: clamps onto the ship, goes off after 2 seconds, and is thrown off by flicks or by a slam into the edge.
+  // The latcher: clamps onto the ship, goes off after 1.5 seconds, and is thrown off by flicks or by a slam into the edge.
   latcher: async () => {
     const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
@@ -499,9 +499,9 @@ const GROUPS = {
         else if (step === 1 && (was || since() > 3)) { out.latched = e.state === 'latch'; out.side = e.side; out.toast = document.getElementById('toast').textContent; out.noHitYet = P.hp === hp0; go(2); }
         else if (step === 2 && (e.dead || since() > 4)) { out.fuse = +since().toFixed(2); out.hurt = hp0 - P.hp; out.noCredit = G.run.kills === kills0; go(3); }   // left alone: it goes off
         else if (step === 3 && since() > 2) { fresh(); drop(-6); go(4); }
-        else if (step === 4 && (was || since() > 3)) { seq = [P.x + 45, P.x - 45, P.x + 45, P.x - 45, P.x + 45]; si = 0; P.target = seq[0]; go(5); }
+        else if (step === 4 && (was || since() > 3)) { seq = [P.x + 20, P.x - 20, P.x + 20, P.x - 20, P.x + 20, P.x - 20, P.x + 40, P.x - 40, P.x + 40, P.x - 40, P.x + 40]; si = 0; P.target = seq[0]; go(5); }   // six narrow flicks (40 units each: too small), then wide ones (80 units)
         else if (step === 5) {   // shaken: the ship flicked from side to side
-          if (Math.abs(P.x - seq[si]) < 2 && si < seq.length - 1) P.target = seq[++si];
+          if (Math.abs(P.x - seq[si]) < 2 && si < seq.length - 1) { if (si === 5) out.narrowHeld = !e.dead && e.state === 'latch'; P.target = seq[++si]; }
           if (e.dead || since() > 3) { out.shakeTime = +since().toFixed(2); out.shakeHurt = hp0 - P.hp; out.shakeKill = G.run.kills - kills0; out.turns = si; P.target = 180; go(6); }
         }
         else if (step === 6 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); drop(6); go(7); }
@@ -523,8 +523,8 @@ const GROUPS = {
           if (was || since() > 8) { out.leap = { latched: was, flight: +since().toFixed(2), hurtByTouch: hp0 - P.hp, lane: Math.round(lane), sideways: lvx > lvy }; if (!e.dead) { e.dead = true; s.scene.remove(e.g); } return res(out); } }
         requestAnimationFrame(f); })(); }));
     check(lt.latched === true && Math.abs(lt.side) === 1 && lt.toast.includes('SHAKE IT OFF') && lt.noHitYet === true, 'a latcher that reaches the ship clamps onto its side, with no hit yet, and the player is told to shake it off', JSON.stringify({ latched: lt.latched, side: lt.side, toast: lt.toast, timeout: lt.timeout }));
-    check(lt.fuse > 1.85 && lt.fuse < 2.2 && lt.hurt === 1 && lt.noCredit === true, 'left alone it goes off after 2 seconds: one hit to the ship, and no credit for it', JSON.stringify({ fuse: lt.fuse, hurt: lt.hurt, noCredit: lt.noCredit }));
-    check(lt.shakeHurt === 0 && lt.shakeKill === 1 && lt.shakeTime < 1.2 && lt.turns >= 3, 'flicking the ship from side to side throws it off and destroys it', JSON.stringify({ seconds: lt.shakeTime, turns: lt.turns, hurt: lt.shakeHurt, kills: lt.shakeKill }));
+    check(lt.fuse > 1.4 && lt.fuse < 1.7 && lt.hurt === 1 && lt.noCredit === true, 'left alone it goes off after 1.5 seconds: one hit to the ship, and no credit for it', JSON.stringify({ fuse: lt.fuse, hurt: lt.hurt, noCredit: lt.noCredit }));
+    check(lt.narrowHeld === true && lt.shakeHurt === 0 && lt.shakeKill === 1 && lt.shakeTime < 1.45 && lt.turns >= 8, 'narrow flicks do not shift it; wide ones (50 units or more, three times) throw it off and destroy it, inside its 1.5 seconds', JSON.stringify({ narrowHeld: lt.narrowHeld, seconds: lt.shakeTime, turns: lt.turns, hurt: lt.shakeHurt, kills: lt.shakeKill }));
     check(lt.slamHurt === 0 && lt.slamKill === 1 && lt.slamAtEdge === true && lt.slamTime < 1.5, 'so does one run into the edge of the field', JSON.stringify({ seconds: lt.slamTime, hurt: lt.slamHurt, kills: lt.slamKill }));
     check(lt.shield && lt.shield.latched === true && lt.shield.popped === true && lt.shield.hurt === 0, 'with a shield up it clamps on all the same, and if it goes off the shield takes the blast', JSON.stringify(lt.shield));
     check(lt.blink && lt.blink.latched === false && lt.blink.hurt === 0 && lt.blink.flewOn === true, 'touching the ship never hurts by itself: a latcher that cannot clamp on flies on by', JSON.stringify(lt.blink));

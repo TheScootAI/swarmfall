@@ -931,13 +931,14 @@ const ESCORT = { beetle: { chance: 0.8, n: 3 }, wasp: { chance: 0.6, n: 2 }, wea
 // `side` a second sideways; `hookAt` above the ship's height it levels off and hooks in from the side at `hook` a
 // second. A ship that keeps away for `chase` seconds has outrun it: it drops away and goes back to its place. It is
 // thrown off, and destroyed, in two ways:
-//   by shaking: `flicks` changes of direction, each after at least `flick` units of travel (measured from where
+//   by shaking: `flicks` changes of direction, each after at least `flick` units of travel (the owner found 2 seconds
+//     and 30 units "too easy to shake off" and asked for a wider shake and 1.5 seconds; it is measured from where
 //     the ship actually went, so it means the same at any frame rate, and a ship pinned at the edge earns nothing);
 //   by a slam: reaching the edge of the field after a run of at least slamRun units at slamSpeed a second or more.
 // off: how far out from the ship's centre it sits. turn: how hard it turns. chance, more and most: the share of the formation's back
 // rows that are latchers on the wave they arrive, how much that grows each wave, and its limit. lots: the share on
 // a test run with the bench's "Latchers: lots" on, from wave 1.
-const LATCH = { fuse: 2, off: 15, flick: 30, flicks: 3, slamRun: 60, slamSpeed: 200, wait: [1.5, 5], accel: 900, turn: 4, side: 320, wide: 100, jink: 20, hookAt: 30, hook: 420, chase: 1.2, chance: 0.04, more: 0.004, most: 0.1, lots: 0.3 };
+const LATCH = { fuse: 1.5, off: 15, flick: 50, flicks: 3, slamRun: 60, slamSpeed: 200, wait: [1.5, 5], accel: 900, turn: 4, side: 320, wide: 100, jink: 20, hookAt: 30, hook: 420, chase: 1.2, chance: 0.04, more: 0.004, most: 0.1, lots: 0.3 };
 const CLEAR = { wave: 3, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
@@ -2556,7 +2557,7 @@ const INTRO_TEXT = {
   beetle: ['Armoured. It stops partway down and launches homing missiles.', 'Shoot the missiles down, or slip past them.'],
   triplet: ['Breaks into three when it leaves the formation.', 'Shoot it while it sits and it never splits.'],
   lancer: ['Charges up, then fires a laser down the whole screen.', 'A thin red line shows the lane first. Leave it.'],
-  latcher: ['It comes round your side, clamps on and blows up 2 seconds later.', 'Shake it off: flick left and right, or slam into the edge.'],
+  latcher: ['It comes round your side, clamps on and blows up 1.5 seconds later.', 'Shake it off: flick left and right, or slam into the edge.'],
   boss: ['Sweeps across the top, firing fans and rings of shots, missiles and ships.', 'It attacks faster when it is badly hurt.'],
   cube: ['Destroy it and it breaks in two. So do the halves.', 'Finish one piece before you start on the next.'],
   warden: ['Stops, then fires a fan of laser beams down the screen.', 'Stand between the thin red lines.'],
