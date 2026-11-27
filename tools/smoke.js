@@ -198,6 +198,7 @@ const GROUPS = {
         else if (step === 2) { G.shootT = 0; if (++tries >= 40) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; return done(out); } }
         requestAnimationFrame(f); })(); }));
     check(ff.kinds && ff.kinds.includes('wasp') && ff.kinds.includes('mite') && ff.darts >= 40 && ff.other === 0 && ff.quiet === 0, 'only wasps fire from the formation, and only darts; with no wasp sitting, nothing fires', JSON.stringify(ff));
+    // (The diving wasp and beetle are the check's own: the formation's roll does not always hold a beetle.)
     // Quiet waves: on every 14th wave (never a boss wave) nothing fires. No darts from the formation or from a diving wasp, no missiles from a beetle, no laser.
     const qw = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, out = { which: [14, 28, 42, 13, 56].map(w => s.quietWave(w)).join() , shots: 0, missiles: 0, laser: false }, t0 = performance.now();
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; G.wave = 27; s.nextWave(); G.flights = 0; out.toast = document.getElementById('toast').textContent;
@@ -207,7 +208,7 @@ const GROUPS = {
         if (performance.now() - t0 > 40000) { out.timeout = step; return done(out); }
         out.shots = Math.max(out.shots, G.eb.length); out.missiles = Math.max(out.missiles, G.em.length);
         const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
-        if (step === 0) { G.shootT = 99; G.diveT = 99; if (G.waveT > 2.6 && formed.length >= G.form.size) { out.lancers = G.enemies.filter(e => e.laser).length; w = formed.find(e => e.type === 'wasp'); b = formed.find(e => e.type === 'beetle'); if (w) s.launchDive(w); if (b) s.launchDive(b); out.sent = (w ? 'wasp ' : '') + (b ? 'beetle' : ''); out.waspShots = w && w.shots; out.beetleShots = b && b.shots; at = G.time; step = 1; } }
+        if (step === 0) { G.shootT = 99; G.diveT = 99; if (G.waveT > 2.6 && formed.length >= G.form.size) { out.lancers = G.enemies.filter(e => e.laser).length; w = s.spawnEnemy('wasp', null, null, { x: 110, y: 130 }); b = s.spawnEnemy('beetle', null, null, { x: 250, y: 130 }); s.launchDive(w); s.launchDive(b); out.sent = 'wasp beetle'; out.waspShots = w && w.shots; out.beetleShots = b && b.shots; at = G.time; step = 1; } }
         else if (step === 1) { G.shootT = 0; G.diveT = 99; if (G.time - at > 4) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; return done(out); } }
         requestAnimationFrame(f); })(); }));
     check(qw.which === 'true,true,false,false,true' && qw.toast.includes('Quiet wave'), 'quiet waves: every 14th wave, but never a boss wave, and the player is told', JSON.stringify({ '14,28,42,13,56': qw.which, toast: qw.toast }));
