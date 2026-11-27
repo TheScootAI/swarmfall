@@ -510,9 +510,12 @@ const GROUPS = {
           if (lasT.state === 'dive' && P.las === lasT) out.tookLeaper = true;
           if (lasT.state === 'latch') { if (out.clampedAt === undefined) out.clampedAt = G.time; else if (G.time - out.clampedAt > 0.3) { out.letGo = P.las !== lasT && !(lasT.lit > 0); lasT.dead = true; s.scene.remove(lasT.g); go(14); } }
           else if (since() > 6) { out.latcherTimeout = lasT.state + (P.alive ? '' : ', ship lost'); go(14); } }
-        else if (step === 14) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.wave = 5; s.nextWave(); P.lasT = 0; go(15); }   // a boss wave: the drone never takes the boss itself, only what the boss lets loose
+        else if (step === 14) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; const g = s.spawnEnemy('mite', 0, 0); g.hp = g.maxHp = 1e12;   // a missile: the drone takes it and burns it out of the air
+          P.lasT = 0; P.x = P.target = 60; s.fireMissile(300, 200); lasT = G.em[G.em.length - 1]; go(14.5); }
+        else if (step === 14.5) { if (P.las === lasT) out.tookMissile = true; if (lasT.dead || since() > 3) { out.missileGone = lasT.dead; out.missileIn = +since().toFixed(2); out.shipUnhurt = P.alive; go(14.7); } }
+        else if (step === 14.7) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.wave = 5; s.nextWave(); P.lasT = 0; go(15); }   // a boss wave: the drone never takes the boss itself, only what the boss lets loose
         else if (step === 15) {
-          if (P.las && P.las.def.boss) out.tookBoss = true; if (P.las && !P.las.def.boss) out.tookHelper = true;
+          if (P.las && P.las.def) { if (P.las.def.boss) out.tookBoss = true; else out.tookHelper = true; }   // (a missile has no def)
           if (G.boss && !(G.boss.intro > 0)) { if (out.bossAt === undefined) out.bossAt = G.time; else if (G.time - out.bossAt > 5) { out.bossWatched = true; G.up.beam = 0; s.recalc(); return res(out); } }
           if (since() > 14) { out.bossTimeout = true; G.up.beam = 0; s.recalc(); return res(out); } }
         if (performance.now() - t0 > 120000) { out.stuckAt = step; return res(out); }
@@ -523,6 +526,7 @@ const GROUPS = {
     check(sg.heavyHp === 5 && sg.heavyLife && sg.twoBarrels && sg.lightStaysAway, 'Sentry Platform (station module): a tougher satellite with twin guns that lasts longer', 'health ' + sg.heavyHp);
     check(!sg.tookSitter && sg.locked === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.3 && sg.killedIn < 5 && sg.otherUntouched === true && sg.idleAgain === true && sg.lockedNext === true && sg.laserRest >= 1.95 && sg.laserRest < 2.4, 'Laser Drone: it leaves enemies in the formation alone; one in flight it locks onto, sets alight and holds until destroyed; after two seconds\' rest it takes the next to leave', JSON.stringify({ tookSitter: !!sg.tookSitter, locked: sg.locked, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, idleAgain: sg.idleAgain, lockedNext: sg.lockedNext, rest: sg.laserRest, timeout: sg.laserTimeout }));
     check(sg.tookLeaper === true && sg.letGo === true, 'Laser Drone: it takes a latcher on its way in, and lets go of one that has clamped onto the ship', JSON.stringify({ tookLeaper: sg.tookLeaper, letGo: sg.letGo, timeout: sg.latcherTimeout }));
+    check(sg.tookMissile === true && sg.missileGone === true && sg.missileIn < 1.5, 'Laser Drone: it locks onto a missile and burns it out of the air', JSON.stringify({ took: sg.tookMissile, gone: sg.missileGone, seconds: sg.missileIn }));
     check(sg.bossWatched === true && !sg.tookBoss, 'Laser Drone: it never locks onto a boss', JSON.stringify({ watched: sg.bossWatched, tookBoss: !!sg.tookBoss, tookHelper: !!sg.tookHelper, timeout: sg.bossTimeout }));
     await page.context().close();
   },
