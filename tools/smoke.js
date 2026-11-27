@@ -502,20 +502,27 @@ const GROUPS = {
         else if (step === 6 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); drop(6); go(7); }
         else if (step === 7 && (was || since() > 3)) { P.target = 14; go(8); }   // slammed: one run into the left edge
         else if (step === 8 && (e.dead || since() > 3)) { out.slamTime = +since().toFixed(2); out.slamHurt = hp0 - P.hp; out.slamAtEdge = P.x < 16; out.slamKill = G.run.kills - kills0; P.target = 180; go(9); }
-        else if (step === 9 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); P.shieldUp = true; drop(6); go(10); }   // the shield stops it like any rammer
-        else if (step === 10 && (e.dead || since() > 3)) { out.shield = { stopped: e.dead && !was, popped: !P.shieldUp, hurt: hp0 - P.hp }; P.target = 346; go(11); }
+        else if (step === 9 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); P.shieldUp = true; drop(6); go(10); }   // with the shield up it clamps on all the same, and the shield takes the blast
+        else if (step === 10 && (e.dead || since() > 4)) { out.shield = { latched: was, popped: !P.shieldUp, hurt: hp0 - P.hp }; P.target = 346; go(11); }
         else if (step === 11 && since() > 0.8 && P.x > 345) { fresh(); drop(-6); go(12); }
         else if (step === 12 && (was || since() > 3)) { go(13); }
         else if (step === 13) {   // pinned against the edge, a wiggling finger moves the ship nowhere and earns nothing
           P.target = Math.floor(since() * 12) % 2 ? 346 : 380;
-          if (since() > 1.2) { out.pinned = { still: !e.dead && e.state === 'latch', flicks: SHK.n }; e.dead = true; s.scene.remove(e.g); return res(out); }
+          if (since() > 1.2) { out.pinned = { still: !e.dead && e.state === 'latch', flicks: SHK.n }; e.dead = true; s.scene.remove(e.g); P.target = 180; go(14); }
         }
+        else if (step === 14 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); P.inv = 3; drop(6); go(15); }   // a ship still blinking from a hit: it cannot clamp on, and touching does no harm
+        else if (step === 15) { if (!e.dead && e.y > P.y + 40 || since() > 2) { out.blink = { latched: was, hurt: hp0 - P.hp, flewOn: !e.dead }; e.dead = true; s.scene.remove(e.g); go(16); } }
+        else if (step === 16 && since() > 0.3) { fresh(); e = s.spawnEnemy('latcher', 2, 0); was = false; hp0 = P.hp; go(17); }   // one sitting in the formation: nothing picks it to dive (G.diveT is held), it leaps by itself
+        else if (step === 17) { if (e.state === 'dive' && out.leapAfter === undefined) { out.leapAfter = +since().toFixed(2); at = G.time; }
+          if (was || since() > 8) { out.leap = { latched: was, flight: +since().toFixed(2), hurtByTouch: hp0 - P.hp }; if (!e.dead) { e.dead = true; s.scene.remove(e.g); } return res(out); } }
         requestAnimationFrame(f); })(); }));
     check(lt.latched === true && Math.abs(lt.side) === 1 && lt.toast.includes('SHAKE IT OFF') && lt.noHitYet === true, 'a latcher that reaches the ship clamps onto its side, with no hit yet, and the player is told to shake it off', JSON.stringify({ latched: lt.latched, side: lt.side, toast: lt.toast, timeout: lt.timeout }));
     check(lt.fuse > 1.85 && lt.fuse < 2.2 && lt.hurt === 1 && lt.noCredit === true, 'left alone it goes off after 2 seconds: one hit to the ship, and no credit for it', JSON.stringify({ fuse: lt.fuse, hurt: lt.hurt, noCredit: lt.noCredit }));
     check(lt.shakeHurt === 0 && lt.shakeKill === 1 && lt.shakeTime < 1.2 && lt.turns >= 3, 'flicking the ship from side to side throws it off and destroys it', JSON.stringify({ seconds: lt.shakeTime, turns: lt.turns, hurt: lt.shakeHurt, kills: lt.shakeKill }));
     check(lt.slamHurt === 0 && lt.slamKill === 1 && lt.slamAtEdge === true && lt.slamTime < 1.5, 'so does one run into the edge of the field', JSON.stringify({ seconds: lt.slamTime, hurt: lt.slamHurt, kills: lt.slamKill }));
-    check(lt.shield && lt.shield.stopped === true && lt.shield.popped === true && lt.shield.hurt === 0, 'the shield stops a latcher like any other rammer', JSON.stringify(lt.shield));
+    check(lt.shield && lt.shield.latched === true && lt.shield.popped === true && lt.shield.hurt === 0, 'with a shield up it clamps on all the same, and if it goes off the shield takes the blast', JSON.stringify(lt.shield));
+    check(lt.blink && lt.blink.latched === false && lt.blink.hurt === 0 && lt.blink.flewOn === true, 'touching the ship never hurts by itself: a latcher that cannot clamp on flies on by', JSON.stringify(lt.blink));
+    check(lt.leapAfter >= 1.4 && lt.leapAfter <= 5.2 && lt.leap && lt.leap.latched === true && lt.leap.flight < 2.5 && lt.leap.hurtByTouch === 0, 'a latcher in the formation leaps by itself within 5 seconds, fast, and catches a ship that stands still', JSON.stringify({ leapAfter: lt.leapAfter, ...lt.leap }));
     check(lt.pinned && lt.pinned.still === true && lt.pinned.flicks === 0, 'a ship pinned at the edge shakes nothing off', JSON.stringify(lt.pinned));
     await shot('17-latcher');
     await page.context().close();
@@ -732,7 +739,7 @@ const ABOUT = {
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
-  latcher: 'the latcher: clamping on, going off, shaken off, slammed off, stopped by the shield',
+  latcher: 'the latcher: leaping by itself, clamping on, going off, shaken off, slammed off; the shield; no harm by touch',
   stress: 'Volatile Payload in a full formation; the hull cap; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',
   bench: 'the test bench and test runs',
