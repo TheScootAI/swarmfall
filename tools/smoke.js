@@ -150,6 +150,39 @@ const GROUPS = {
       requestAnimationFrame(tick); }));
     check(bt.hits === 13, 'a beetle takes 13 hits on the wave it arrives', bt.hits + ' hits');
     check(bt.fired === 2 && bt.set === 0.8 && bt.gap > 0.7 && bt.gap <= 0.8, 'a beetle launches two missiles 0.8 seconds apart', JSON.stringify(bt));
+    // Reinforcements (SWARM): from wave 2 a fresh flight fills the formation's empty places once it has been thinned; from wave 10, two.
+    const rf = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P, SWARM } = s, out = { flights: {}, expect: {} };
+      const gone = e => { e.dead = true; s.scene.remove(e.g); }, wipe = () => { for (const e of G.enemies) gone(e); G.queue.length = 0; G.eb.length = 0; G.em.length = 0; };
+      const build = w => { wipe(); G.enemies.length = 0; G.wave = w - 1; s.nextWave(); }, fire = () => { for (const q of G.queue) q.fn(); G.queue.length = 0; };
+      const holders = () => G.enemies.filter(e => e.c != null && !e.dead);
+      for (const w of [1, 2, 6, 9, 10, 20]) { build(w); out.flights[w] = G.flights; out.expect[w] = w % 6 ? SWARM.flights.filter(x => w >= x).length : 0; }
+      // wave 8: thin the formation to the trigger, and see one flight fill half of it
+      build(8); fire(); const size = G.form.size, rows = G.form.rows, keep = Math.floor(size * SWARM.thin); out.size = size; out.built = holders().length;
+      holders().slice(keep + 1).forEach(gone);   // one too many left: nothing must come yet
+      let step = 0, frames = 0, total = 0, elites = 0, sawClear = false; const seen = new Set(), t0 = performance.now();
+      const tick = () => { P.inv = 99; frames++;
+        if (performance.now() - t0 > 25000) { out.timeout = step; return done(out); }
+        if (step === 0 && frames > 6) { out.early = G.flights !== 1 || G.queue.length > 0; gone(holders()[0]); step = 1; }
+        else if (step === 1 && G.queue.length) {
+          out.left = G.flights; out.sent = G.queue.length; out.want = Math.round(size * SWARM.refill); out.toast = document.getElementById('toast').textContent; const before = new Set(G.enemies);
+          fire(); const h = holders(), fresh = h.filter(e => !before.has(e));
+          out.unique = new Set(h.map(e => e.r * 16 + e.c)).size === h.length; out.frontMites = fresh.every(e => e.r < rows - 2 || e.type === 'mite'); out.state = G.state;
+          // wave 13: destroy everything the moment it appears, and count what the whole wave sends
+          build(13); out.size13 = G.form.size; out.flights13 = G.flights; step = 2;
+        } else if (step === 2) {
+          fire(); for (const e of G.enemies) if (!seen.has(e)) { seen.add(e); if (e.c != null) total++; if (e.elite) elites++; }
+          if (G.state === 'clear') { out.total13 = total; out.elites13 = elites; out.clearedEarly = sawClear; return done(out); }
+          if (G.flights > 0 && G.state !== 'play') sawClear = true;
+          for (const e of G.enemies) gone(e);
+        }
+        requestAnimationFrame(tick); };
+      requestAnimationFrame(tick); }));
+    check(JSON.stringify(rf.flights) === JSON.stringify(rf.expect) && rf.flights[1] === 0 && rf.flights[2] === 1 && rf.flights[10] === 2 && rf.flights[6] === 0, 'reinforcement flights: none on wave 1 or a boss wave, one from wave 2, two from wave 10', JSON.stringify(rf.flights));
+    check(rf.built === rf.size && rf.early === false, 'no reinforcements while more than ' + '35% of the formation is left', JSON.stringify({ size: rf.size, built: rf.built, early: rf.early }));
+    check(rf.sent === rf.want && rf.left === 0 && rf.toast.includes('REINFORCEMENTS') && rf.state === 'play', 'thinned to 35%, a flight half the size of the formation sets off', JSON.stringify({ size: rf.size, sent: rf.sent, want: rf.want, left: rf.left, toast: rf.toast, timeout: rf.timeout }));
+    check(rf.unique === true && rf.frontMites === true, 'reinforcements take empty places only, and mites still hold the front two rows');
+    check(rf.flights13 === 2 && rf.total13 === rf.size13 + 2 * Math.round(rf.size13 * 0.5) && rf.clearedEarly === false, 'wave 13 sends its formation and two flights before it counts as cleared', JSON.stringify({ size: rf.size13, total: rf.total13, timeout: rf.timeout }));
+    check(rf.elites13 <= 3, 'at most three elites in a wave, reinforcements included', rf.elites13 + ' elites');
     const first = await page.evaluate(() => { const s = window.__swarmfall, first = {};
       for (let w = 1; w <= 31; w++) for (let k = 0; k < 30; k++) {
         for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0;
@@ -559,7 +592,7 @@ const GROUPS = {
 };
 const ABOUT = {
   core: 'a whole run: launch, shuttle, booster, Hive Core and its death scene, docking, station, death, reload',
-  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses, the beetle\'s numbers',
+  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses, the beetle\'s numbers, reinforcements',
   bosses: 'the four later bosses: attacks, special rules, docking; the station\'s bottom bar',
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',

@@ -40,6 +40,14 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   await page.evaluate(() => { const s = window.__swarmfall; const L = s.G.enemies.filter(e => e.laser); if (L[0]) { L[0].laser.phase = 'fire'; L[0].laser.t = 1.6; } s.spawnPick('scrap', 250, 380); s.spawnPick('scrap', 300, 300); s.spawnPick('heart', 200, 330); });
   await hold(page, 500); await snap(page, '4-laser-pickups');
 
+  // reinforcements: most of the formation destroyed, and a fresh flight on its way in under the word
+  page = await open(); await start(page);
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 8; s.nextWave(); window.__tick = s => { s.P.inv = 9; }; });
+  await hold(page, 5000);
+  await page.evaluate(() => { const s = window.__swarmfall, h = s.G.enemies.filter(e => e.c != null);
+    for (const e of h.slice(Math.floor(h.length * 0.3))) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); });
+  await hold(page, 1500); await snap(page, '4b-reinforcements');
+
   // Hive Core with its fan of shots, missiles homing, seekers and lightning from the ship
   page = await open(); await start(page);
   await page.evaluate(() => { const s = window.__swarmfall; s.G.up.missile = 1; s.G.up.chain = 3; s.G.up.blast = 1; s.G.up.twin = 1; s.recalc(); s.G.wave = 5; s.nextWave(); window.__tick = s => { s.P.inv = 9; }; });
@@ -51,7 +59,7 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
 
   // a hit on the shield, then booster screen for UI over the scene
   page = await open(); await start(page);
-  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 2; s.nextWave(); s.G.queue.length = 0; for (const e of s.G.enemies) e.hp = 0; window.__tick = null; });
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 2; s.nextWave(); s.G.queue.length = 0; s.G.flights = 0; for (const e of s.G.enemies) e.hp = 0; window.__tick = null; });
   await page.waitForFunction(() => window.__swarmfall.G.state === 'cut', null, { timeout: 90000 }); await page.waitForTimeout(4000); await snap(page, '7-shuttle');
   await page.waitForFunction(() => window.__swarmfall.G.state === 'draft', null, { timeout: 90000 }); await page.waitForTimeout(300); await snap(page, '8-booster');
 

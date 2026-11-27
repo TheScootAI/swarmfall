@@ -28,6 +28,7 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 - **One hit ends the run.** A new ship has a single hull point. Everything that makes it stronger is a choice about where your scrap and booster picks go: weapons to kill faster, armor to take more hits, shields to block hits and recharge, or specials such as drones and homing missiles.
 - **New enemies are introduced.** The first time each kind of enemy or boss appears, the game slows to a stop for a moment, puts a spotlight on it and tells you what it does and what to do about it, then waits for you to touch the screen again before it carries on.
 - **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else is a hit, and all enemy fire is red: balls, darts, missiles and laser beams.
+- **Reinforcements.** From wave 2 a wave holds more than the formation you first see: when about a third of the formation is left, a fresh flight fills half of its places. From wave 10 that happens twice a wave. Bosses and wave 1 have none.
 - **Waves** grow in size and add enemy types: mites (the pawns: the largest group in every wave, holding the front two rows), wasps (fire fast darts while diving), weavers (from wave 5; zigzag), splitters (from wave 8; break into two mites when destroyed), triplets (from wave 13, after the second boss; break into three smaller copies that fan out across the screen when they leave the formation, so shoot them while they sit), lancers (one from wave 15, two from 20, three from 25; patrol above the top row from one side of the screen to the other, then stop, charge up and fire a laser beam down the screen that blocks a lane for a couple of seconds), beetles (from wave 10, taking over the top row from wave 13; armoured, launch homing missiles you can shoot down), and red-ringed elites (from wave 8; three times the health, extra scrap).
 - **Bosses** take turns, one every sixth wave, and come back tougher. Each is built on an enemy you have already met.
   - The **Hive Core** (waves 6, 36, 66) sweeps the top with fans and rings of shots, missiles and released ships.
@@ -50,6 +51,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `DRAFT_EVERY` and `BOSS_EVERY`: how often boosters and bosses come.
 - `BOSSES`: the bosses in the order they take turns. `CUBE`, `WARDEN`, `SIEGE` and `TRIAD`: each later boss's numbers.
 - `SKIP_SCRAP`: scrap for passing up a booster.
+- `SWARM`: how big the formation grows, and the reinforcements (from which waves, how thin the formation gets first, how much comes back).
 - `CLEAR`: the seconds of quiet after a wave (2) and after a boss.
 - `ENTER`: how much faster enemies fly into the formation each wave, and the limit.
 - `FINALE`: a boss's death scene (length, how slow, how often the follow-up blasts come).
@@ -64,7 +66,7 @@ There is no build for the game. Edit `index.html` and open it in a browser.
 cd tools && npm install
 node smoke.js [screenshot-dir]   # every test group in a headless phone browser (about 8 minutes); exits 1 on failure
 node smoke.js --only core,intro  # only some groups; --list names them
-node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by eye
+node shots.js <dir> "gfx=high"   # fixed pictures for judging the look by eye
 node artifact.js [out.html]      # the copy of the game published as a claude.ai artifact
 node portraits.js                # re-renders the enemy pictures for the guide
 node build-three.js              # rebuilds vendor/three.min.js (after changing three-entry.js or the three.js version)
