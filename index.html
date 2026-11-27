@@ -893,9 +893,10 @@ const SKIP_SCRAP = 10;   // scrap for passing up a booster
 const SWARM = { cols0: 4, colsPer: 0.5, maxCols: 8, rows1: 2, rows0: 3, rowsPer: 0.25, maxRows: 5, flights: [2, 10], thin: 0.35, refill: 0.5 };
 // Elites (the red ring). share: the part of a wave's enemies that are elite on the wave they first appear
 // (UNLOCK.elite); more: added each wave after, until every enemy is one (wave 40). hp: times the health.
-// scrap: what its ring is worth. It drops every time while elites are rare, and less often as they become
-// common (never less often than the enemy underneath). repair: its chance of a repair cross when the hull is
-// damaged; repairs: the most of those in one wave, so a wave full of elites does not keep the hull topped up.
+// scrap: what its ring is worth; it drops as often as the enemy underneath drops one (it used to drop every
+// time, which with elites this common would pay far more than the owner's halved scrap allows). repair: its
+// chance of a repair cross when the hull is damaged; repairs: the most of those in one wave, so a wave full of
+// elites does not keep the hull topped up.
 // size: how much bigger its model is; ring: the widest its ring may be, before that.
 const ELITE = { share: 0.04, more: 0.03, hp: 3, scrap: 3, repair: 0.3, repairs: 2, size: 1.12, ring: 17 };
 const eliteShare = n => n < UNLOCK.elite ? 0 : Math.min(1, ELITE.share + ELITE.more * (n - UNLOCK.elite));
@@ -1576,8 +1577,7 @@ function killEnemy(e) {
     return;
   }
   SFX.boom(); shake(e.elite ? 5 : 2);
-  const pScrap = e.elite ? Math.max(e.def.scrap, 1 - eliteShare(G.wave)) : e.def.scrap;
-  if (Math.random() < pScrap * SCRAP_RATE) spawnPick('scrap', e.x, e.y, e.elite ? ELITE.scrap : e.type === 'beetle' ? 2 : 1);   // one ring, worth more, in place of several
+  if (Math.random() < e.def.scrap * SCRAP_RATE) spawnPick('scrap', e.x, e.y, e.elite ? ELITE.scrap : e.type === 'beetle' ? 2 : 1);   // one ring, worth more, in place of several
   if (P.hp < S.maxHp) {
     if (!e.elite) { if (Math.random() < 0.03) spawnPick('heart', e.x, e.y); }
     else if (G.repairs < ELITE.repairs && Math.random() < ELITE.repair) { G.repairs++; spawnPick('heart', e.x, e.y); }
@@ -2466,8 +2466,8 @@ function introPlace() {
 function introShow() {
   const key = IN.key, seen = introSeen();
   if (introGone(key, IN.e)) IN.e = introFind(key) || null;   // the one first seen has gone: show another of its kind
+  if (!IN.e) { introEnd(); IN.cool = INTRO.gap; return; }   // gone while the game was slowing (a missile shot down, a ring picked up): keep the card for the next one
   seen[key] = true; if (!G.test) save();
-  if (!IN.e) { introEnd(); return; }
   const boss = BOSSES.find(b => b.type === key), text = INTRO_TEXT[key];
   $('introKind').textContent = boss ? 'New boss' : INTRO_KIND[key] || 'New enemy'; $('introName').textContent = boss ? boss.name : INTRO_NAME[key]; $('introA').textContent = text[0]; $('introB').textContent = text[1];
   $('introGo').textContent = finePointer ? 'Click to continue' : 'Tap to continue';

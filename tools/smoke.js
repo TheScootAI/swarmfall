@@ -160,7 +160,7 @@ const GROUPS = {
     const dr = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P, S } = s, real = Math.random, out = { rate: s.SCRAP_RATE, got: [] }, t0 = performance.now();
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.repairs = 0; G.state = 'play';
       const guard = s.spawnEnemy('mite', 0, 0); guard.hp = guard.maxHp = 1e12;   // keeps the wave from counting as cleared
-      const jobs = [{ roll: 0.2 }, { roll: 0.1 }, { roll: 0, elite: true }, { roll: 0, elite: true }, { roll: 0, elite: true }, { roll: 0, elite: true }], seen = new Set(G.picks);
+      const jobs = [{ roll: 0.2 }, { roll: 0.1 }, { roll: 0.2, elite: true }, { roll: 0, elite: true }, { roll: 0, elite: true }, { roll: 0, elite: true }, { roll: 0, elite: true }], seen = new Set(G.picks);
       let job = null, e = null, wait = 0, hearts = 0;
       (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99; S.maxHp = 3; P.hp = 1; guard.hp = 1e12;
         if (performance.now() - t0 > 20000) { Math.random = real; out.timeout = true; return done(out); }
@@ -170,7 +170,7 @@ const GROUPS = {
         else if (e.dead) { Math.random = real; let worth = 0; for (const p of G.picks) if (!seen.has(p)) { seen.add(p); if (p.kind === 'scrap') worth += p.worth; else hearts++; } out.got.push(worth); job = null; }
         requestAnimationFrame(f); })(); }));
     check(dr.rate === 0.5 && dr.got[0] === 0 && dr.got[1] === 1, 'scrap drops are halved: a mite pays 15% of the time, not 30%', JSON.stringify(dr));
-    check(dr.got[2] === 3 && dr.hearts === 2 && dr.repairs === 2, 'an elite\'s ring is worth 3, and elites give at most two repair crosses a wave', JSON.stringify(dr));
+    check(dr.got[2] === 0 && dr.got[3] === 3 && dr.hearts === 2 && dr.repairs === 2, 'an elite\'s ring is worth 3 and drops as often as the enemy underneath pays; elites give at most two repair crosses a wave', JSON.stringify(dr));
     // Reinforcements (SWARM): from wave 2 a fresh flight fills the formation's empty places once it has been thinned; from wave 10, two.
     const rf = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P, SWARM } = s, out = { flights: {}, expect: {} };
       const gone = e => { e.dead = true; s.scene.remove(e.g); }, wipe = () => { for (const e of G.enemies) gone(e); G.queue.length = 0; G.eb.length = 0; G.em.length = 0; };
@@ -662,10 +662,10 @@ const ABOUT = {
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
-  stress: 'every booster at once on late waves; pause; the Graphics button',
+  stress: 'Volatile Payload in a full formation; the hull cap; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',
   bench: 'the test bench and test runs',
-  intro: 'enemy introductions',
+  intro: 'enemy introductions, and the same for the first scrap ring and the first missile',
   small: 'a short phone: bottom bars and "More below" on every screen',
 };
 
