@@ -1084,19 +1084,27 @@ const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, hello: 2, lead: 1.2, rush: 
   line: 2, lineHold: 1, per: 0.25, perfect: 10,   // what it pays (30 at the most, about what the first six waves pay: the owner's choice, after their first numbers, 5, 1 and 20, came to 85): for every hologram of one line (a ring that shows for lineHold seconds where the last one went, then flies to the ship), for each hologram at the end, and for all of them
   span: 620, clear: 40, split: 0.2, over: 60,   // how a path's heights are placed on the field: see simYAt(). With the lines further from the ship (740 and 70) the fifth stage was only just possible: the bot cleared it 2 times in 6
   end: { card: 0.7, count: 1.3, beat: 0.55, wait: 0.35, out: 0.3, lift: 0.3 },   // the result card: seconds before it shows, the count-up for a full score, the beat between its lines, the least time before a touch carries on, its fade, and the wait after the finger lifts
+  side: 13,   // a pair flies this far to each side of its path
+  // The lines the holograms fly, as [across, down] shares of the field (down is placed by simYAt). Each is a smooth
+  // curve through its points, flown at an even pace point to point. They are round on purpose: big arcs, a loop,
+  // a flat pass just above the ship, a rising diagonal.
   paths: {
-    drop: [[0.5, -0.1], [0.5, 0.15], [0.5, 0.4], [0.5, 0.56], [0.36, 0.64], [0.2, 0.56], [0.14, 0.35], [0.14, 0.1], [0.14, -0.12]],
-    climb: [[-0.12, 0.42], [0.1, 0.6], [0.3, 0.62], [0.32, 0.4], [0.32, 0.2], [0.32, 0], [0.32, -0.14]],
-    sweep: [[0.86, -0.1], [0.86, 0.2], [0.86, 0.48], [0.76, 0.63], [0.64, 0.56], [0.62, 0.32], [0.62, 0.08], [0.62, -0.14]],
-    loop: [[0.25, -0.1], [0.25, 0.2], [0.27, 0.44], [0.46, 0.6], [0.66, 0.48], [0.6, 0.28], [0.44, 0.32], [0.44, 0.5], [0.6, 0.62], [0.9, 0.5], [1.14, 0.36]],
-    zig: [[0.5, -0.1], [0.5, 0.08], [0.5, 0.28], [0.3, 0.4], [0.68, 0.5], [0.36, 0.62], [0.1, 0.5], [-0.14, 0.36]],
+    drop: [[0.5, -0.1], [0.5, 0.12], [0.5, 0.34], [0.48, 0.52], [0.36, 0.63], [0.2, 0.58], [0.12, 0.4], [0.12, 0.18], [0.12, -0.12]],   // straight down the middle, then round and out up the side
+    arc: [[0.1, -0.1], [0.1, 0.16], [0.16, 0.38], [0.32, 0.56], [0.5, 0.63], [0.68, 0.56], [0.84, 0.38], [0.9, 0.16], [0.9, -0.12]],     // in at one top corner, a wide arc down past the ship, out at the other
+    low: [[-0.12, 0.6], [0.12, 0.63], [0.36, 0.63], [0.6, 0.63], [0.8, 0.57], [0.88, 0.42], [0.76, 0.3], [0.54, 0.26], [0.34, 0.12], [0.3, -0.14]],   // in from the side, flat across just above the ship, then curling back over the top
+    rise: [[-0.12, 0.62], [0.08, 0.63], [0.28, 0.61], [0.44, 0.53], [0.54, 0.41], [0.6, 0.27], [0.64, 0.1], [0.66, -0.14]],   // in low from the side and up across the field on a slant
+    cross: [[0.08, -0.1], [0.12, 0.12], [0.26, 0.3], [0.44, 0.46], [0.64, 0.58], [0.82, 0.6], [0.92, 0.46], [0.92, 0.22], [0.92, -0.12]],   // corner to far side on a slant, then up the wall
+    loop: [[0.24, -0.1], [0.24, 0.2], [0.28, 0.44], [0.46, 0.62], [0.68, 0.52], [0.62, 0.36], [0.4, 0.38], [0.38, 0.54], [0.58, 0.63], [0.88, 0.52], [1.14, 0.38]],   // down a lane, once round, and off the side
+    weave: [[0.5, -0.1], [0.5, 0.1], [0.36, 0.24], [0.42, 0.4], [0.6, 0.48], [0.62, 0.6], [0.44, 0.63], [0.2, 0.56], [-0.14, 0.46]],   // an easy S down the middle and off the side
   },
+  // Five lines to a stage, a stage to a boss: [path, flipped left to right, how its eight fly]. 'file': one after another.
+  // 'pair': four rows of two, side by side. 'split': two files of four that mirror each other, taking turns to come in.
   stages: [
-    [['drop', 0], ['sweep', 0], ['climb', 0], ['zig', 0], ['loop', 0]],
-    [['sweep', 1], ['drop', 1], ['loop', 1], ['climb', 1], ['zig', 1]],
-    [['zig', 0], ['climb', 1], ['drop', 0], ['loop', 1], ['sweep', 0]],
-    [['loop', 0], ['zig', 1], ['sweep', 1], ['drop', 1], ['climb', 0]],
-    [['climb', 1], ['loop', 0], ['zig', 0], ['sweep', 1], ['drop', 0]],
+    [['drop', 0, 'pair'], ['low', 0, 'split'], ['arc', 0, 'file'], ['rise', 0, 'split'], ['loop', 0, 'file']],
+    [['cross', 0, 'split'], ['drop', 1, 'pair'], ['low', 1, 'file'], ['weave', 0, 'file'], ['arc', 1, 'split']],
+    [['rise', 1, 'file'], ['loop', 1, 'split'], ['low', 0, 'pair'], ['cross', 1, 'file'], ['weave', 1, 'split']],
+    [['arc', 0, 'pair'], ['rise', 0, 'split'], ['drop', 0, 'file'], ['loop', 1, 'file'], ['low', 1, 'split']],
+    [['weave', 0, 'pair'], ['cross', 0, 'split'], ['arc', 1, 'file'], ['low', 0, 'file'], ['loop', 0, 'split']],
   ] };
 const SIM_KINDS = ['mite', 'wasp', 'weaver', 'splitter', 'beetle'];   // the shapes the holograms take, one kind to a line
 const HOLO_RGB = [0.44, 0.78, 1];
@@ -2479,8 +2487,11 @@ function startSim() {
 function simBegin() {
   if (!SIMS.on || !SIMS.wait || SIMS.waitT < SIM.hello) return;
   SIMS.wait = false; $('simHello').classList.remove('on'); P.fireT = 0.5; G.queue = []; G.waveT = 0; SFX.card();
-  SIM.stages[simStageOf(G.wave)].forEach(([name, mirror], g) => { const path = simPath(name, mirror), kind = SIM_KINDS[g % SIM_KINDS.length];
-    for (let k = 0; k < SIM.n; k++) G.queue.push({ t: SIM.lead + g * SIM.every + k * SIM.gap, fn: () => spawnHolo(kind, path, g) }); });
+  SIM.stages[simStageOf(G.wave)].forEach(([name, mirror, form], g) => { const path = simPath(name, mirror), other = simPath(name, !mirror), kind = SIM_KINDS[g % SIM_KINDS.length], t0 = SIM.lead + g * SIM.every;
+    for (let k = 0; k < SIM.n; k++) { const odd = k & 1;
+      if (form === 'pair') G.queue.push({ t: t0 + (k - odd) * SIM.gap, fn: () => spawnHolo(kind, path, g, odd ? SIM.side : -SIM.side) });   // two at a time, a row every two beats
+      else if (form === 'split') G.queue.push({ t: t0 + k * SIM.gap, fn: () => spawnHolo(kind, odd ? other : path, g, 0) });               // a beat apart, from one side and then the other
+      else G.queue.push({ t: t0 + k * SIM.gap, fn: () => spawnHolo(kind, path, g, 0) }); } });
   G.queue.sort((a, b) => a.t - b.t);
 }
 function simTally() { $('simTally').textContent = 'HIT ' + SIMS.hits + ' / ' + SIMS.total; }
@@ -2495,14 +2506,14 @@ function simLine(x, y) {
   const el = $('simPlus'); el.textContent = '◆ +' + SIM.line; el.style.left = clamp((introV.x * 0.5 + 0.5) * window.innerWidth, 44, window.innerWidth - 44) + 'px'; el.style.top = (0.5 - introV.y * 0.5) * window.innerHeight + 'px';
   el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
 }
-function spawnHolo(kind, path, line) {
-  const e = spawnEnemy(kind, null, null, { x: path[0] * W, y: simYAt(path[1]) });
+function spawnHolo(kind, path, line, px) {   // px: how far to the side of its path it flies (a pair)
+  const e = spawnEnemy(kind, null, null, { x: path[0] * W + px, y: simYAt(path[1]) }); e.px = px;
   e.holo = true; e.path = path; e.state = 'sim'; e.u = 0; e.hp = e.maxHp = 1; e.z = 0; e.line = line; e.rushIn = path[1] < SIM.split;   // one that comes in over the top edge comes in fast
   for (const m of e.meshes) { m.material = m.userData.base = M.holo; m.layers.enable(GLOW); }   // its model was built for it alone, so the layer goes no further
 }
 function updateHolo(e, dt) {
   e.u += dt / SIM.dur * (e.rushIn ? SIM.rush : 1); if (e.u >= 1) { despawn(e); return; }   // it has flown its line and gone
-  const f = e.u * SIM_STEPS, i = Math.min(SIM_STEPS - 1, Math.floor(f)), t = f - i, p = e.path, nx = lerp(p[i * 2], p[i * 2 + 2], t) * W, h = lerp(p[i * 2 + 1], p[i * 2 + 3], t);
+  const f = e.u * SIM_STEPS, i = Math.min(SIM_STEPS - 1, Math.floor(f)), t = f - i, p = e.path, nx = lerp(p[i * 2], p[i * 2 + 2], t) * W + e.px, h = lerp(p[i * 2 + 1], p[i * 2 + 3], t);
   if (h >= SIM.split) e.rushIn = false;   // down among the lines: its own pace from here
   e.vx = (nx - e.x) / Math.max(dt, 0.001); e.x = nx; e.y = simYAt(h); e.z = 0;
 }
@@ -3241,7 +3252,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, simYAt, shipY, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

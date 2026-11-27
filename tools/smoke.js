@@ -555,7 +555,7 @@ const GROUPS = {
   // The simulation: the holographic drill the station runs once the ship has docked after a boss.
   sim: async () => {
     let { page, st, waitFor, playTo, shot } = await open('?gfx=low&intro=off&debug'), s;   // the simulation is on here; every other group switches it off with ?sim=off
-    // An aiming bot: it goes for the lowest hologram, leading it by the time a shot takes to get there. It also watches the rules.
+    // An aiming bot: it takes the holograms in the order they came out, leading each by the time a shot takes to get there. It also watches the rules.
     const drill = quick => page.evaluate(quick => new Promise(res => { const w = window.__swarmfall, { G, P, S, SIMS } = w, out = { fire: 0, hurt: false, paused: null, kills0: G.run.kills, scrap0: G.run.scrap, topHit: 1e9 }, t0 = performance.now(), seen = new Map(); let touched = 0, pausedAt = 0, moved = null;
       (function f() {
         if (performance.now() - t0 > 120000) { out.timeout = G.state; return res(out); }
@@ -574,7 +574,7 @@ const GROUPS = {
           // the first whole line: its ring is shown where the last hologram went, stays put for a second, then flies to the ship and is paid
           if (SIMS.lines >= 1 && !out.ring && G.picks.length) { const p = G.picks[0], el = document.getElementById('simPlus'); out.ring = { worth: p.worth, home: p.home, hold: +p.hold.toFixed(2), label: el.textContent, shown: el.classList.contains('go'), paidYet: +(G.run.scrap - out.scrap0).toFixed(2), x: p.x, y: p.y, at: G.waveT, moved: 0, from: Math.round(Math.hypot(p.x - P.x, p.y - P.y)) }; }
           if (out.ring && out.ring.took === undefined) { const p = G.picks[0]; if (p && p.hold > 0) out.ring.moved = Math.max(out.ring.moved, Math.hypot(p.x - out.ring.x, p.y - out.ring.y)); if (!p) { out.ring.took = +(G.waveT - out.ring.at).toFixed(2); out.ring.paid = +(G.run.scrap - out.scrap0).toFixed(2); } }
-          let t = null; for (const e of G.enemies) if (!e.dead && e.holo) { seen.set(e, e.y); if (!t || e.y > t.y) t = e; }
+          let t = null; for (const e of G.enemies) if (!e.dead && e.holo) { seen.set(e, e.y); if (!t || e.u > t.u) t = e; }
           if (t && touched < 3 && G.waveT > 3) { t.u = t.u; touched++; out.touchAt = Math.hypot(t.x - P.x, t.y - P.y) < 400; const x = t.x, y = t.y; moved = t; t.x = P.x; t.y = P.y; requestAnimationFrame(() => { if (P.hp < out.hp0 || !P.alive) out.hurt = true; }); }   // a hologram put right on top of the ship: nothing must come of it
           if (t) P.target = Math.max(14, Math.min(346, t.x + t.vx * Math.max(0, P.y - t.y) / S.shotSpeed));
           if (SIMS.ended && out.hits === undefined) { out.hits = SIMS.hits; out.lines = SIMS.lines; out.reward = SIMS.reward; out.perfect = SIMS.perfect; out.took = +G.waveT.toFixed(1); out.paid = +(G.run.scrap - out.scrap0).toFixed(2); out.kills = G.run.kills - out.kills0; out.scrapShown0 = +document.getElementById('scrap').textContent.replace(/\D/g, ''); }
