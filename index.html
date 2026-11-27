@@ -1332,7 +1332,7 @@ function latchOn(e) {
   let side = e.x < P.x ? -1 : 1;
   for (const o of G.enemies) if (!o.dead && o.state === 'latch' && o.side === side) { side = -side; break; }
   for (const o of G.enemies) if (!o.dead && o.state === 'latch' && o.side === side) return false;
-  e.state = 'latch'; e.side = side; e.fuse = LATCH.fuse; e.tick = 0; e.z = 0; e.lead = null;
+  e.state = 'latch'; e.side = side; e.fuse = LATCH.fuse; e.tick = 0; e.z = 0; e.lead = null; e.lit = 0;   // and any fire the Laser Drone had set on it goes out: once it is on the ship it has to be shaken off
   SFX.latch(); vibrate(40); toast('SHAKE IT OFF', finePointer ? 'Flick left and right, or hit the edge' : 'Flick left and right, or slam the edge');
   return true;
 }
@@ -1846,11 +1846,12 @@ function updateSats(dt) {
 // ---- Laser Drone ----
 // The drone picks the nearest enemy in flight and holds a thin yellow beam on it until it is destroyed, or flies
 // out of reach, or goes back to its place. Only enemies in flight (the owner's rule): one that has left the formation
-// to dive, a confused one, a latcher (clamped on included), a boss, or anything a boss or a splitter let loose. Never
-// one sitting in the formation or still flying in to it. The beam sets it alight, and the fire is what hurts it:
+// to dive (a leaping latcher too), a confused one, a boss, or anything a boss or a splitter let loose. Never one
+// sitting in the formation or still flying in to it, and never a latcher that has clamped onto the ship: the owner
+// wants that one shaken off, not burned off. The beam sets it alight, and the fire is what hurts it:
 // LASER.dps of a shot every second, for as long as the beam is on it and for LASER.burn seconds after. Unlike a
 // Flame Cloud's, this fire does finish an enemy off.
-const inFlight = e => e.state === 'dive' || e.state === 'ram' || e.state === 'latch' || e.state === 'boss';
+const inFlight = e => e.state === 'dive' || e.state === 'ram' || e.state === 'boss';
 function updateLaser(dt) {
   const lv = Math.min(3, S.beam);
   if (!lv || G.state !== 'play') { P.las = null; return; }

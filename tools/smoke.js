@@ -475,7 +475,13 @@ const GROUPS = {
           if (since() > 8) { out.laserTimeout = true; G.up.beam = 0; s.recalc(); return res(out); }
         }
         else if (step === 10 && since() > 0.6) { out.idleAgain = !P.las; const n = formed.find(e => e !== other); lasT = n; if (n) s.launchDive(n); go(11); }   // none in flight again: it waits; then the next to leave
-        else if (step === 11 && (P.las === lasT || since() > 3)) { out.lockedNext = !!lasT && P.las === lasT; G.up.beam = 0; s.recalc(); return res(out); }
+        else if (step === 11 && (P.las === lasT || since() > 3)) { out.lockedNext = !!lasT && P.las === lasT; if (lasT) { lasT.dead = true; s.scene.remove(lasT.g); } go(12); }
+        else if (step === 12 && since() > 0.3) {   // a latcher on its way is fair game; once it has clamped onto the ship the drone leaves it alone
+          P.inv = 0; lasT = s.spawnEnemy('latcher', null, null, { x: P.x + 6, y: P.y - 200 }); lasT.hp = lasT.maxHp = 1e9; s.launchDive(lasT); lasT.x = P.x + 6; lasT.y = P.y - 200; lasT.vx = 0; lasT.vy = 120; go(13); }
+        else if (step === 13) { P.inv = 0;
+          if (lasT.state === 'dive' && P.las === lasT) out.tookLeaper = true;
+          if (lasT.state === 'latch') { if (out.clampedAt === undefined) out.clampedAt = G.time; else if (G.time - out.clampedAt > 0.3) { out.letGo = P.las !== lasT && !(lasT.lit > 0); lasT.dead = true; s.scene.remove(lasT.g); G.up.beam = 0; s.recalc(); return res(out); } }
+          if (since() > 6) { out.latcherTimeout = true; G.up.beam = 0; s.recalc(); return res(out); } }
         if (performance.now() - t0 > 120000) { out.stuckAt = step; return res(out); }
         requestAnimationFrame(f); })(); }));
     check(sg.ahead === 150 && sg.life && sg.hp === 2 && sg.oneBarrel && sg.hurtSwarm >= 2, 'Sentry Satellite: set down ahead of the ship, it fires at the swarm by itself', sg.hurtSwarm + ' enemies destroyed or damaged in 3 seconds · ' + JSON.stringify(sg));
@@ -483,6 +489,7 @@ const GROUPS = {
     check(sg.ranOut === true, 'Sentry Satellite: it runs out when its time is up');
     check(sg.heavyHp === 5 && sg.heavyLife && sg.twoBarrels && sg.lightStaysAway, 'Sentry Platform (station module): a tougher satellite with twin guns that lasts longer', 'health ' + sg.heavyHp);
     check(!sg.tookSitter && sg.locked === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.3 && sg.killedIn < 5 && sg.otherUntouched === true && sg.idleAgain === true && sg.lockedNext === true, 'Laser Drone: it leaves enemies in the formation alone; one in flight it locks onto, sets alight and holds until destroyed, then takes the next to leave', JSON.stringify({ tookSitter: !!sg.tookSitter, locked: sg.locked, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, idleAgain: sg.idleAgain, lockedNext: sg.lockedNext, timeout: sg.laserTimeout }));
+    check(sg.tookLeaper === true && sg.letGo === true, 'Laser Drone: it takes a latcher on its way in, and lets go of one that has clamped onto the ship', JSON.stringify({ tookLeaper: sg.tookLeaper, letGo: sg.letGo, timeout: sg.latcherTimeout }));
     await page.context().close();
   },
   // The latcher: clamps onto the ship, goes off after 1.5 seconds, and is thrown off by flicks or by a slam into the edge.
