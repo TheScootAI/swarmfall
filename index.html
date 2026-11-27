@@ -906,6 +906,11 @@ const SCRAP_RATE = 0.5;
 // Volatile Payload, by level: a destroyed enemy hurts whatever is within r of it for dmg of one shot. An enemy
 // that a blast destroys sets off no blast of its own: at levels 2 and 3 that chain cleared the whole formation.
 const BLAST = { r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
+// Escorts: when a stronger enemy leaves the formation, sometimes a few mites leave with it and fly just ahead of it
+// as pawns. chance and n: how often, and how many, by the kind they escort (a beetle most of all: its three form a
+// wall in front of it while it stops to launch its missiles). ahead: how far in front of it they fly; gap: how far
+// apart; from: the first wave it can happen on.
+const ESCORT = { beetle: { chance: 0.7, n: 3 }, wasp: { chance: 0.3, n: 2 }, weaver: { chance: 0.3, n: 2 }, splitter: { chance: 0.3, n: 2 }, ahead: 30, gap: 24, from: 4 };
 const CLEAR = { wave: 3, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
@@ -1087,7 +1092,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) {
@@ -1140,9 +1145,27 @@ function launchDive(e) {
   }
 }
 function startDive(e) {
-  e.state = 'dive'; e.t = 0; e.z = 0;
+  e.state = 'dive'; e.t = 0; e.z = 0; e.lead = null;
   e.vx = (e.x < W / 2 ? -1 : 1) * rand(40, 110) * (Math.random() < 0.7 ? 1 : -1); e.vy = -rand(60, 110);
   e.shots = e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.def.missiles || 0; e.shootT = rand(0.3, 0.6);
+}
+// Sends up to n mites out of the formation with a stronger enemy that has just left it: the nearest ones, which
+// then fly side by side just ahead of it (see updateDive). Returns how many went.
+function sendEscort(lead, n) {
+  let sent = 0;
+  for (let i = 0; i < n; i++) {
+    let best = null, bd = 1e9;
+    for (const m of G.enemies) { if (m.dead || m.state !== 'form' || m.type !== 'mite' || m.c == null) continue; const d = (m.x - lead.x) ** 2 + (m.y - lead.y) ** 2; if (d < bd) { bd = d; best = m; } }
+    if (!best) break;
+    startDive(best); best.lead = lead; best.off = (i - (n - 1) / 2) * ESCORT.gap; sent++;
+  }
+  return sent;
+}
+// An enemy leaves the formation to dive, and from wave ESCORT.from a stronger one sometimes takes mites with it.
+function launchFromFormation(e) {
+  launchDive(e);
+  const E = ESCORT[e.type];
+  if (E && e.state === 'dive' && G.wave >= ESCORT.from && !G.boss && Math.random() < E.chance) sendEscort(e, E.n);
 }
 // Dive while holding a lane: used where several enemies leave together and must arrive spread out.
 // Sends a released enemy out to its own lane, so a group spreads across the field. The lane is only for its first
@@ -1206,7 +1229,12 @@ function updateDive(e, dt) {
       e.vy = Math.min(e.shots > 0 ? sp : sp * 2.4, e.vy + 260 * dt);
       if (steer) e.vx += (clamp((P.x - e.x) * 0.8, -70, 70) - e.vx) * Math.min(1, 2 * dt);
     }
+  } else if (e.lead && !e.lead.dead && e.lead.state === 'dive') {
+    // an escort: holds its place just ahead of the enemy it left with, matching its speed, so it is shot first
+    const L = e.lead;
+    e.vx = L.vx + clamp((clamp(L.x + e.off, 14, W - 14) - e.x) * 6, -260, 260); e.vy = L.vy + clamp((L.y + ESCORT.ahead - e.y) * 6, -260, 260);
   } else {
+    e.lead = null;   // nobody to escort (any more): an ordinary dive from here
     e.vy = Math.min(sp, e.vy + 330 * dt);
     const k = e.type === 'splitter' ? (e.t < 0.55 ? 4 : 0) : e.type === 'weaver' ? 0.6 : 1.5;
     if (e.lane != null) e.vx += (clamp((e.lane + clamp(P.x - e.lane, -28, 28) - e.x) * 3.5, -320, 320) - e.vx) * Math.min(1, 5 * dt);   // hold the lane, lean a little toward the player
@@ -1984,7 +2012,7 @@ function updateEnemies(dt) {
   const alive = G.enemies.length, maxDive = Math.min(6, 2 + Math.floor(G.wave / 3));
   G.diveT -= dt * (alive <= 4 ? 4 : 1);
   if (G.diveT <= 0 && formed.length && diving < maxDive) {
-    launchDive(pick(formed));   // lancers are not in this list: they never dive
+    launchFromFormation(pick(formed));   // lancers are not in this list: they never dive
     G.diveT = Math.max(0.45, 2.3 - G.wave * 0.12) * rand(0.6, 1.3);
   }
   if (!G.boss) {   // shots from the formation: wasps and beetles, then anyone from UNLOCK.formationFire
@@ -2722,7 +2750,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

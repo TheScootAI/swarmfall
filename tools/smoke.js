@@ -156,6 +156,25 @@ const GROUPS = {
       requestAnimationFrame(tick); }));
     check(bt.hits === 13, 'a beetle takes 13 hits on the wave it arrives', bt.hits + ' hits');
     check(bt.fired === 2 && bt.set === 0.8 && bt.gap > 0.7 && bt.gap <= 0.8, 'a beetle launches two missiles 0.8 seconds apart', JSON.stringify(bt));
+    // Escorts (ESCORT): mites that leave the formation with a stronger enemy fly side by side just ahead of it. A beetle's three
+    // make a wall in front of it while it stops to launch its missiles. With the beetle gone they carry on as ordinary divers.
+    const es = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, E = s.ESCORT, out = { table: E.beetle.n + ' ' + E.beetle.chance + ' ' + E.wasp.chance + ' ' + !!E.mite + !!E.triplet + !!E.lancer }, t0 = performance.now();
+      for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; G.wave = s.UNLOCK.beetleTopRow - 1; s.nextWave(); G.flights = 0;
+      for (const q of G.queue) q.fn(); G.queue.length = 0;
+      let step = 0, b = null, esc = [], frames = 0;
+      (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99; P.x = P.target = 40; G.em.length = 0;
+        if (performance.now() - t0 > 40000) { out.timeout = step; return done(out); }
+        const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
+        if (step === 0 && formed.length >= G.form.size) { b = formed.filter(e => e.type === 'beetle').sort((p, q) => Math.abs(p.x - 180) - Math.abs(q.x - 180))[0];
+          s.launchDive(b); out.sent = s.sendEscort(b, E.beetle.n); esc = G.enemies.filter(e => e.lead === b); out.mites = esc.length === out.sent && esc.every(e => e.type === 'mite' && e.state === 'dive'); step = 1; }
+        else if (step === 1 && b.shots === 1) {   // the beetle has stopped and launched its first missile: where is its escort?
+          out.ahead = esc.map(m => Math.round(m.y - b.y)); out.across = esc.map(m => Math.round(m.x - b.x)).sort((p, q) => p - q); out.alive = esc.every(m => !m.dead && m.state === 'dive');
+          b.dead = true; s.scene.remove(b.g); step = 2; }
+        else if (step === 2 && ++frames > 5) { out.released = esc.every(m => m.lead === null && (m.dead || m.state === 'dive')); for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } return done(out); }
+        requestAnimationFrame(f); })(); }));
+    check(es.table === '3 0.7 0.3 falsefalsefalse' && es.sent === 3 && es.mites === true, 'escorts: three of the nearest mites leave with a beetle; mites, triplets and lancers get none', JSON.stringify(es));
+    check(es.alive === true && es.ahead.every(d => d > 18 && d < 42) && es.across.length === 3 && Math.abs(es.across[0] + 24) < 9 && Math.abs(es.across[1]) < 9 && Math.abs(es.across[2] - 24) < 9, 'a beetle\'s escort holds a wall just in front of it while it launches its missiles', JSON.stringify({ ahead: es.ahead, across: es.across }));
+    check(es.released === true, 'with the beetle gone, its escort carries on as ordinary divers');
     // Drops. Every enemy's scrap chance is halved (SCRAP_RATE): a mite pays 15% of the time. An elite's ring is worth 3. Elites give at most two repair crosses a wave.
     const dr = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P, S } = s, real = Math.random, out = { rate: s.SCRAP_RATE, got: [] }, t0 = performance.now();
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.repairs = 0; G.state = 'play';
@@ -660,7 +679,7 @@ const GROUPS = {
 };
 const ABOUT = {
   core: 'a whole run: launch, shuttle, booster, Hive Core and its death scene, docking, station, death, reload',
-  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses, the beetle\'s numbers, reinforcements',
+  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses, the beetle\'s numbers, escorts, reinforcements',
   bosses: 'the four later bosses: attacks, special rules, docking; the station\'s bottom bar',
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',

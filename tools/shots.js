@@ -47,6 +47,13 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 39; s.nextWave(); s.G.shootT = 0.4; window.__tick = s => { s.P.inv = 9; s.P.fireT = 9; }; });
   await hold(page, 6500); await snap(page, '4a-all-elites');
 
+  // a beetle stopped to launch its missiles, behind the wall of three mites that left the formation with it
+  page = await open(); await start(page);
+  await page.evaluate(() => { const s = window.__swarmfall, G = s.G; G.wave = 12; s.nextWave(); G.flights = 0; let b = null;
+    window.__tick = s => { s.P.inv = 9; s.P.fireT = 9; G.diveT = 99; G.shootT = 99;
+      if (!b && !G.queue.length && G.waveT > 6) { b = G.enemies.filter(e => e.type === 'beetle' && e.state === 'form').sort((p, q) => Math.abs(p.x - 200) - Math.abs(q.x - 200))[0]; if (b) { s.launchDive(b); s.sendEscort(b, 3); } } }; });
+  await hold(page, 10500, 200); await snap(page, '4c-escort');
+
   // reinforcements: most of the formation destroyed, and a fresh flight on its way in under the word
   page = await open(); await start(page);
   await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 8; s.nextWave(); window.__tick = s => { s.P.inv = 9; }; });
