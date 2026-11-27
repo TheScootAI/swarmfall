@@ -75,7 +75,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   check(fin.slowest < 0.3 && fin.closest > 0.999, 'the Hive Core dies in slow motion, and the camera stays where it is', JSON.stringify(fin));
   check(!fin.hurt && fin.grace > 0.3, 'the ship cannot be hit during the core\'s death scene, nor for a moment after', 'grace ' + fin.grace);
   check(!fin.on && fin.speed === 1 && Math.abs(fin.z - fin.far) < 0.01, 'speed and camera are back to normal by the time docking starts', JSON.stringify(fin));
-  check(fin.sps.length === 8 && fin.worth === 14 && new Set(fin.sps).size === 8 && Math.max(...fin.sps) === 1 && Math.min(...fin.sps) < 0.6 && fin.gotLast - fin.gotFirst > 0.3 && fin.picksLeft === 0, 'the boss\'s scrap is 8 rings worth 14 in all, which fly to the ship at different speeds and are all in before docking', fin.sps.length + ' rings worth ' + fin.worth + ', speeds ' + Math.min(...fin.sps) + ' to 1, collected over ' + (fin.gotLast - fin.gotFirst).toFixed(2) + ' s of game time');
+  check(fin.sps.length === 14 && fin.worth === 14 && new Set(fin.sps).size >= 10 && Math.max(...fin.sps) === 1 && Math.min(...fin.sps) < 0.6 && fin.gotLast - fin.gotFirst > 0.3 && fin.picksLeft === 0, 'the boss\'s scrap is a shower of 14 single rings, which fly to the ship at different speeds and are all in before docking', fin.sps.length + ' rings worth ' + fin.worth + ', speeds ' + Math.min(...fin.sps) + ' to 1, collected over ' + (fin.gotLast - fin.gotFirst).toFixed(2) + ' s of game time');
   s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);
   check(s.scrap >= 60, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
   await shot('05-station');
@@ -271,6 +271,26 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   check(cl.auto === true && cl.belowFormation === true && cl.cloudAbove >= 150 && cl.cloudAbove <= 270, 'with the booster, the ship lobs a cloud into the open lanes below the formation', cl.cloudAbove + ' above the ship');
   check(cl.dartVx > 5 && cl.dartLean > 0.05 && cl.dartLean <= 0.105, 'a dart bends a little toward the ship, and only so far', 'lean after 1.5 s: ' + cl.dartLean + ' radians (the limit is 0.1)');
   check(cl.sidestepClears === true, 'a sidestep still clears a dart aimed at the ship');
+
+  // ---- ships a boss releases: spread to lanes on their first pass, then each on its own line ----
+  await page.reload(); await page.waitForTimeout(500);
+  await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await waitFor(x => x.state === 'play');
+  const loose = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, out = { lanes: [], back: [], wander: 0 }, t0 = performance.now(), seen = new Map(); G.wave = 5; s.nextWave(); const g0 = G.time;
+    (function f() {
+      P.inv = 9; P.fireT = 9; P.x = P.target = 180; G.eb.length = 0; G.em.length = 0;   // the ship does not fire, so the released ships live to come round again
+      for (const e of G.enemies) {
+        if (e.dead || e.def.boss) continue;
+        let r = seen.get(e); if (!r) { r = { lane: e.lane, lastY: e.y, back: false }; seen.set(e, r); if (e.lane != null) out.lanes.push(Math.round(e.lane)); }
+        if (!r.back && e.lane != null && e.y > 250) out.wander = Math.max(out.wander, Math.abs(e.x - e.lane - Math.max(-28, Math.min(28, P.x - e.lane))));   // how far it strays from its lane on the way down
+        if (!r.back && r.lastY > 400 && e.y < 0) { r.back = true; out.back.push({ x: Math.round(e.x), laneKept: e.lane != null, pace: +e.pace.toFixed(2) }); }
+        r.lastY = e.y;
+      }
+      if (out.back.length >= 5 || G.time - g0 > 40 || performance.now() - t0 > 150000) return res(out);
+      requestAnimationFrame(f); })(); }));
+  const bx = loose.back.map(b => b.x);
+  check(loose.lanes.length >= 5 && new Set(loose.lanes).size >= 5, 'ships the Hive Core releases spread out to lanes of their own', 'lanes ' + loose.lanes.join(', '));
+  check(loose.back.length >= 5 && loose.back.every(b => !b.laneKept) && new Set(bx).size >= 4 && Math.max(...bx) - Math.min(...bx) > 60 && new Set(loose.back.map(b => b.pace)).size >= 4 && loose.wander > 4,
+    'after their first pass they come back from new places, at different speeds, and they weave on the way down', 'came back at x ' + bx.join(', ') + ' · strayed up to ' + Math.round(loose.wander) + ' from a lane');
 
   // ---- sentry satellites and the Laser Drone ----
   await page.reload(); await page.waitForTimeout(500);
