@@ -171,7 +171,8 @@ const GROUPS = {
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; G.wave = s.UNLOCK.beetleTopRow - 1; s.nextWave(); G.flights = 0;
       for (const q of G.queue) q.fn(); G.queue.length = 0;
       let step = 0, b = null, esc = [], frames = 0;
-      (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99; P.x = P.target = 40; G.em.length = 0;
+      (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99; P.x = P.target = 180;   // mid-field: a beetle follows the ship, and one pulled against the edge has no room for its wall
+         G.em.length = 0;
         if (performance.now() - t0 > 40000) { out.timeout = step; return done(out); }
         const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
         if (step === 0 && formed.length >= G.form.size) { b = formed.filter(e => e.type === 'beetle').sort((p, q) => Math.abs(p.x - 180) - Math.abs(q.x - 180))[0] || s.spawnEnemy('beetle', null, null, { x: 180, y: 100 });   // the roll does not always leave a beetle in the formation: then the check brings its own
