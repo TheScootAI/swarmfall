@@ -1008,7 +1008,7 @@ const UP = [
   { id: 'flame', c: 'w', n: 'Flame Cloud', r: 1, max: 3, d: 'Lob a cloud of flame ahead of your ship. Enemies that fly through it burn slowly.' },
   { id: 'scav', c: 's', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
   { id: 'sentry', c: 's', n: 'Sentry Satellite', r: 1, max: 3, d: 'Deploy a satellite that fires at the swarm. It can be shot down, and it runs out after a while.' },
-  { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing locks a thin laser onto one enemy and sets it alight. It burns until it is destroyed.' },
+  { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing locks a thin laser onto an enemy in flight and sets it alight. It burns until it is destroyed.' },
   { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
   { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
   { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
@@ -1844,9 +1844,13 @@ function updateSats(dt) {
 }
 
 // ---- Laser Drone ----
-// The drone picks the enemy nearest the ship and holds a thin yellow beam on it until it is destroyed (or flies out
-// of reach). The beam sets it alight, and the fire is what hurts it: LASER.dps of a shot every second, for as long as
-// the beam is on it and for LASER.burn seconds after. Unlike a Flame Cloud's, this fire does finish an enemy off.
+// The drone picks the nearest enemy in flight and holds a thin yellow beam on it until it is destroyed, or flies
+// out of reach, or goes back to its place. Only enemies in flight (the owner's rule): one that has left the formation
+// to dive, a confused one, a latcher (clamped on included), a boss, or anything a boss or a splitter let loose. Never
+// one sitting in the formation or still flying in to it. The beam sets it alight, and the fire is what hurts it:
+// LASER.dps of a shot every second, for as long as the beam is on it and for LASER.burn seconds after. Unlike a
+// Flame Cloud's, this fire does finish an enemy off.
+const inFlight = e => e.state === 'dive' || e.state === 'ram' || e.state === 'latch' || e.state === 'boss';
 function updateLaser(dt) {
   const lv = Math.min(3, S.beam);
   if (!lv || G.state !== 'play') { P.las = null; return; }
@@ -1857,10 +1861,12 @@ function updateLaser(dt) {
     damageEnemy(e, d, true);
   }
   let t = P.las;
-  if (t && (t.dead || t.z < -60 || (t.x - dx) ** 2 + (t.y - dy) ** 2 > LASER.range * LASER.range)) { t = P.las = null; P.lasT = LASER.relock; }   // destroyed, or gone: a moment, then the next
+  if (t && (t.dead || !inFlight(t) || t.z < -60 || (t.x - dx) ** 2 + (t.y - dy) ** 2 > LASER.range * LASER.range)) { t = P.las = null; P.lasT = LASER.relock; }   // destroyed, back in its place, or gone: a moment, then the next
   if (!t) {
     P.lasT -= dt; if (P.lasT > 0) return;
-    t = P.las = nearest(P.x, P.y, null, LASER.range); if (!t) { P.lasT = 0.3; return; }
+    let bd = LASER.range * LASER.range; for (const e of G.enemies) { if (e.dead || e.z < -60 || !inFlight(e)) continue; const q = (e.x - P.x) ** 2 + (e.y - P.y) ** 2; if (q < bd) { bd = q; t = e; } }
+    if (!t) { P.lasT = 0.15; return; }   // nothing in flight: look again shortly
+    P.las = t;
     SFX.lase();
   }
   t.lit = LASER.burn;

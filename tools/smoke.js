@@ -465,22 +465,24 @@ const GROUPS = {
         else if (step === 5 && since() > 0.3) { out.ranOut = !light.on; G.up.sentry = 0; s.meta.up.sentry = 1; s.recalc(); heavy.cool = 0.05; seen3 = 0; go(6); }   // now the station module's
         else if (step === 6 && heavy.on && since() > 2.5) { out.heavyHp = heavy.hp; out.heavyLife = heavy.t > 10; out.twoBarrels = seen3 === 2; out.lightStaysAway = !light.on; s.meta.up.sentry = 0; s.recalc(); heavy.t = 0.03; go(7); }
         else if (step === 7 && since() > 0.5) { P.x = P.target = 180; G.up.beam = 1; s.recalc(); P.lasT = 0.05; go(8); }   // the Laser Drone
-        else if (step === 8 && P.las) {   // it locks onto the enemy nearest the ship
-          lasT = P.las; const live = G.enemies.filter(e => !e.dead && e.z > -60), dist = e => Math.hypot(e.x - P.x, e.y - P.y);
-          out.lockedNearest = live.every(e => dist(e) >= dist(lasT) - 0.01); laneHp = lasT.hp; other = live.sort((a, b) => dist(b) - dist(a))[0]; otherHp = other.hp; out.stayed = true; go(9); }
-        else if (step === 9) {   // and stays on it, burning, until it is destroyed; nothing else is touched
-          if (!lasT.dead) { if (P.las !== lasT) out.stayed = false; if (lasT.lit > 0 && lasT.hp < laneHp) out.burning = true; }
+        else if (step === 8) {   // with everything sitting in the formation it has nothing to aim at: it only takes enemies in flight
+          if (P.las) out.tookSitter = true;
+          if (since() > 1.2) { lasT = formed[formed.length - 1]; other = formed[0]; laneHp = lasT.hp; otherHp = other.hp; s.launchDive(lasT); out.stayed = true; go(9); }
+        }
+        else if (step === 9) {   // one leaves the formation: it locks on, sets it alight and stays on it until it is destroyed; nothing else is touched
+          if (!lasT.dead) { if (P.las === lasT) out.locked = true; else if (out.locked) out.stayed = false; if (lasT.lit > 0 && lasT.hp < laneHp) out.burning = true; }
           else { out.killedIn = +since().toFixed(2); out.otherUntouched = !other.dead && other.hp === otherHp; go(10); }
           if (since() > 8) { out.laserTimeout = true; G.up.beam = 0; s.recalc(); return res(out); }
         }
-        else if (step === 10 && (P.las && P.las !== lasT || since() > 3)) { out.lockedNext = !!P.las && P.las !== lasT && !P.las.dead; G.up.beam = 0; s.recalc(); return res(out); }   // then the next one
+        else if (step === 10 && since() > 0.6) { out.idleAgain = !P.las; const n = formed.find(e => e !== other); lasT = n; if (n) s.launchDive(n); go(11); }   // none in flight again: it waits; then the next to leave
+        else if (step === 11 && (P.las === lasT || since() > 3)) { out.lockedNext = !!lasT && P.las === lasT; G.up.beam = 0; s.recalc(); return res(out); }
         if (performance.now() - t0 > 120000) { out.stuckAt = step; return res(out); }
         requestAnimationFrame(f); })(); }));
     check(sg.ahead === 150 && sg.life && sg.hp === 2 && sg.oneBarrel && sg.hurtSwarm >= 2, 'Sentry Satellite: set down ahead of the ship, it fires at the swarm by itself', sg.hurtSwarm + ' enemies destroyed or damaged in 3 seconds · ' + JSON.stringify(sg));
     check(sg.tookHit && sg.destroyed && sg.rest === 9, 'Sentry Satellite: it stops an enemy shot, takes the damage, and is shot down when its health is gone');
     check(sg.ranOut === true, 'Sentry Satellite: it runs out when its time is up');
     check(sg.heavyHp === 5 && sg.heavyLife && sg.twoBarrels && sg.lightStaysAway, 'Sentry Platform (station module): a tougher satellite with twin guns that lasts longer', 'health ' + sg.heavyHp);
-    check(sg.lockedNearest === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.6 && sg.killedIn < 4 && sg.otherUntouched === true && sg.lockedNext === true, 'Laser Drone: it locks onto the nearest enemy, sets it alight, stays on it until it is destroyed and touches nothing else, then locks onto the next', JSON.stringify({ lockedNearest: sg.lockedNearest, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, lockedNext: sg.lockedNext, timeout: sg.laserTimeout }));
+    check(!sg.tookSitter && sg.locked === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.3 && sg.killedIn < 5 && sg.otherUntouched === true && sg.idleAgain === true && sg.lockedNext === true, 'Laser Drone: it leaves enemies in the formation alone; one in flight it locks onto, sets alight and holds until destroyed, then takes the next to leave', JSON.stringify({ tookSitter: !!sg.tookSitter, locked: sg.locked, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, idleAgain: sg.idleAgain, lockedNext: sg.lockedNext, timeout: sg.laserTimeout }));
     await page.context().close();
   },
   // The latcher: clamps onto the ship, goes off after 1.5 seconds, and is thrown off by flicks or by a slam into the edge.
