@@ -885,7 +885,6 @@ const UNLOCK = {
   weaver: 5,
   waspFullRow: 5,      // the whole top row
   gaps: 5,             // gapped formations; earlier waves are solid blocks of mites
-  formationFire: 7,    // any formation enemy may fire; before this only wasps and beetles do
   splitter: 8,
   elite: 8,
   waspSecondRow: 9,
@@ -2140,11 +2139,11 @@ function updateEnemies(dt) {
     launchFromFormation(pick(formed));   // lancers are not in this list: they never dive
     G.diveT = Math.max(0.45, 2.3 - G.wave * 0.12) * rand(0.6, 1.3);
   }
-  if (!G.boss) {   // shots from the formation: wasps and beetles, then anyone from UNLOCK.formationFire
+  if (!G.boss) {   // shots from the formation: wasps only, and only darts (the owner's rule: "we let wasps shoot from the formation but only wasps")
     G.shootT -= dt;
     if (G.shootT <= 0 && formed.length) {
-      const pool = formed.filter(e => e.type === 'wasp' || e.type === 'beetle' || G.wave >= UNLOCK.formationFire), e = pick(pool);
-      if (e) { const a = lerp(Math.PI / 2, aimAt(e.x, e.y), 0.6); if (e.type === 'wasp') fireDart(e.x, e.y + 10, a); else fireE(e.x, e.y + 10, a, ebSpeed() * 0.8, 5); SFX.eshoot(); }
+      let n = 0, e = null; for (const o of formed) if (o.type === 'wasp' && Math.random() * ++n < 1) e = o;   // one of the sitting wasps, each as likely as the next
+      if (e) { fireDart(e.x, e.y + 10, lerp(Math.PI / 2, aimAt(e.x, e.y), 0.6)); SFX.eshoot(); }
       G.shootT = Math.max(0.6, 3.2 - G.wave * 0.16) * rand(0.7, 1.3);
     }
   }
@@ -2569,7 +2568,7 @@ const INTRO = { ramp: 0.3, wait: 0.35, gap: 1.6 };
 // what it does, then what to do about it: two short lines each
 const INTRO_TEXT = {
   mite: ['The pawns of the swarm. They dive at you and ram.', 'One shot each. Thin them out while they sit.'],
-  wasp: ['Fires fast darts as it dives. The darts lean toward you.', 'Keep moving, and shoot it before it leaves the top row.'],
+  wasp: ['Fires fast darts, sitting or diving. They lean toward you.', 'Keep moving, and shoot it before it leaves the top row.'],
   weaver: ['Zigzags as it dives, so it is hard to line up.', 'Shoot it while it sits.'],
   splitter: ['Breaks into two mites when it is destroyed.', 'Be ready for the pair that comes out.'],
   elite: ['A red ring marks a tougher enemy, with three times the health.', 'Worth the effort: its scrap ring is worth 3.'],

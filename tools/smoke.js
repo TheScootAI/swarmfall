@@ -184,6 +184,20 @@ const GROUPS = {
     check(es.table === '3 0.8 2 0.6 from 2 falsefalsefalse' && es.sent === 3 && es.mites === true, 'escorts: from wave 2; three of the nearest mites leave with a beetle, two with a wasp; mites, triplets and lancers get none', JSON.stringify(es));
     check(es.alive === true && es.ahead.every(d => d > 18 && d < 42) && es.across.length === 3 && Math.abs(es.across[0] + 24) < 9 && Math.abs(es.across[1]) < 9 && Math.abs(es.across[2] - 24) < 9, 'a beetle\'s escort holds a wall just in front of it while it launches its missiles', JSON.stringify({ ahead: es.ahead, across: es.across }));
     check(es.released === true, 'with the beetle gone, its escort carries on as ordinary divers');
+    // Fire from the formation: only wasps, and only darts. With the wasps gone, the formation does not fire at all.
+    const ff = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, out = { darts: 0, other: 0, quiet: 0 }, t0 = performance.now();
+      for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; G.wave = 9; s.nextWave(); G.flights = 0;
+      for (const q of G.queue) q.fn(); G.queue.length = 0;
+      let step = 0, tries = 0;
+      (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.em.length = 0; for (const e of G.enemies) if (e.def.latch) e.leap = 9;
+        if (performance.now() - t0 > 40000) { out.timeout = step; return done(out); }
+        const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
+        for (const b of G.eb) if (!b.seen) { b.seen = true; if (step === 1) { if (b.kind === 1) out.darts++; else out.other++; } else if (step === 2) out.quiet++; }
+        if (step === 0) { G.shootT = 99; if (G.waveT > 2.6 && formed.length >= G.form.size) { out.kinds = [...new Set(formed.map(e => e.type))].sort().join(); step = 1; } }
+        else if (step === 1) { G.shootT = 0; if (++tries >= 60) { for (const e of G.enemies) if (e.type === 'wasp') { e.dead = true; s.scene.remove(e.g); } tries = 0; step = 2; } }
+        else if (step === 2) { G.shootT = 0; if (++tries >= 40) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; return done(out); } }
+        requestAnimationFrame(f); })(); }));
+    check(ff.kinds && ff.kinds.includes('wasp') && ff.kinds.includes('mite') && ff.darts >= 40 && ff.other === 0 && ff.quiet === 0, 'only wasps fire from the formation, and only darts; with no wasp sitting, nothing fires', JSON.stringify(ff));
     // Drops. Every enemy's scrap chance is halved (SCRAP_RATE): a mite pays 15% of the time. An elite's ring is worth 3. Elites give at most two repair crosses a wave.
     const dr = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P, S } = s, real = Math.random, out = { rate: s.SCRAP_RATE, got: [] }, t0 = performance.now();
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.repairs = 0; G.state = 'play';
