@@ -1051,7 +1051,8 @@ const LATCH = { fuse: 1.5, off: 15, flick: 50, flicks: 3, slamRun: 60, slamSpeed
 //   lift: how far above the docked ship its projection flies. per: scrap for each hologram hit; perfect: extra for all.
 //   hold: seconds the result stays up. paths: each line's points, across and down the field from 0 to 1; a path with a
 //   long straight run up or down one lane is one every hologram can be hit on. stages: five lines each, [path, mirrored].
-const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, lead: 3,   // lead: seconds before the first hologram, while the opening words are read per: 0.25, perfect: 10,
+// lead: seconds before the first hologram, while the opening words are read.
+const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, lead: 3, per: 0.25, perfect: 10,
   span: 740, clear: 70, split: 0.2, over: 60,   // how a path's heights are placed on the field: see simYAt()
   end: { card: 0.7, count: 1.3, beat: 0.55, wait: 0.35, out: 0.3, lift: 0.3 },   // the result card: seconds before it shows, the count-up for a full score, the beat between its lines, the least time before a touch carries on, its fade, and the wait after the finger lifts
   paths: {
