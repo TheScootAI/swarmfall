@@ -162,7 +162,7 @@ const GROUPS = {
     check(bt.fired === 2 && bt.set === 0.8 && bt.gap > 0.7 && bt.gap <= 0.8, 'a beetle launches two missiles 0.8 seconds apart', JSON.stringify(bt));
     // Escorts (ESCORT): mites that leave the formation with a stronger enemy fly side by side just ahead of it. A beetle's three
     // make a wall in front of it while it stops to launch its missiles. With the beetle gone they carry on as ordinary divers.
-    const es = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, E = s.ESCORT, out = { table: E.beetle.n + ' ' + E.beetle.chance + ' ' + E.wasp.chance + ' ' + !!E.mite + !!E.triplet + !!E.lancer }, t0 = performance.now();
+    const es = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, E = s.ESCORT, out = { table: E.beetle.n + ' ' + E.beetle.chance + ' ' + E.wasp.n + ' ' + E.wasp.chance + ' from ' + E.from + ' ' + !!E.mite + !!E.triplet + !!E.lancer }, t0 = performance.now();
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; G.wave = s.UNLOCK.beetleTopRow - 1; s.nextWave(); G.flights = 0;
       for (const q of G.queue) q.fn(); G.queue.length = 0;
       let step = 0, b = null, esc = [], frames = 0;
@@ -176,7 +176,7 @@ const GROUPS = {
           b.dead = true; s.scene.remove(b.g); step = 2; }
         else if (step === 2 && ++frames > 5) { out.released = esc.every(m => m.lead === null && (m.dead || m.state === 'dive')); for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } return done(out); }
         requestAnimationFrame(f); })(); }));
-    check(es.table === '3 0.7 0.3 falsefalsefalse' && es.sent === 3 && es.mites === true, 'escorts: three of the nearest mites leave with a beetle; mites, triplets and lancers get none', JSON.stringify(es));
+    check(es.table === '3 0.8 2 0.6 from 2 falsefalsefalse' && es.sent === 3 && es.mites === true, 'escorts: from wave 2; three of the nearest mites leave with a beetle, two with a wasp; mites, triplets and lancers get none', JSON.stringify(es));
     check(es.alive === true && es.ahead.every(d => d > 18 && d < 42) && es.across.length === 3 && Math.abs(es.across[0] + 24) < 9 && Math.abs(es.across[1]) < 9 && Math.abs(es.across[2] - 24) < 9, 'a beetle\'s escort holds a wall just in front of it while it launches its missiles', JSON.stringify({ ahead: es.ahead, across: es.across }));
     check(es.released === true, 'with the beetle gone, its escort carries on as ordinary divers');
     // Drops. Every enemy's scrap chance is halved (SCRAP_RATE): a mite pays 15% of the time. An elite's ring is worth 3. Elites give at most two repair crosses a wave.
