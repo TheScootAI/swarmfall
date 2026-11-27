@@ -815,8 +815,10 @@ addEventListener('resize', resize);
 const ET = {
   mite: { hp: 10, r: 10, speed: 190, scrap: 0.3, col: [1, 0.31, 0.55] },
   wasp: { hp: 20, r: 11, speed: 165, scrap: 0.45, col: [1, 0.69, 0.18] },
-  weaver: { hp: 16, r: 11, speed: 135, scrap: 0.4, col: [0.65, 0.42, 1] },
-  splitter: { hp: 28, r: 12, speed: 230, scrap: 0.5, col: [1, 0.48, 0.24] },
+  // balls: slow balls it fires at the ship while diving, from the wave the formation opens fire (UNLOCK.formationFire).
+  // The owner, on wave 9: "even flying enemies, the wasp only shoots". Mites stay pawns: they ram and never fire in flight.
+  weaver: { hp: 16, r: 11, speed: 135, scrap: 0.4, col: [0.65, 0.42, 1], balls: 1 },
+  splitter: { hp: 28, r: 12, speed: 230, scrap: 0.5, col: [1, 0.48, 0.24], balls: 1 },
   triplet: { hp: 36, r: 13, speed: 205, scrap: 0.35, col: [0.24, 0.48, 1] },
   // The beetle stops partway down and launches its missiles, missileGap seconds apart. Then it must not fly over them
   // (the owner: "when the beetle moves it should go left or right and then diagonally"): it slides `aside` units to
@@ -891,6 +893,7 @@ const UNLOCK = {
   waspFullRow: 5,      // the whole top row
   gaps: 5,             // gapped formations; earlier waves are solid blocks of mites
   splitter: 8,
+  formationFire: 7,    // from here any enemy sitting in the formation may fire a slow ball; before it, only wasps fire (their darts)
   elite: 8,
   waspSecondRow: 9,
   beetle: 10,          // some top-row spots
@@ -1191,7 +1194,7 @@ function startDive(e) {
   e.state = 'dive'; e.t = 0; e.z = 0; e.lead = null; e.hookT = 0; e.flank = e.x < P.x ? -1 : 1;   // flank and hookT: only a latcher uses them
   e.asideLeft = 0; e.asideDir = 0; e.diag = e.type === 'beetle' && !e.shots ? (e.x < P.x ? 1 : -1) : 0;   // only a beetle uses these; one with no missiles to launch goes straight into its diagonal dive
   e.vx = (e.x < W / 2 ? -1 : 1) * rand(40, 110) * (Math.random() < 0.7 ? 1 : -1); e.vy = -rand(60, 110);
-  e.shots = quietWave(G.wave) ? 0 : e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.def.missiles || 0; e.shootT = rand(0.3, 0.6);   // nothing to fire on a quiet wave
+  e.shots = quietWave(G.wave) ? 0 : e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.def.missiles || (G.wave >= UNLOCK.formationFire && !G.boss && e.def.balls) || 0; e.shootT = rand(0.3, 0.6);   // not what a boss lets loose: a boss's own attacks are the fire to read there   // nothing to fire on a quiet wave
 }
 // Sends up to n mites out of the formation with a stronger enemy that has just left it: the nearest ones, which
 // then fly side by side just ahead of it (see updateDive). Returns how many went.
@@ -1312,7 +1315,7 @@ function updateDive(e, dt) {
     if (e.type === 'weaver') e.x += Math.cos(e.t * 4.6 + e.ph) * 150 * dt;
     else if (e.type === 'mite' && e.lane == null) e.x += Math.sin(e.t * 3.4 + e.ph) * (e.sway || 62) * dt;   // a gentle side-to-side wobble all the way down
     else if (e.lane != null) e.x += Math.sin(e.t * 3.1 + e.ph) * (e.sway || 40) * 0.7 * dt;   // and a smaller one for those holding a lane
-    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6) { e.shootT -= dt; if (e.shootT <= 0) { fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
+    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6) { e.shootT -= dt; if (e.shootT <= 0) { if (e.type === 'wasp') fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); else fireE(e.x, e.y + 8, aimAt(e.x, e.y), ebSpeed() * 0.8, 5); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }   // a wasp's darts; anything else, a slow ball
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
   if (e.x < 12) { e.x = 12; e.vx = Math.abs(e.vx); } else if (e.x > W - 12) { e.x = W - 12; e.vx = -Math.abs(e.vx); }
@@ -2155,11 +2158,14 @@ function updateEnemies(dt) {
     launchFromFormation(pick(formed));   // lancers are not in this list: they never dive
     G.diveT = Math.max(0.45, 2.3 - G.wave * 0.12) * rand(0.6, 1.3);
   }
-  if (!G.boss && !quietWave(G.wave)) {   // shots from the formation: wasps only, and only darts (the owner's rule: "we let wasps shoot from the formation but only wasps")
+  // Shots from the formation. On the early waves only wasps fire from their place (the owner: "we let wasps shoot from
+  // the formation but only wasps"). From UNLOCK.formationFire the rest join in with slow balls: on wave 9 the owner
+  // found "only wasps are shooting still".
+  if (!G.boss && !quietWave(G.wave)) {
     G.shootT -= dt;
     if (G.shootT <= 0 && formed.length) {
-      let n = 0, e = null; for (const o of formed) if (o.type === 'wasp' && Math.random() * ++n < 1) e = o;   // one of the sitting wasps, each as likely as the next
-      if (e) { fireDart(e.x, e.y + 10, lerp(Math.PI / 2, aimAt(e.x, e.y), 0.6)); SFX.eshoot(); }
+      const all = G.wave >= UNLOCK.formationFire; let n = 0, e = null; for (const o of formed) if ((all || o.type === 'wasp') && Math.random() * ++n < 1) e = o;   // one of those that may fire, each as likely as the next
+      if (e) { const a = lerp(Math.PI / 2, aimAt(e.x, e.y), 0.6); if (e.type === 'wasp') fireDart(e.x, e.y + 10, a); else fireE(e.x, e.y + 10, a, ebSpeed() * 0.8, 5); SFX.eshoot(); }
       G.shootT = Math.max(0.6, 3.2 - G.wave * 0.16) * rand(0.7, 1.3);
     }
   }
