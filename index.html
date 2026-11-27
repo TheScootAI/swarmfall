@@ -1497,7 +1497,7 @@ function reinforce() {
   let held = 0; for (const e of G.enemies) if (e.c != null && !e.dead) held++;
   if (held > G.form.size * SWARM.thin) return;
   G.flights--;
-  if (queueFlight(G.wave, G.waveT, Math.round(G.form.size * SWARM.refill))) { G.queue.sort((a, b) => a.t - b.t); toast('REINFORCEMENTS'); }
+  if (queueFlight(G.wave, G.waveT, Math.round(G.form.size * SWARM.refill))) { G.queue.sort((a, b) => a.t - b.t); toast('INCOMING', 'Reinforcements'); }   // one long word would not fit a narrow phone
 }
 
 function restoreMats(e) { for (const m of e.meshes) m.material = m.userData.base; }

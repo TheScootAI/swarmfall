@@ -12,8 +12,10 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const errors = [];
   fs.mkdirSync(OUT, { recursive: true });
+  let ctx = null;
   const open = async () => {
-    const page = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
+    if (ctx) await ctx.close();   // the last scene's page: left open it keeps drawing, and software rendering has no time to spare
+    ctx = await browser.newContext({ ...devices['iPhone 13'] }); const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     await page.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
     await page.goto(GAME); await page.waitForTimeout(700); return page;
@@ -113,6 +115,6 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   await gameWait(0.45); await snap(page, '21-clouds-flying');
   await gameWait(1.6); await snap(page, '22-clouds-hanging');
 
-  console.log('wrote 22 screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
+  console.log('wrote the screenshots to', OUT, '| page errors:', errors.length, errors.slice(0, 3).join(' | '));
   await browser.close();
 })();

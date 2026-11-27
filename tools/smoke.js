@@ -179,7 +179,7 @@ const GROUPS = {
       requestAnimationFrame(tick); }));
     check(JSON.stringify(rf.flights) === JSON.stringify(rf.expect) && rf.flights[1] === 0 && rf.flights[2] === 1 && rf.flights[10] === 2 && rf.flights[6] === 0, 'reinforcement flights: none on wave 1 or a boss wave, one from wave 2, two from wave 10', JSON.stringify(rf.flights));
     check(rf.built === rf.size && rf.early === false, 'no reinforcements while more than ' + '35% of the formation is left', JSON.stringify({ size: rf.size, built: rf.built, early: rf.early }));
-    check(rf.sent === rf.want && rf.left === 0 && rf.toast.includes('REINFORCEMENTS') && rf.state === 'play', 'thinned to 35%, a flight half the size of the formation sets off', JSON.stringify({ size: rf.size, sent: rf.sent, want: rf.want, left: rf.left, toast: rf.toast, timeout: rf.timeout }));
+    check(rf.sent === rf.want && rf.left === 0 && rf.toast.includes('Reinforcements') && rf.state === 'play', 'thinned to 35%, a flight half the size of the formation sets off', JSON.stringify({ size: rf.size, sent: rf.sent, want: rf.want, left: rf.left, toast: rf.toast, timeout: rf.timeout }));
     check(rf.unique === true && rf.frontMites === true, 'reinforcements take empty places only, and mites still hold the front two rows');
     check(rf.flights13 === 2 && rf.total13 === rf.size13 + 2 * Math.round(rf.size13 * 0.5) && rf.clearedEarly === false, 'wave 13 sends its formation and two flights before it counts as cleared', JSON.stringify({ size: rf.size13, total: rf.total13, timeout: rf.timeout }));
     check(rf.elites13 <= 3, 'at most three elites in a wave, reinforcements included', rf.elites13 + ' elites');
