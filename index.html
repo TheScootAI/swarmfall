@@ -1950,7 +1950,9 @@ function updateGame(dt) {
 // begins, so a tap that skipped would cut them short by accident. (The launch could be skipped once; the owner
 // asked for that to stop.)
 const easeIO = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-const CUTS = { launch: { dur: 2.4 }, shuttle: { dur: 2.3 }, dock: { dur: 2.8 } };   // seconds
+// dur: seconds the scene lasts. hold: seconds at its end when the flying is over and things just sit. The shuttle
+// holds beside the ship for 0.75 seconds before the booster menu opens: the owner found the menu came up too soon.
+const CUTS = { launch: { dur: 2.4 }, shuttle: { dur: 3.05, hold: 0.75 }, dock: { dur: 2.8 } };
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function startCut(kind, done) {
   FIN.on = FIN.toast = false; clearClouds(); clearSats(); P.lasOn = 0;   // a cloud, satellite or beam would hang frozen through the scene
@@ -1962,7 +1964,7 @@ function startCut(kind, done) {
   }
 }
 function updateCut(dt) {
-  const c = G.cut; c.t = Math.min(c.dur, c.t + dt); const u = c.t / c.dur;
+  const c = G.cut; c.t = Math.min(c.dur, c.t + dt); const fly = c.dur - (CUTS[c.kind].hold || 0), u = Math.min(1, c.t / fly);   // u runs from 0 to 1 over the flying part
   if (c.kind === 'launch') {
     // clamps release, then the station falls away behind while the ship settles into its flying position
     const hold = 0.2, e = u < hold ? 0 : easeIO((u - hold) / (1 - hold));
@@ -2035,12 +2037,12 @@ function syncScene(dt) {
   if (ST.on) { station.position.set(0, TY(ST.y), -20); stRing.rotation.z += 0.45 * dt; const blink = Math.floor(G.time * 2) % 2 === 0; stLights[0].visible = stLights[1].visible = blink; stLights[2].visible = stLights[3].visible = !blink; }
   if (SH.leave) { SH.rot = 0; SH.y += 280 * dt; SH.x += SH.side * 70 * dt; if (SH.y > H + 80) { SH.on = false; SH.leave = false; } }   // drops back once the booster is aboard
   shuttle.visible = SH.on;
-  const near = SH.on && !SH.leave && SH.pod && (G.state === 'draft' || (G.state === 'cut' && G.cut.kind === 'shuttle' && G.cut.t > G.cut.dur * 0.78));   // close alongside: the last of its approach, and while a booster is chosen
+  const near = SH.on && !SH.leave && SH.pod && (G.state === 'draft' || (G.state === 'cut' && G.cut.kind === 'shuttle' && G.cut.t > (G.cut.dur - CUTS.shuttle.hold) * 0.78));   // close alongside: the last of its approach, and while a booster is chosen
   if (SH.on) {
     shuttle.position.set(TX(SH.x), TY(SH.y) + Math.sin(G.time * 2.6) * 1.5, 0); shuttle.rotation.z = SH.rot;
     SH.bank += ((SH.rot ? clamp(SH.rot * 0.55, -0.75, 0.75) : SH.side * -0.3) - SH.bank) * Math.min(1, 6 * dt); shBody.rotation.y = SH.bank;   // it banks into its turn, then lies a little toward the ship
     shPod.visible = SH.pod; shPod.userData.crate.rotation.z += 2.2 * dt; shPod.userData.crate.rotation.x = 0.5; const hs = 9.5 * (1 + Math.sin(G.time * 7) * 0.14); shPod.userData.halo.scale.set(hs, hs, 1);
-    const burn = SH.leave || G.state === 'cut' ? 1 : 0.45;   // engines idle while it holds beside the ship
+    const burn = SH.leave || (G.state === 'cut' && G.cut.t < G.cut.dur - (CUTS[G.cut.kind].hold || 0)) ? 1 : 0.45;   // engines idle while it holds beside the ship
     for (let i = 0; i < 3; i++) shFlames[i].scale.y = (i ? 7 : 11) * burn + Math.sin(G.time * 36 + i) * 2.2 * burn;
     const blink = Math.floor(G.time * 2.5) % 2 === 0; shLights[0].visible = blink; shLights[1].visible = !blink; shLights[2].visible = true;
     if (burn === 1 && dt > 0 && Math.random() < 0.8) burst(SH.x + Math.sin(SH.rot) * 30 + rand(-3, 3), SH.y + Math.cos(SH.rot) * 30, THRUST_RGB, 1, 34, 0.32);   // exhaust left along its path

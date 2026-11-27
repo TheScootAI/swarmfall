@@ -51,6 +51,10 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   s = await playTo(x => x.state === 'cut' && x.cut === 'shuttle'); check(s.wave === 3, 'booster shuttle arrives after wave 3', 'wave ' + s.wave);
   await page.waitForTimeout(500); await page.touchscreen.tap(100, 500); await page.waitForTimeout(100);
   check((await st()).state === 'cut', 'a tap does not cut the shuttle scene short');
+  const held = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall; let x = s.SH.x, y = s.SH.y, stillFrom = null, dur = 0, last = 0;
+    (function f() { const c = s.G.cut; if (!c) return res({ dur, stillFor: +(last - stillFrom).toFixed(2), state: s.G.state });
+      dur = c.dur; last = c.t; if (Math.abs(s.SH.x - x) + Math.abs(s.SH.y - y) > 0.01) stillFrom = null; else if (stillFrom === null) stillFrom = c.t; x = s.SH.x; y = s.SH.y; requestAnimationFrame(f); })(); }));
+  check(held.dur === 3.05 && held.stillFor > 0.6 && held.stillFor < 0.9 && held.state === 'draft', 'the shuttle holds beside the ship for three quarters of a second before the booster menu opens', 'still for ' + held.stillFor + ' s of a ' + held.dur + ' s scene');
   await shot('03-shuttle');
   s = await waitFor(x => x.state === 'draft'); check(s.state === 'draft', 'booster choice opens after the shuttle');
   check((await page.textContent('#draftEyebrow')).startsWith('Booster shuttle'), 'booster screen heading');
