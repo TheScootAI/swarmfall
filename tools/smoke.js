@@ -450,7 +450,7 @@ const GROUPS = {
     await page.reload(); await page.waitForTimeout(500);
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await waitFor(x => x.state === 'play');
     const sg = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, out = {}, t0 = performance.now(), light = s.sats[0], heavy = s.sats[1]; G.wave = 3; s.nextWave(); G.flights = 0;   // no reinforcements: this scene counts on the formation it built
-      let step = 0, at = 0, sum0 = 0, seen3 = 0, lasT = null, other = null, laneHp = 0, otherHp = 0;
+      let step = 0, at = 0, sum0 = 0, seen3 = 0, lasT = null, other = null, laneHp = 0, otherHp = 0, killAt = 0;
       const hpSum = () => G.enemies.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0), since = () => G.time - at, go = n => { step = n; at = G.time; };
       const ball = o => G.eb.push({ x: o.x, y: o.y - 1, vx: 0, vy: 1, r: 4.5, kind: 0, turn: 0, dead: false });
       (function f() {
@@ -471,11 +471,11 @@ const GROUPS = {
         }
         else if (step === 9) {   // one leaves the formation: it locks on, sets it alight and stays on it until it is destroyed; nothing else is touched
           if (!lasT.dead) { if (P.las === lasT) out.locked = true; else if (out.locked) out.stayed = false; if (lasT.lit > 0 && lasT.hp < laneHp) out.burning = true; }
-          else { out.killedIn = +since().toFixed(2); out.otherUntouched = !other.dead && other.hp === otherHp; go(10); }
+          else { out.killedIn = +since().toFixed(2); out.otherUntouched = !other.dead && other.hp === otherHp; killAt = G.time; go(10); }
           if (since() > 8) { out.laserTimeout = true; G.up.beam = 0; s.recalc(); return res(out); }
         }
-        else if (step === 10 && since() > 0.6) { out.idleAgain = !P.las; const n = formed.find(e => e !== other); lasT = n; if (n) s.launchDive(n); go(11); }   // none in flight again: it waits; then the next to leave
-        else if (step === 11 && (P.las === lasT || since() > 3)) { out.lockedNext = !!lasT && P.las === lasT; if (lasT) { lasT.dead = true; s.scene.remove(lasT.g); } go(12); }
+        else if (step === 10 && since() > 0.3) { out.idleAgain = !P.las; const n = formed.find(e => e !== other); lasT = n; if (n) s.launchDive(n); go(11); }   // none in flight again: it waits; then the next to leave
+        else if (step === 11 && (P.las === lasT || since() > 3)) { out.lockedNext = !!lasT && P.las === lasT; out.laserRest = +(G.time - killAt).toFixed(2); if (lasT) { lasT.dead = true; s.scene.remove(lasT.g); } go(12); }
         else if (step === 12 && since() > 0.3) {   // a latcher on its way is fair game; once it has clamped onto the ship the drone leaves it alone
           P.inv = 0; lasT = s.spawnEnemy('latcher', null, null, { x: P.x + 6, y: P.y - 200 }); lasT.hp = lasT.maxHp = 1e9; s.launchDive(lasT); lasT.x = P.x + 6; lasT.y = P.y - 200; lasT.vx = 0; lasT.vy = 120; go(13); }
         else if (step === 13) { P.inv = 0;
@@ -488,7 +488,7 @@ const GROUPS = {
     check(sg.tookHit && sg.destroyed && sg.rest === 9, 'Sentry Satellite: it stops an enemy shot, takes the damage, and is shot down when its health is gone');
     check(sg.ranOut === true, 'Sentry Satellite: it runs out when its time is up');
     check(sg.heavyHp === 5 && sg.heavyLife && sg.twoBarrels && sg.lightStaysAway, 'Sentry Platform (station module): a tougher satellite with twin guns that lasts longer', 'health ' + sg.heavyHp);
-    check(!sg.tookSitter && sg.locked === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.3 && sg.killedIn < 5 && sg.otherUntouched === true && sg.idleAgain === true && sg.lockedNext === true, 'Laser Drone: it leaves enemies in the formation alone; one in flight it locks onto, sets alight and holds until destroyed, then takes the next to leave', JSON.stringify({ tookSitter: !!sg.tookSitter, locked: sg.locked, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, idleAgain: sg.idleAgain, lockedNext: sg.lockedNext, timeout: sg.laserTimeout }));
+    check(!sg.tookSitter && sg.locked === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.3 && sg.killedIn < 5 && sg.otherUntouched === true && sg.idleAgain === true && sg.lockedNext === true && sg.laserRest >= 0.95 && sg.laserRest < 1.4, 'Laser Drone: it leaves enemies in the formation alone; one in flight it locks onto, sets alight and holds until destroyed; after a second\'s rest it takes the next to leave', JSON.stringify({ tookSitter: !!sg.tookSitter, locked: sg.locked, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, idleAgain: sg.idleAgain, lockedNext: sg.lockedNext, rest: sg.laserRest, timeout: sg.laserTimeout }));
     check(sg.tookLeaper === true && sg.letGo === true, 'Laser Drone: it takes a latcher on its way in, and lets go of one that has clamped onto the ship', JSON.stringify({ tookLeaper: sg.tookLeaper, letGo: sg.letGo, timeout: sg.latcherTimeout }));
     await page.context().close();
   },
