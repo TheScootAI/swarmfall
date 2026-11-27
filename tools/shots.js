@@ -69,8 +69,8 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
 
   // the simulation after a boss: a neon grid, no station, the ship made of light and lines of holograms in flight
   page = await open(); await start(page);
-  await page.evaluate(() => { const s = window.__swarmfall, G = s.G; for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.wave = 6; s.startSim(); window.__tick = s => { s.P.fireT = 9; }; });
-  await hold(page, 9800, 180); await snap(page, '4f-simulation');
+  await page.evaluate(() => { const s = window.__swarmfall, G = s.G; for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.wave = 6; s.startSim(); s.SIMS.waitT = 9; s.simBegin(); window.__tick = s => { s.P.fireT = 9; }; });
+  await hold(page, 8000, 180); await snap(page, '4f-simulation');
 
   // reinforcements: most of the formation destroyed, and a fresh flight on its way in under the word
   page = await open(); await start(page);
