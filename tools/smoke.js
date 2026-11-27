@@ -174,7 +174,7 @@ const GROUPS = {
       (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99; P.x = P.target = 40; G.em.length = 0;
         if (performance.now() - t0 > 40000) { out.timeout = step; return done(out); }
         const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
-        if (step === 0 && formed.length >= G.form.size) { b = formed.filter(e => e.type === 'beetle').sort((p, q) => Math.abs(p.x - 180) - Math.abs(q.x - 180))[0];
+        if (step === 0 && formed.length >= G.form.size) { b = formed.filter(e => e.type === 'beetle').sort((p, q) => Math.abs(p.x - 180) - Math.abs(q.x - 180))[0] || s.spawnEnemy('beetle', null, null, { x: 180, y: 100 });   // the roll does not always leave a beetle in the formation: then the check brings its own
           s.launchDive(b); out.sent = s.sendEscort(b, E.beetle.n); esc = G.enemies.filter(e => e.lead === b); out.mites = esc.length === out.sent && esc.every(e => e.type === 'mite' && e.state === 'dive'); step = 1; }
         else if (step === 1 && b.shots === 1) {   // the beetle has stopped and launched its first missile: where is its escort?
           out.ahead = esc.map(m => Math.round(m.y - b.y)); out.across = esc.map(m => Math.round(m.x - b.x)).sort((p, q) => p - q); out.alive = esc.every(m => !m.dead && m.state === 'dive');
@@ -817,7 +817,8 @@ const ABOUT = {
   const t0 = Date.now();
   for (const n of want) {
     const g0 = Date.now(), f0 = failures; console.log('--- ' + n + ': ' + ABOUT[n]);
-    try { await GROUPS[n](); } catch (e) { check(false, n + ': the group ran to its end', String(e && e.message || e).split('\n')[0]); }   // one group breaking does not stop the rest
+    let stuck = null;   // a group that stops dead (a check waiting on something that never comes) fails after 7 minutes, and the run goes on
+    try { await Promise.race([GROUPS[n](), new Promise((_, no) => { stuck = setTimeout(() => no(new Error('no result after 7 minutes: a check stopped dead')), 420000); })]); clearTimeout(stuck); } catch (e) { clearTimeout(stuck); check(false, n + ': the group ran to its end', String(e && e.message || e).split('\n')[0]); }   // one group breaking does not stop the rest
     console.log('    (' + n + ': ' + Math.round((Date.now() - g0) / 1000) + ' s' + (failures > f0 ? ', ' + (failures - f0) + ' failed' : '') + ')');
   }
   check(errors.length === 0, 'no page errors', errors.slice(0, 5).join(' | '));
