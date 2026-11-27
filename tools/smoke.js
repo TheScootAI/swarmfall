@@ -88,7 +88,7 @@ const GROUPS = {
       (function f() { if (s.SH.gift >= 0) { out.crossed = true; out.podLeftShuttle = !s.SH.pod; } if (out.crossed && s.SH.gift < 0 && !s.SH.on) { out.gone = true; return res(out); } if (performance.now() - t0 > 8000) return res(out); requestAnimationFrame(f); })(); }));
     check(side.beside && side.pod && side.on && handOver.crossed && handOver.podLeftShuttle && handOver.gone, 'the shuttle holds beside the ship, the chosen booster crosses over, and the shuttle drops back', JSON.stringify({ ...side, ...handOver }));
 
-    await page.evaluate(() => { window.__swarmfall.G.run.scrap += 60; });
+    await page.evaluate(() => { window.__swarmfall.G.run.scrap += 120; });   // enough to buy Reinforced Hull (90) at the station
     // watch the Hive Core's death scene from inside the page: slowest game speed, closest camera, and hull lost during it
     await page.evaluate(() => { const s = window.__swarmfall, w = window.__fin = { slowest: 1, closest: 1, far: s.camera.position.z, hp: null, hurt: false };
       (function f() {
@@ -113,7 +113,7 @@ const GROUPS = {
     check(!fin.on && fin.speed === 1 && Math.abs(fin.z - fin.far) < 0.01, 'speed and camera are back to normal by the time docking starts', JSON.stringify(fin));
     check(fin.sps.length === 14 && fin.worth === 14 && new Set(fin.sps).size >= 10 && Math.max(...fin.sps) === 1 && Math.min(...fin.sps) < 0.6 && fin.gotLast - fin.gotFirst > 0.3 && fin.picksLeft === 0, 'the boss\'s scrap is a shower of 14 single rings, which fly to the ship at different speeds and are all in before docking', fin.sps.length + ' rings worth ' + fin.worth + ', speeds ' + Math.min(...fin.sps) + ' to 1, collected over ' + (fin.gotLast - fin.gotFirst).toFixed(2) + ' s of game time');
     s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);
-    check(s.scrap >= 60, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
+    check(s.scrap >= 120, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
     await shot('05-station');
     const hp0 = await page.evaluate(() => window.__swarmfall.S.maxHp);
     await page.locator('#shop .item', { hasText: 'Reinforced Hull' }).locator('button').tap();
@@ -185,20 +185,32 @@ const GROUPS = {
     check(es.table === '3 0.8 2 0.6 from 2 falsefalsefalse' && es.sent === 3 && es.mites === true, 'escorts: from wave 2; three of the nearest mites leave with a beetle, two with a wasp; mites, triplets and lancers get none', JSON.stringify(es));
     check(es.alive === true && es.ahead.every(d => d > 18 && d < 42) && es.across.length === 3 && Math.abs(es.across[0] + 24) < 9 && Math.abs(es.across[1]) < 9 && Math.abs(es.across[2] - 24) < 9, 'a beetle\'s escort holds a wall just in front of it while it launches its missiles', JSON.stringify({ ahead: es.ahead, across: es.across }));
     check(es.released === true, 'with the beetle gone, its escort carries on as ordinary divers');
-    // Fire from the formation: only wasps, and only darts. With the wasps gone, the formation does not fire at all.
-    const ff = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, out = { darts: 0, other: 0, quiet: 0 }, t0 = performance.now();
-      for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; G.wave = 9; s.nextWave(); G.flights = 0;
-      for (const q of G.queue) q.fn(); G.queue.length = 0;
-      let step = 0, tries = 0;
+    // Fire from the formation. Before wave 7 only wasps fire, and only darts: with no wasp sitting, nothing fires. From wave 7 the rest join in with slow balls.
+    const ff = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, out = { early: { darts: 0, other: 0, quiet: 0 }, late: { darts: 0, other: 0 }, from: s.UNLOCK.formationFire }, t0 = performance.now();
+      const build = w => { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.em.length = 0; G.wave = w - 1; s.nextWave(); G.flights = 0; for (const q of G.queue) q.fn(); G.queue.length = 0; };
+      let step = 0, tries = 0; build(5);
       (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.em.length = 0; for (const e of G.enemies) if (e.def.latch) e.leap = 9;
-        if (performance.now() - t0 > 40000) { out.timeout = step; return done(out); }
+        if (performance.now() - t0 > 60000) { out.timeout = step; return done(out); }
         const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
-        for (const b of G.eb) if (!b.seen) { b.seen = true; if (step === 1) { if (b.kind === 1) out.darts++; else out.other++; } else if (step === 2) out.quiet++; }
-        if (step === 0) { G.shootT = 99; if (G.waveT > 2.6 && formed.length >= G.form.size) { out.kinds = [...new Set(formed.map(e => e.type))].sort().join(); step = 1; } }
-        else if (step === 1) { G.shootT = 0; if (++tries >= 60) { for (const e of G.enemies) if (e.type === 'wasp') { e.dead = true; s.scene.remove(e.g); } tries = 0; step = 2; } }
-        else if (step === 2) { G.shootT = 0; if (++tries >= 40) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; return done(out); } }
+        for (const b of G.eb) if (!b.seen) { b.seen = true; if (step === 1) { if (b.kind === 1) out.early.darts++; else out.early.other++; } else if (step === 2) out.early.quiet++; else if (step === 4) { if (b.kind === 1) out.late.darts++; else out.late.other++; } }
+        if (step === 0 || step === 3) { G.shootT = 99; if (G.waveT > 2.6 && formed.length >= G.form.size) step++; }
+        else if (step === 1) { G.shootT = 0; if (++tries >= 50) { for (const e of G.enemies) if (e.type === 'wasp') { e.dead = true; s.scene.remove(e.g); } tries = 0; step = 2; } }
+        else if (step === 2) { G.shootT = 0; if (++tries >= 40) { tries = 0; build(9); step = 3; } }
+        else if (step === 4) { G.shootT = 0; if (++tries >= 80) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; return done(out); } }
         requestAnimationFrame(f); })(); }));
-    check(ff.kinds && ff.kinds.includes('wasp') && ff.kinds.includes('mite') && ff.darts >= 40 && ff.other === 0 && ff.quiet === 0, 'only wasps fire from the formation, and only darts; with no wasp sitting, nothing fires', JSON.stringify(ff));
+    check(ff.from === 7 && ff.early.darts >= 30 && ff.early.other === 0 && ff.early.quiet === 0, 'before wave 7 only wasps fire from the formation, and only darts; with no wasp sitting, nothing fires', JSON.stringify(ff.early));
+    check(ff.late.darts > 0 && ff.late.other > 0, 'from wave 7 the rest of the formation fires too, with slow balls', JSON.stringify(ff.late));
+    // In flight: before wave 7 only a wasp fires as it dives; from wave 7 a diving weaver and a diving splitter each fire one slow ball. A mite never does.
+    const df = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, out = {}, t0 = performance.now();
+      const dive = (wave, type) => { G.wave = wave; const e = s.spawnEnemy(type, null, null, { x: 180, y: 100 }); s.launchDive(e); const n = e.shots; e.dead = true; s.scene.remove(e.g); return n; };
+      for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; G.flights = 0;
+      out.early = [dive(5, 'weaver'), dive(5, 'mite'), dive(5, 'wasp')].join(); out.late = [dive(9, 'weaver'), dive(9, 'splitter'), dive(9, 'mite'), dive(9, 'wasp')].join(); out.quiet = [dive(14, 'weaver'), dive(14, 'wasp')].join();
+      G.wave = 9; G.eb.length = 0; const guard = s.spawnEnemy('mite', 0, 0); guard.hp = guard.maxHp = 1e12; const w = s.spawnEnemy('weaver', null, null, { x: 180, y: 100 }); s.launchDive(w); w.hp = w.maxHp = 1e12;
+      (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99; guard.hp = 1e12;
+        if (G.eb.length && out.ball === undefined) out.ball = G.eb[0].kind === 0;
+        if (out.ball !== undefined || w.dead || performance.now() - t0 > 15000) { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.eb.length = 0; return done(out); }
+        requestAnimationFrame(f); })(); }));
+    check(df.early === '0,0,2' && df.late === '1,1,0,3' && df.quiet === '0,0' && df.ball === true, 'in flight: before wave 7 only a wasp fires; from wave 7 a diving weaver and splitter each fire one slow ball; a mite never does; nobody on a quiet wave', JSON.stringify(df));
     // (The diving wasp and beetle are the check's own: the formation's roll does not always hold a beetle.)
     // Quiet waves: on every 14th wave (never a boss wave) nothing fires. No darts from the formation or from a diving wasp, no missiles from a beetle, no laser.
     const qw = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, out = { which: [14, 28, 42, 13, 56].map(w => s.quietWave(w)).join() , shots: 0, missiles: 0, laser: false }, t0 = performance.now();
@@ -651,9 +663,9 @@ const GROUPS = {
     check(vp.chance === 0.25 && vp.none === 1 && vp.hurtNone === 0, 'Volatile Payload: a destroyed enemy explodes one time in four; on the other three nothing near it is touched', JSON.stringify({ chance: vp.chance, destroyed: vp.none, hurt: vp.hurtNone }));
     // Hull: two upgrades at the most, counting the station's Reinforced Hull and Hull Plate boosters together
     const hull = await page.evaluate(() => { const s = window.__swarmfall, was = s.meta.up.hull, plate = s.UP.find(u => u.id === 'plate'), out = {};
-      for (const [m, b] of [[0, 2], [1, 1], [2, 2], [2, 0], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
-      s.meta.up.hull = was; s.G.up = {}; s.recalc(); out.max = plate.max; return out; });
-    check(hull['0+2'] === '3 full' && hull['1+1'] === '3 full' && hull['2+2'] === '3 full' && hull['2+0'] === '3 full' && hull['1+0'] === '2 more' && hull.max === 2, 'hull: at most 2 upgrades, station levels and Hull Plates together, and Hull Plate is not offered past that', JSON.stringify(hull));
+      for (const [m, b] of [[0, 2], [1, 1], [1, 2], [0, 1], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
+      s.meta.up.hull = was; s.G.up = {}; s.recalc(); out.max = plate.max; const shopHull = s.SHOP.find(x => x.id === 'hull'); out.levels = shopHull.cost.length; out.price = shopHull.cost[0]; return out; });
+    check(hull['0+2'] === '3 full' && hull['1+1'] === '3 full' && hull['1+2'] === '3 full' && hull['0+1'] === '2 more' && hull['1+0'] === '2 more' && hull.max === 2 && hull.levels === 1 && hull.price === 90, 'hull: at most 2 upgrades, of which the station sells one (for 90); Hull Plate is not offered past the two', JSON.stringify(hull));
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
