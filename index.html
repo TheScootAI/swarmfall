@@ -360,6 +360,7 @@ const mlv = id => testMods ? testMods[id] | 0 : meta.up[id] || 0;
 // ---------- audio ----------
 let AC = null, master = null, noiseBuf = null, hush = null, audioStale = false;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let embedded = true; try { embedded = window.top !== window.self; } catch (e) {}   // running inside another page, as an artifact does
 // A short silent clip. On iPhones and iPads the ring/silent switch mutes game audio unless the page counts as
 // "playing media"; looping this is the long-standing way to make it count where the newer setting is missing.
 function silentClip() {
@@ -388,7 +389,9 @@ function audioInit() {
   if (audioStale && AC.state === 'running') { audioStale = false; try { const p = AC.suspend(); if (p && p.then) p.then(() => AC.resume()).catch(() => {}); } catch (e) {} }
   else if (AC.state !== 'running') { audioStale = false; try { const r = AC.resume(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
   if (hush && hush.paused && !meta.mute) { try { const r = hush.play(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }   // the silent clip that keeps an iPhone's sound on is stopped by the same things
-  if (isIOS && !navigator.audioSession && !meta.mute && !hush) {
+  // Inside another page (an artifact in the Claude app is one) the audio session setting above may be there and yet do
+  // nothing: the owner had sound in Safari and none in the artifact. So an embedded copy plays the silent clip as well.
+  if (isIOS && (!navigator.audioSession || embedded) && !meta.mute && !hush) {
     try { hush = new Audio(silentClip()); hush.loop = true; hush.setAttribute('playsinline', ''); const r = hush.play(); if (r && r.catch) r.catch(() => { hush = null; }); } catch (e) { hush = null; }
   }
 }
