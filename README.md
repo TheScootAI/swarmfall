@@ -61,7 +61,8 @@ There is no build for the game. Edit `index.html` and open it in a browser.
 
 ```
 cd tools && npm install
-node smoke.js [screenshot-dir]   # plays a full run in a headless phone browser; exits 1 on failure
+node smoke.js [screenshot-dir]   # every test group in a headless phone browser (about 8 minutes); exits 1 on failure
+node smoke.js --only core,intro  # only some groups; --list names them
 node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by eye
 node artifact.js [out.html]      # the copy of the game published as a claude.ai artifact
 node portraits.js                # re-renders the enemy pictures for the guide

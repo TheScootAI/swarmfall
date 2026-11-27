@@ -44,15 +44,23 @@ These are in `CLAUDE.md`. The ones that bite most often:
 
 ## 4. Test
 
+Choose the test groups to fit the change. Do not run everything for a small one: the owner asked for that, because it made every request wait eight minutes.
+
 ```
-cd tools && node smoke.js /tmp/shots   # every check must PASS; screenshots land in /tmp/shots
+cd tools
+node smoke.js --only core,bosses /tmp/shots   # the groups you need; screenshots land in /tmp/shots
+node smoke.js /tmp/shots                      # every group, about 8 minutes
+node smoke.js --list
 ```
 
-- If you changed rendering, colours, HUD or any screen, also run `node shots.js <dir> "gfx=high"` and look at the pictures; the checks cannot see colour. Compare with the pictures from before your change.
+- **Always `core`** (40 seconds). Add the groups for what you touched. The table and the rules for choosing are under "Testing" in `CLAUDE.md`.
+- **Every group** after a change to shared code (the loop, enemy updates, damage and kills, saving, the screens, input), whenever you are unsure what a change can reach, and before a branch is merged.
+- Say in your report which groups you ran.
+- Every check must PASS. If you changed rendering, colours, HUD or any screen, also run `node shots.js <dir> "gfx=high"` and look at the pictures; the checks cannot see colour. Compare with the pictures from before your change.
 - Frame rate on a phone cannot be measured in the sandbox. Tell the owner when a change could cost speed.
 - For a balance change, tell the owner it is untested by a person, and how to reach it on the test bench (five taps on the title: pick the wave and boosters, Launch test).
-- For a behaviour the smoke test does not cover, add a check to `smoke.js`, not a throwaway script. Use `window.__swarmfall` (see `CLAUDE.md`) to set up the situation.
-- `node --check tools/smoke.js` catches a broken test script before a 2-minute run. To check that the game's script parses without a browser:
+- For a behaviour the tests do not cover, add a check to the right group in `smoke.js` (or a new group), not a throwaway script. Use `window.__swarmfall` (see `CLAUDE.md`) to set up the situation. A group must stand alone: it starts from `open()` with a new save.
+- `node --check tools/smoke.js` catches a broken test script before a run. To check that the game's script parses without a browser:
 
 ```
 node -e "const s=require('fs').readFileSync('index.html','utf8');new Function(s.match(/<script>\n([\s\S]*)<\/script>/)[1]);console.log('parses')"

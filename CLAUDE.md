@@ -123,27 +123,40 @@ Not done, on purpose: the WebGPU renderer and node materials. They cannot be run
 ## Testing
 
 ```
-cd tools && npm install          # three.js, esbuild; Playwright and Chromium are already on the machine
-node smoke.js [shots-dir]        # about 8 minutes; exits 1 on any failure
-node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by eye; add `bosses` for only the boss ones
+cd tools && npm install              # three.js, esbuild; Playwright and Chromium are already on the machine
+node smoke.js --only core,intro      # only these groups
+node smoke.js                        # every group: about 8 minutes; exits 1 on any failure
+node smoke.js --list                 # the groups
+node shots.js <dir> "gfx=high"       # fixed pictures for judging the look by eye; add `bosses` for only the boss and cloud ones
 ```
 
-`smoke.js` uses headless Chromium in a phone viewport with software WebGL. It covers:
+`smoke.js` uses headless Chromium in a phone viewport with software WebGL. Its checks are in named groups. Each group opens its own fresh browser with a new save, so any group runs alone and in any order.
 
-- A full run: launch, booster shuttle, Hive Core, docking, the station, death and reload.
-- The four bosses after the Hive Core: each arrives on its wave, every attack happens, and destroying each leads to docking and a new module. Also: the cube breaks 1 to 2 to 4 with the bar following; a gap between the Warden's beams is safe and a beam is not; the Siege Beetle's shell lets 40% of a hit through shut and all of it open; losing a Triad core does not end the fight.
-- Checks that each enemy first appears on the wave `UNLOCK` says.
-- Sentry satellites and the Laser Drone: a satellite deploys ahead of the ship, fires by itself, stops enemy shots, is shot down or runs out; the station module's is tougher with two barrels; the laser burns everything in its lane and nothing outside it.
-- Ships a boss releases: lanes on the first pass, then new places, paces and lines.
-- The cloud boosters: a Flame Cloud weakens an enemy and never destroys it; a confused enemy chases and rams the enemy furthest from it, with no new weapon, and flies home if its time runs out; the ship lobs clouds into the lanes below the formation. A dart bends a little toward the ship and a sidestep still clears it. A boss's scrap arrives over time and is all in before docking.
-- Enemy introductions: the slow-down and speed-up, the frozen game, the card staying until a fresh touch, each kind once per save, and the bench's switch. Every other test page turns them off with `?intro=off`, as `shots.js` and `portraits.js` do.
-- The test bench: the secret gesture, choosing a wave and boosters, that a test run starts as set up and leaves the save untouched, and `?debug`.
-- A stress run with every booster on, and pause.
-- The station: Undock stays on screen while the list scrolls, and "More below" shows until its end. On a short phone (iPhone SE size), the same for the title, pause and booster screens.
-- A boss's death scene: slow motion happens and the camera stays put, the ship cannot be hit during it, and speed is normal again before docking.
-- Graphics: the setting button, that a real picture reaches the screen with every effect on, and that `auto` steps down on a slow device.
+| Group | Seconds | What it covers |
+|---|---|---|
+| `core` | 40 | A whole run: launch, the booster shuttle and its hold, a booster and the hand-over, the Hive Core and its death scene, the scrap shower, docking, the station, death, reload. |
+| `waves` | 10 | Each enemy first appears on the wave `UNLOCK` says; how fast they fly in; the order of the bosses. |
+| `bosses` | 180 | The Fracture Cube, Beam Warden, Siege Beetle and Triad: each arrives on its wave, every attack happens, its special rules hold, and destroying it leads to docking and a new module. Also the station's bottom bar and "More below". |
+| `clouds` | 40 | Flame Cloud weakens and never destroys; a confused enemy chases and rams, with no new weapon; clouds go into the lanes; a dart leans a little and a sidestep clears it. |
+| `released` | 30 | Ships a boss releases: lanes on the first pass, then new places, paces and lines. |
+| `sentry` | 20 | Sentry satellites (the booster's and the station module's) and the Laser Drone. |
+| `stress` | 35 | Every booster at once on late waves; pause; the Graphics button. |
+| `gfx` | 20 | Every effect on and a real picture on screen; `auto` steps down on a slow device. |
+| `bench` | 40 | The test bench: the secret gesture, choosing a wave, boosters and modules, a test run leaving the save untouched, `?debug`. |
+| `intro` | 50 | Enemy introductions: the slow-down and speed-up, the frozen game, the card staying until a fresh touch, once per kind per save, the bench's switch. |
+| `small` | 15 | A short phone (iPhone SE size): every screen keeps its main buttons on screen and says when there is more. |
 
-The main run uses `?gfx=low`, because software rendering makes the effects very slow. Frame rate on a real phone cannot be measured here; say so when it matters.
+**Which groups to run.** The owner asked for the tests to be chosen to fit the change, since running everything every time made every small request wait eight minutes.
+
+- **Always `core`.** It is 40 seconds and plays the whole loop.
+- **A small, contained change** (wording, a number in a table, one booster, one boss, one screen's layout): `core` plus the groups for what you touched. A number in `CUBE` is `core,bosses`; a booster's numbers are `core,stress` and its own group if it has one; a screen's styles are `core,small`; an enemy's arrival wave is `core,waves`.
+- **Every group**, when the change is to code everything shares: `frame()`, `updateGame()`, `updateEnemies()`, `damageEnemy()` and `killEnemy()`, saving and loading, `show()` and the screens' shared styles, input handling, the three.js stage. Also when you are not sure what a change can reach.
+- **Every group before a branch is merged**, and after any change to `smoke.js` itself.
+- When you ran only some groups, say which in your report, so the owner knows what was and was not checked.
+
+A new feature gets its checks in the group it belongs to, or a new group (add it to `GROUPS` and `ABOUT` in `smoke.js`, and to the table above). A group must not depend on another having run: start from `open()`, and set up whatever the checks need.
+
+Every test page but the `intro` group's switches enemy introductions off with `?intro=off`, as `shots.js` and `portraits.js` do, and all but the `gfx` group's use `?gfx=low`, because software rendering makes the effects very slow. Frame rate on a real phone cannot be measured here; say so when it matters.
 
 Passing tests cannot see colour or layout. After a change to rendering or UI, save screenshots (pass a directory) and look at them.
 
