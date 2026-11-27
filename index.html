@@ -56,7 +56,7 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 #toast.go{animation:toast 1.7s ease-out both}
 /* A new enemy's introduction: the game has stopped, the field dims but for a spotlight on the enemy, and a card says
    what it is. The ring is white: a blue one would look like the halo that marks something good to grab. */
-#intro{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .2s}   /* nothing to press: it goes by itself */
+#intro{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .2s}   /* touches pass through: any new touch on the field carries on, and goes on to steer */
 #intro.on{opacity:1}
 #introRing{position:absolute;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px var(--ink),0 0 18px 2px rgba(238,240,255,.45);animation:introRing 1.2s ease-in-out infinite}
 @keyframes introRing{50%{box-shadow:0 0 0 3px var(--ink),0 0 28px 6px rgba(238,240,255,.6)}}
@@ -66,6 +66,8 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 #introCard p{margin:0}
 #introA{font-size:1rem;line-height:1.4}
 #introB{font-size:1rem;line-height:1.4;color:var(--arc)}
+#introGo{margin-top:6px!important;font:700 .8rem/1 var(--display);letter-spacing:.18em;text-transform:uppercase;color:var(--dim);animation:introGo 1.2s ease-in-out infinite}
+@keyframes introGo{50%{opacity:.35}}
 #toast small{display:block;margin-top:8px;font:500 .95rem/1.2 var(--body);letter-spacing:.04em;color:var(--dim);text-shadow:none}
 @keyframes toast{0%{opacity:0;transform:translateY(12px)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0}}
 
@@ -176,7 +178,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 .fb-row .btn{min-height:44px;padding:0 14px;font-size:.85rem;display:inline-grid;place-items:center;text-decoration:none}
 #fbSend[aria-disabled="true"]{opacity:.45;cursor:default}
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;background:var(--void)}
-@media (prefers-reduced-motion:reduce){#introRing{animation:none}#intro{transition:none}#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}.more::after{animation:none}}
+@media (prefers-reduced-motion:reduce){#introGo{animation:none}#introRing{animation:none}#intro{transition:none}#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}.more::after{animation:none}}
 </style>
 </head>
 <body>
@@ -189,6 +191,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       <h2 id="introName"></h2>
       <p id="introA"></p>
       <p id="introB"></p>
+      <p id="introGo">Tap to continue</p>
     </div>
   </div>
   <div id="col">
@@ -2344,11 +2347,13 @@ $('shop').onclick = e => {
 
 // ---------- enemy introductions ----------
 // The first time a kind of enemy takes its place, the game slows quickly to a stop, the field dims but for a
-// spotlight on that enemy, and a card says what it is and what to do about it. After a moment the game speeds up
-// again by itself: there is nothing to press (the owner asked for that).
+// spotlight on that enemy, and a card says what it is and what to do about it. It stays until the player touches
+// the screen afresh: lift the finger and put it down again, like "press fire to continue" (the owner's words; a card
+// that went by itself after a moment was tried first). That touch then steers as usual. A click or a key does the same.
 // Each kind is introduced once per save (meta.seen). ramp: seconds to slow to a stop and to speed back up.
-// hold: seconds the card stays up. gap: game seconds between two introductions when a wave brings two new kinds.
-const INTRO = { ramp: 0.3, hold: 1.5, gap: 1.6 };
+// wait: seconds after the card appears before a touch counts, so one already on its way down does not clear it
+// unread. gap: game seconds between two introductions when a wave brings two new kinds.
+const INTRO = { ramp: 0.3, wait: 0.35, gap: 1.6 };
 // what it does, then what to do about it: two short lines each
 const INTRO_TEXT = {
   mite: ['The pawns of the swarm. They dive at you and ram.', 'One shot each. Thin them out while they sit.'],
@@ -2401,17 +2406,20 @@ function introShow() {
   if (!IN.e) { introEnd(); return; }
   const boss = BOSSES.find(b => b.type === key), text = INTRO_TEXT[key];
   $('introKind').textContent = boss ? 'New boss' : 'New enemy'; $('introName').textContent = boss ? boss.name : INTRO_NAME[key]; $('introA').textContent = text[0]; $('introB').textContent = text[1];
+  $('introGo').textContent = finePointer ? 'Click to continue' : 'Tap to continue';
   $('intro').hidden = false; introPlace(); $('intro').offsetWidth; $('intro').classList.add('on');   // reading its width makes the fade-in start from clear
   restoreMats(IN.e); IN.e.flash = 0;   // not caught white in the middle of a hit-blink
   IN.phase = 'hold'; IN.t = 0; SFX.card();
 }
+// The player's fresh touch (or click, or key): carry on.
+function introDone() { if (IN.on && IN.phase === 'hold' && IN.t >= INTRO.wait) { IN.phase = 'out'; IN.t = 0; $('intro').classList.remove('on'); } }
 // Moves the introduction on by real time and returns how fast game time runs this frame: quickly down to 0, held
 // there while the card is up, and quickly back to 1.
 function introStep(real) {
   if (!IN.on) return 1;
   if (!inPlay()) { introEnd(); return 1; }
   IN.t += real;
-  if (IN.phase === 'hold') { if (IN.t >= INTRO.hold) { IN.phase = 'out'; IN.t = 0; $('intro').classList.remove('on'); } return 0; }
+  if (IN.phase === 'hold') return 0;   // until introDone()
   const k = Math.min(1, IN.t / (reduceMotion ? 0.01 : INTRO.ramp));
   if (IN.phase === 'in') { if (k < 1) return 1 - smooth(k); introShow(); return 0; }
   if (k < 1) return smooth(k);
@@ -2589,6 +2597,7 @@ addEventListener('keydown', e => {
   audioInit(); const k = e.key.toLowerCase();
   if (k === 'arrowleft' || k === 'arrowright' || k === 'a' || k === 'd') { keys[k] = true; if (inPlay()) e.preventDefault(); }
   else if (G.state === 'cut') { /* a cutscene always plays out */ }
+  else if (IN.on) { if (k === ' ' || k === 'enter') e.preventDefault(); introDone(); }   // any key carries on from an introduction
   else if (k === '`' && G.state === 'title') openDebug();
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'm') toggleMute();
@@ -2600,6 +2609,7 @@ let drag = null;
 const worldX = cx => clamp((cx - window.innerWidth / 2) * unitsPerPx + W / 2, 14, W - 14);
 addEventListener('pointerdown', e => {
   audioInit();
+  if (IN.on && !(e.target.closest && e.target.closest('#fb'))) introDone();   // a fresh touch carries on from an introduction, and then steers as usual
   if (G.state === 'cut' && !(e.target.closest && e.target.closest('button, #fb'))) return;   // a touch during a cutscene does nothing: it neither skips the scene nor steers
   if (!inPlay() || (e.target.closest && e.target.closest('button, #fb'))) return;
   if (e.pointerType === 'mouse') P.target = worldX(e.clientX); else drag = { id: e.pointerId, sx: e.clientX, tx: P.x };

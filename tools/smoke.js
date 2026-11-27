@@ -435,19 +435,25 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
         out.started = true; out.key = IN.key; s.P.inv = 9;
         if (IN.phase === 'in') out.in.push(+s.G.speed.toFixed(2));
         else if (IN.phase === 'hold') { if (g0 === null) { g0 = s.G.time; out.name = document.getElementById('introName').textContent; out.kind = document.getElementById('introKind').textContent; out.text = document.getElementById('introA').textContent + ' / ' + document.getElementById('introB').textContent;
-            const r = document.getElementById('introRing').getBoundingClientRect(), c = document.getElementById('introCard').getBoundingClientRect(); out.ring = Math.round(r.width); out.cardOnScreen = c.top >= 0 && c.bottom <= innerHeight && c.left >= 0 && c.right <= innerWidth; out.cardClearOfRing = c.top >= r.bottom || c.bottom <= r.top; out.button = !!el.querySelector('button'); }
+            const r = document.getElementById('introRing').getBoundingClientRect(), c = document.getElementById('introCard').getBoundingClientRect(); out.ring = Math.round(r.width); out.cardOnScreen = c.top >= 0 && c.bottom <= innerHeight && c.left >= 0 && c.right <= innerWidth; out.cardClearOfRing = c.top >= r.bottom || c.bottom <= r.top; out.button = !!el.querySelector('button'); out.prompt = document.getElementById('introGo').textContent;
+            window.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })); }   // a touch landing just as the card appears must not clear it
+          if (IN.t > 0.2 && IN.t < 0.34) out.earlyTouchIgnored = true;
           out.frozen = s.G.time === g0 && s.G.speed === 0; out.held = +IN.t.toFixed(2); out.shown = !el.hidden; }
         else out.out.push(+s.G.speed.toFixed(2));
       } else if (out.started) { out.after = s.G.speed; out.hidden = el.hidden; return res(out); }
       if (performance.now() - t0 > ms) return res(out);
       requestAnimationFrame(f); })(); }), ms);
   const ramps = a => a.length >= 3 && a.some(v => v > 0.1 && v < 0.9);
-  await startIp(); const i1 = await watchIntro(40000);
+  const cardUpFor = t => ip.waitForFunction(t => { const I = window.__swarmfall.IN; return I.on && I.phase === 'hold' && I.t >= t; }, t, { timeout: 60000 });
+  // an introduction stays until the player touches the screen afresh: wait well past the point, then tap
+  const through = async wait => { const w = watchIntro(90000); await cardUpFor(wait); await ip.touchscreen.tap(200, 520); return w; };
+  await startIp(); const i1 = await through(2.5);
   check(i1.started && i1.key === 'mite' && i1.name === 'Mite' && i1.kind === 'New enemy' && i1.shown && i1.ring > 20 && i1.cardOnScreen && i1.cardClearOfRing, 'a new enemy is introduced when it takes its place: a spotlight on it and a card with its name and what to do', JSON.stringify({ name: i1.name, text: i1.text, ring: i1.ring }));
   check(ramps(i1.in) && i1.in[0] > i1.in[i1.in.length - 1] && i1.frozen && ramps(i1.out) && i1.out[0] < i1.out[i1.out.length - 1] && i1.after === 1 && i1.hidden, 'the game slows quickly to a stop for it, then speeds quickly back up', 'in ' + i1.in.join(' ') + ' · out ' + i1.out.join(' '));
-  check(!i1.button && i1.held >= 1.4 && i1.held <= 1.6, 'the card goes by itself after about a second and a half, with nothing to press', 'held ' + i1.held + ' s');
+  check(!i1.button && i1.prompt === 'Tap to continue' && i1.earlyTouchIgnored && i1.held >= 2.5, 'the card stays until the player touches the screen afresh; a touch landing as it appears does not clear it', 'still up after ' + i1.held + ' s, cleared by a tap');
   await ip.evaluate(() => { const s = window.__swarmfall; for (const e of s.G.enemies) { e.dead = true; e.g.visible = false; } s.G.wave = 1; s.nextWave(); });
-  const i2 = await watchIntro(40000);
+  const i2 = await through(0.6);
+  const steers = await ip.evaluate(() => window.__swarmfall.G.state === 'play');
   const seenSaved = await ip.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('swarmfall.v1')).seen || {}).sort().join());
   check(i2.key === 'wasp' && i2.name === 'Wasp' && seenSaved === 'mite,wasp', 'the next new kind is introduced in its turn, and the save remembers which have been', 'saved as seen: ' + seenSaved);
   await ip.reload(); await ip.waitForTimeout(600); await startIp();
@@ -458,9 +464,9 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   if ((await ip.textContent('#dbgIntro')).endsWith('off')) await ip.tap('#dbgIntro');
   await ip.tap('#dbgClear'); await ip.tap('#dbgBoss [data-w="6"]'); if ((await ip.textContent('#dbgGod')).endsWith('off')) await ip.tap('#dbgGod');
   await ip.tap('#dbgGo'); await ip.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 30000 });
-  const i4 = await watchIntro(60000);
+  const i4 = await through(0.6);
   const seenAfter = await ip.evaluate(() => Object.keys(window.__swarmfall.meta.seen).sort().join());
-  check(i4.key === 'boss' && i4.name === 'Hive Core' && i4.kind === 'New boss' && seenAfter === 'mite,wasp', 'test bench: "Introduce enemies" shows them on a test run (a boss here) without touching the save', i4.name + ' · save still has ' + seenAfter);
+  check(i4.key === 'boss' && i4.name === 'Hive Core' && i4.kind === 'New boss' && seenAfter === 'mite,wasp' && steers, 'test bench: "Introduce enemies" shows them on a test run (a boss here) without touching the save', i4.name + ' · save still has ' + seenAfter);
 
   // ---- a short phone: every screen keeps its main buttons on screen and says when there is more below ----
   const sm = await (await browser.newContext({ ...devices['iPhone SE'] })).newPage();
