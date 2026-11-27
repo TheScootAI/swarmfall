@@ -29,6 +29,7 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 - **New enemies are introduced.** The first time each kind of enemy or boss appears, the game slows to a stop for a moment, puts a spotlight on it and tells you what it does and what to do about it, then waits for you to touch the screen again before it carries on.
 - **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else is a hit, and all enemy fire is red: balls, darts, missiles and laser beams.
 - **The latcher** (from wave 11) leaps on its own, very fast, drops down one side of your ship out of the line of fire, then hooks in and clamps onto its side; touching never hurts by itself. A second and a half later it blows up for one hit (a shield takes the blast). Shake it off by flicking the ship left and right, or by running hard into the edge of the field.
+- **The simulation.** Each time the ship docks after a boss, the station runs a holographic drill before the shop opens: forty holograms in five lines of eight, each line on a set path, different for each boss. Nothing in it can hurt the ship, and only the bare ship's own gun fires. Each hologram hit pays a little scrap, with a bonus for all forty.
 - **Quiet waves.** On every 14th wave (14, 28, 56 and so on; never a boss wave) the swarm holds its fire: no darts, no missiles, no lasers. It still dives, and latchers still leap.
 - **Escorts.** From wave 2, when a wasp, weaver, splitter or beetle leaves the formation it usually takes mites with it, flying just ahead of it as pawns. A wasp, weaver or splitter brings two; a beetle brings three, which hold a wall in front of it while it launches its missiles.
 - **Reinforcements.** From wave 2 a wave holds more than the formation you first see: when about a third of the formation is left, a fresh flight fills half of its places. From wave 10 that happens twice a wave. Bosses and wave 1 have none.
@@ -60,6 +61,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `SWARM`: how big the formation grows, and the reinforcements (from which waves, how thin the formation gets first, how much comes back).
 - `LATCH`: the latcher's fuse, what counts as shaking it off or slamming it off, and how many there are.
 - `ESCORT`: how often a stronger enemy takes mites with it when it dives, how many, and where they fly.
+- `SIM`: the simulation after a boss (the paths, the stages, the timing and what it pays).
 - `CLEAR`: the seconds of quiet after a wave (3) and after a boss (2).
 - `ENTER`: how much faster enemies fly into the formation each wave, and the limit.
 - `FINALE`: a boss's death scene (length, how slow, how often the follow-up blasts come).
