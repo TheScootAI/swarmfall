@@ -60,10 +60,11 @@ const GROUPS = {
     s = await waitFor(x => x.state === 'cut'); check(s.cut === 'launch', 'Launch opens the launch cutscene');
     s = await waitFor(x => x.state === 'play'); check(s.wave === 1, 'wave 1 starts after the launch');
     await page.waitForTimeout(400); await shot('02-wave1');
-    // a touch on the playfield refuses the phone's own gestures (its text magnifier on a double tap, zoom); a button keeps its tap
-    const tch = await page.evaluate(() => { const fire = el => { const ev = new TouchEvent('touchstart', { bubbles: true, cancelable: true }); el.dispatchEvent(ev); return ev.defaultPrevented; };
-      return { field: fire(document.getElementById('stage')), hud: fire(document.getElementById('wave')), button: fire(document.getElementById('btnPause')) }; });
-    check(tch.field === true && tch.hud === true && tch.button === false, 'a touch on the playfield refuses the phone\'s own double-tap and held-press gestures; a button keeps its tap', JSON.stringify(tch));
+    // the second tap of a double tap on the playfield refuses the phone's own gesture (its text magnifier, a zoom); a first tap is left alone, since sound may only start from an ordinary tap; a button always keeps its tap
+    const tch = await page.evaluate(() => new Promise(done => { const fire = (el, type = 'touchstart') => { const ev = new TouchEvent(type, { bubbles: true, cancelable: true }); el.dispatchEvent(ev); return ev.defaultPrevented; }, stage = document.getElementById('stage'), out = {};
+      setTimeout(() => { out.first = fire(stage); fire(stage, 'touchend'); out.second = fire(stage); out.button = fire(document.getElementById('btnPause')); fire(stage, 'touchend');
+        setTimeout(() => { out.later = fire(stage); done(out); }, 600); }, 600); }));
+    check(tch.first === false && tch.second === true && tch.button === false && tch.later === false, 'only the second tap of a double tap on the playfield refuses the phone\'s own gesture; a first tap, a later tap and a button keep theirs', JSON.stringify(tch));
     s = await playTo(x => x.state === 'clear' && x.wave === 1);
     check((await page.textContent('#toast')).includes('Booster shuttle inbound'), 'the shuttle is announced after wave 1');
     // the quiet after a wave lasts 3 seconds (CLEAR.wave) before the next wave, or the shuttle
@@ -484,7 +485,7 @@ const GROUPS = {
     const lt = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, { G, P, S, SHK } = s, out = {}, t0 = performance.now();
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.wave = s.UNLOCK.latcher;
       const guard = s.spawnEnemy('mite', 0, 0); guard.hp = guard.maxHp = 1e12;   // keeps the wave from counting as cleared
-      let step = 0, e = null, at = 0, hp0 = 0, kills0 = 0, seq = null, si = 0, was = false;
+      let step = 0, e = null, at = 0, hp0 = 0, kills0 = 0, seq = null, si = 0, was = false, lane = 1e9, lvx = 0, lvy = 0;
       const drop = dx => { e = s.spawnEnemy('latcher', null, null, { x: P.x + dx, y: P.y - 90 }); s.launchDive(e); e.x = P.x + dx; e.y = P.y - 90; e.vx = 0; e.vy = 220; hp0 = P.hp; kills0 = G.run.kills; was = false; };
       const since = () => G.time - at, go = n => { step = n; at = G.time; }, fresh = () => { P.hp = 3; P.inv = 0; P.shieldUp = false; };
       P.target = 180;
@@ -513,8 +514,9 @@ const GROUPS = {
         else if (step === 14 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); P.inv = 3; drop(6); go(15); }   // a ship still blinking from a hit: it cannot clamp on, and touching does no harm
         else if (step === 15) { if (!e.dead && e.y > P.y + 40 || since() > 2) { out.blink = { latched: was, hurt: hp0 - P.hp, flewOn: !e.dead }; e.dead = true; s.scene.remove(e.g); go(16); } }
         else if (step === 16 && since() > 0.3) { fresh(); e = s.spawnEnemy('latcher', 2, 0); was = false; hp0 = P.hp; go(17); }   // one sitting in the formation: nothing picks it to dive (G.diveT is held), it leaps by itself
-        else if (step === 17) { if (e.state === 'dive' && out.leapAfter === undefined) { out.leapAfter = +since().toFixed(2); at = G.time; }
-          if (was || since() > 8) { out.leap = { latched: was, flight: +since().toFixed(2), hurtByTouch: hp0 - P.hp }; if (!e.dead) { e.dead = true; s.scene.remove(e.g); } return res(out); } }
+        else if (step === 17) { if (e.state === 'dive' && out.leapAfter === undefined) { out.leapAfter = +since().toFixed(2); at = G.time; lane = 1e9; }
+          if (e.state === 'dive') { if (e.y > 320 && e.y < P.y - 60) lane = Math.min(lane, Math.abs(e.x - P.x)); if (e.y > P.y - 30) { lvx = Math.abs(e.vx); lvy = Math.abs(e.vy); } }   // how close it comes to the ship's line of fire on the way down, and how it is moving as it arrives
+          if (was || since() > 8) { out.leap = { latched: was, flight: +since().toFixed(2), hurtByTouch: hp0 - P.hp, lane: Math.round(lane), sideways: lvx > lvy }; if (!e.dead) { e.dead = true; s.scene.remove(e.g); } return res(out); } }
         requestAnimationFrame(f); })(); }));
     check(lt.latched === true && Math.abs(lt.side) === 1 && lt.toast.includes('SHAKE IT OFF') && lt.noHitYet === true, 'a latcher that reaches the ship clamps onto its side, with no hit yet, and the player is told to shake it off', JSON.stringify({ latched: lt.latched, side: lt.side, toast: lt.toast, timeout: lt.timeout }));
     check(lt.fuse > 1.85 && lt.fuse < 2.2 && lt.hurt === 1 && lt.noCredit === true, 'left alone it goes off after 2 seconds: one hit to the ship, and no credit for it', JSON.stringify({ fuse: lt.fuse, hurt: lt.hurt, noCredit: lt.noCredit }));
@@ -522,7 +524,8 @@ const GROUPS = {
     check(lt.slamHurt === 0 && lt.slamKill === 1 && lt.slamAtEdge === true && lt.slamTime < 1.5, 'so does one run into the edge of the field', JSON.stringify({ seconds: lt.slamTime, hurt: lt.slamHurt, kills: lt.slamKill }));
     check(lt.shield && lt.shield.latched === true && lt.shield.popped === true && lt.shield.hurt === 0, 'with a shield up it clamps on all the same, and if it goes off the shield takes the blast', JSON.stringify(lt.shield));
     check(lt.blink && lt.blink.latched === false && lt.blink.hurt === 0 && lt.blink.flewOn === true, 'touching the ship never hurts by itself: a latcher that cannot clamp on flies on by', JSON.stringify(lt.blink));
-    check(lt.leapAfter >= 1.4 && lt.leapAfter <= 5.2 && lt.leap && lt.leap.latched === true && lt.leap.flight < 2.5 && lt.leap.hurtByTouch === 0, 'a latcher in the formation leaps by itself within 5 seconds, fast, and catches a ship that stands still', JSON.stringify({ leapAfter: lt.leapAfter, ...lt.leap }));
+    check(lt.leapAfter >= 1.4 && lt.leapAfter <= 5.2 && lt.leap && lt.leap.latched === true && lt.leap.flight < 3 && lt.leap.hurtByTouch === 0, 'a latcher in the formation leaps by itself within 5 seconds, fast, and catches a ship that stands still', JSON.stringify({ leapAfter: lt.leapAfter, ...lt.leap }));
+    check(lt.leap && lt.leap.lane >= 55 && lt.leap.sideways === true, 'it stays out of the ship\'s line of fire on the way down, and comes in from the side', JSON.stringify({ lane: lt.leap && lt.leap.lane, sideways: lt.leap && lt.leap.sideways }));
     check(lt.pinned && lt.pinned.still === true && lt.pinned.flicks === 0, 'a ship pinned at the edge shakes nothing off', JSON.stringify(lt.pinned));
     await shot('17-latcher');
     await page.context().close();
