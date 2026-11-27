@@ -6,7 +6,7 @@ const GAME = path.join(__dirname, '..', 'index.html');
 const OUT = process.argv[2] || path.join(__dirname, '..', 'artifacts', 'enemy-guide', 'img');
 // name, model scale for the picture, spawn options
 const SHOTS = [['mite', 4.2, {}], ['wasp', 3.6, {}], ['weaver', 4, {}], ['splitter', 3.6, {}], ['beetle', 3, {}], ['elite', 3, { elite: true }],
-  ['triplet', 3.4, {}], ['lancer', 3, {}], ['boss', 1.4, { tint: 0xff4f8b }], ['cube', 1.5, {}], ['warden', 1.6, {}], ['siege', 1.7, {}], ['triad', 1.25, {}]];
+  ['triplet', 3.4, {}], ['lancer', 3, {}], ['latcher', 3.6, {}], ['boss', 1.4, { tint: 0xff4f8b }], ['cube', 1.5, {}], ['warden', 1.6, {}], ['siege', 1.7, {}], ['triad', 1.25, {}]];
 
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

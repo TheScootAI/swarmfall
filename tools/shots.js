@@ -54,6 +54,12 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
       if (!b && !G.queue.length && G.waveT > 6) { b = G.enemies.filter(e => e.type === 'beetle' && e.state === 'form').sort((p, q) => Math.abs(p.x - 200) - Math.abs(q.x - 200))[0]; if (b) { s.launchDive(b); s.sendEscort(b, 3); } } }; });
   await hold(page, 10500, 200); await snap(page, '4c-escort');
 
+  // latchers in the back rows, and one clamped onto the ship with its red light on
+  page = await open(); await start(page);
+  await page.evaluate(() => { const s = window.__swarmfall, G = s.G, P = s.P; s.LATCH.chance = 0.3; s.LATCH.most = 0.3; G.wave = 10; s.nextWave(); G.flights = 0; let e = null;
+    window.__tick = s => { G.diveT = 99; G.shootT = 99; P.fireT = 9; if (!e && !G.queue.length && G.waveT > 6) { e = s.spawnEnemy('latcher', null, null, { x: P.x + 6, y: P.y - 90 }); s.launchDive(e); e.x = P.x + 6; e.y = P.y - 90; e.vx = 0; e.vy = 220; } if (e && e.state !== 'latch') P.inv = 0; }; });
+  await hold(page, 7600, 200); await snap(page, '4d-latcher');
+
   // reinforcements: most of the formation destroyed, and a fresh flight on its way in under the word
   page = await open(); await start(page);
   await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 8; s.nextWave(); window.__tick = s => { s.P.inv = 9; }; });

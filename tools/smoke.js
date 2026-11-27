@@ -235,7 +235,7 @@ const GROUPS = {
       return first; });
     // the game's UNLOCK table says when each enemy arrives; check the waves it builds agree
     const U = await page.evaluate(() => window.__swarmfall.UNLOCK);
-    const expected = { mite: 1, wasp: U.wasp, weaver: U.weaver, splitter: U.splitter, elite: U.elite, beetle: U.beetle, triplet: U.triplet, lancer: U.lancer[0] };
+    const expected = { mite: 1, wasp: U.wasp, weaver: U.weaver, splitter: U.splitter, elite: U.elite, beetle: U.beetle, latcher: U.latcher, triplet: U.triplet, lancer: U.lancer[0] };
     for (const [t, w] of Object.entries(expected)) check(first[t] === w, t + ' first appears on wave ' + w + ' (UNLOCK)', 'seen first on ' + first[t]);
     const lancersAt = await page.evaluate(L => L.map(w => { const s = window.__swarmfall; for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0; return s.G.enemies.filter(e => e.type === 'lancer').length; }), U.lancer);
     check(lancersAt.join() === '1,2,3', 'lancers: 1, 2 and 3 from waves ' + U.lancer.join(', '), 'got ' + lancersAt.join(','));
@@ -249,7 +249,7 @@ const GROUPS = {
       out.after = []; for (let w = 1; w <= 40; w++) if (s.shuttleAfter(w)) out.after.push(w);
       return out; });
     check(el[7].share === 0 && el[8].share > 0 && el[8].share < 0.12 && Math.abs(el[20].share - 0.4) < 0.08 && el[40].share === 1 && el[40].want === 1, 'elites: none before wave 8, about 4% then, 40% on wave 20, every enemy on wave 40', JSON.stringify({ 7: el[7].share, 8: el[8].share, 20: el[20].share, 40: el[40].share }));
-    check(el[40].kinds === 'beetle,lancer,mite,splitter,triplet,wasp,weaver', 'on wave 40 every kind of enemy is an elite, triplets and lancers too', el[40].kinds);
+    check(el[40].kinds === 'beetle,lancer,latcher,mite,splitter,triplet,wasp,weaver', 'on wave 40 every kind of enemy is an elite, triplets and lancers too', el[40].kinds);
     check(el.after.join() === '1,4,9,14,19,29,34,39', 'the booster shuttle comes after waves 1, 4 and 9, then every 5th wave, but never after a boss wave (24)', el.after.join());
     // enemies fly into the formation 5% faster each wave: wave 1 takes 2.3 seconds, wave 11 two thirds of that, and it levels off at 2.5 times the pace
     const fl = first.flight; check(fl[1] === 2.3 && Math.abs(fl[11] - 2.3 / 1.5) < 0.002 && Math.abs(fl[2] - 2.3 / 1.05) < 0.002 && Math.abs(fl[31] - 0.92) < 0.002 && fl[29] > fl[31], 'enemies fly into the formation 5% faster each wave, up to 2.5 times', 'wave 1: ' + fl[1] + ' s, 2: ' + fl[2] + ', 11: ' + fl[11] + ', 31: ' + fl[31]);
@@ -476,6 +476,50 @@ const GROUPS = {
     check(sg.fired && sg.inLane > 0 && sg.laneLost > sg.laneOf * 0.5 && sg.otherUntouched, 'Laser Drone: its beam burns every enemy in its lane and nothing outside it', sg.inLane + ' in the lane lost ' + sg.laneLost + ' of ' + sg.laneOf);
     await page.context().close();
   },
+  // The latcher: clamps onto the ship, goes off after 2 seconds, and is thrown off by flicks or by a slam into the edge.
+  latcher: async () => {
+    const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
+    // The ship is steered through P.target, as a finger steers it. Each latcher is dropped just above the ship.
+    const lt = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, { G, P, S, SHK } = s, out = {}, t0 = performance.now();
+      for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.wave = s.UNLOCK.latcher;
+      const guard = s.spawnEnemy('mite', 0, 0); guard.hp = guard.maxHp = 1e12;   // keeps the wave from counting as cleared
+      let step = 0, e = null, at = 0, hp0 = 0, kills0 = 0, seq = null, si = 0, was = false;
+      const drop = dx => { e = s.spawnEnemy('latcher', null, null, { x: P.x + dx, y: P.y - 90 }); s.launchDive(e); e.x = P.x + dx; e.y = P.y - 90; e.vx = 0; e.vy = 220; hp0 = P.hp; kills0 = G.run.kills; was = false; };
+      const since = () => G.time - at, go = n => { step = n; at = G.time; }, fresh = () => { P.hp = 3; P.inv = 0; P.shieldUp = false; };
+      P.target = 180;
+      (function f() { G.diveT = 99; G.shootT = 99; P.fireT = 9; G.eb.length = 0; S.maxHp = 3; guard.hp = 1e12; if (e && e.state === 'latch') was = true;
+        if (performance.now() - t0 > 90000) { out.timeout = step; return res(out); }
+        if (step === 0 && since() > 0.4 && Math.abs(P.x - 180) < 2) { fresh(); drop(6); go(1); }
+        else if (step === 1 && (was || since() > 3)) { out.latched = e.state === 'latch'; out.side = e.side; out.toast = document.getElementById('toast').textContent; out.noHitYet = P.hp === hp0; go(2); }
+        else if (step === 2 && (e.dead || since() > 4)) { out.fuse = +since().toFixed(2); out.hurt = hp0 - P.hp; out.noCredit = G.run.kills === kills0; go(3); }   // left alone: it goes off
+        else if (step === 3 && since() > 2) { fresh(); drop(-6); go(4); }
+        else if (step === 4 && (was || since() > 3)) { seq = [P.x + 45, P.x - 45, P.x + 45, P.x - 45, P.x + 45]; si = 0; P.target = seq[0]; go(5); }
+        else if (step === 5) {   // shaken: the ship flicked from side to side
+          if (Math.abs(P.x - seq[si]) < 2 && si < seq.length - 1) P.target = seq[++si];
+          if (e.dead || since() > 3) { out.shakeTime = +since().toFixed(2); out.shakeHurt = hp0 - P.hp; out.shakeKill = G.run.kills - kills0; out.turns = si; P.target = 180; go(6); }
+        }
+        else if (step === 6 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); drop(6); go(7); }
+        else if (step === 7 && (was || since() > 3)) { P.target = 14; go(8); }   // slammed: one run into the left edge
+        else if (step === 8 && (e.dead || since() > 3)) { out.slamTime = +since().toFixed(2); out.slamHurt = hp0 - P.hp; out.slamAtEdge = P.x < 16; out.slamKill = G.run.kills - kills0; P.target = 180; go(9); }
+        else if (step === 9 && since() > 0.6 && Math.abs(P.x - 180) < 2) { fresh(); P.shieldUp = true; drop(6); go(10); }   // the shield stops it like any rammer
+        else if (step === 10 && (e.dead || since() > 3)) { out.shield = { stopped: e.dead && !was, popped: !P.shieldUp, hurt: hp0 - P.hp }; P.target = 346; go(11); }
+        else if (step === 11 && since() > 0.8 && P.x > 345) { fresh(); drop(-6); go(12); }
+        else if (step === 12 && (was || since() > 3)) { go(13); }
+        else if (step === 13) {   // pinned against the edge, a wiggling finger moves the ship nowhere and earns nothing
+          P.target = Math.floor(since() * 12) % 2 ? 346 : 380;
+          if (since() > 1.2) { out.pinned = { still: !e.dead && e.state === 'latch', flicks: SHK.n }; e.dead = true; s.scene.remove(e.g); return res(out); }
+        }
+        requestAnimationFrame(f); })(); }));
+    check(lt.latched === true && Math.abs(lt.side) === 1 && lt.toast.includes('SHAKE IT OFF') && lt.noHitYet === true, 'a latcher that reaches the ship clamps onto its side, with no hit yet, and the player is told to shake it off', JSON.stringify({ latched: lt.latched, side: lt.side, toast: lt.toast, timeout: lt.timeout }));
+    check(lt.fuse > 1.85 && lt.fuse < 2.2 && lt.hurt === 1 && lt.noCredit === true, 'left alone it goes off after 2 seconds: one hit to the ship, and no credit for it', JSON.stringify({ fuse: lt.fuse, hurt: lt.hurt, noCredit: lt.noCredit }));
+    check(lt.shakeHurt === 0 && lt.shakeKill === 1 && lt.shakeTime < 1.2 && lt.turns >= 3, 'flicking the ship from side to side throws it off and destroys it', JSON.stringify({ seconds: lt.shakeTime, turns: lt.turns, hurt: lt.shakeHurt, kills: lt.shakeKill }));
+    check(lt.slamHurt === 0 && lt.slamKill === 1 && lt.slamAtEdge === true && lt.slamTime < 1.5, 'so does one run into the edge of the field', JSON.stringify({ seconds: lt.slamTime, hurt: lt.slamHurt, kills: lt.slamKill }));
+    check(lt.shield && lt.shield.stopped === true && lt.shield.popped === true && lt.shield.hurt === 0, 'the shield stops a latcher like any other rammer', JSON.stringify(lt.shield));
+    check(lt.pinned && lt.pinned.still === true && lt.pinned.flicks === 0, 'a ship pinned at the edge shakes nothing off', JSON.stringify(lt.pinned));
+    await shot('17-latcher');
+    await page.context().close();
+  },
   // Every booster at once on late waves; pause; the Graphics button.
   stress: async () => {
     const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
@@ -688,6 +732,7 @@ const ABOUT = {
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
+  latcher: 'the latcher: clamping on, going off, shaken off, slammed off, stopped by the shield',
   stress: 'Volatile Payload in a full formation; the hull cap; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',
   bench: 'the test bench and test runs',

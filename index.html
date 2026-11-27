@@ -299,6 +299,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <div class="row quietrow"><button id="dbgModSave" class="btn quiet">As in my save</button><button id="dbgModNone" class="btn quiet">None</button><button id="dbgModMax" class="btn quiet">All at top level</button></div>
         <h3 class="grp">Ship</h3>
         <div class="row quietrow"><button id="dbgGod" class="btn quiet">Ship cannot be hit: off</button><button id="dbgIntro" class="btn quiet">Introduce enemies: off</button></div>
+        <div class="row quietrow"><button id="dbgLatch" class="btn quiet">Latchers: usual</button></div>
         <h3 class="grp">Your save <span>These do change your real save</span></h3>
         <div class="row quietrow"><button id="dbgScrap" class="btn quiet">Add ◆ 1000</button><button id="dbgMods" class="btn quiet">Fit every module</button><button id="dbgSeen" class="btn quiet">Introduce every enemy again</button></div>
         <div class="row dockbar">
@@ -438,6 +439,9 @@ const SFX = {
   eshoot() { if (limited('e', 90)) tone('square', 300, 200, 0.06, 0.08); },
   missile() { if (limited('m', 150)) { noise(0.35, 0.22, 1800, 0.02); tone('sawtooth', 240, 520, 0.3, 0.12); } },
   alarm() { tone('square', 1320, 1240, 0.05, 0.06); },
+  latch() { tone('square', 240, 150, 0.12, 0.2); noise(0.08, 0.25, 1800); },   // a latcher clamping on: a low clunk
+  fuse() { tone('triangle', 640, 640, 0.035, 0.14); },                        // its fuse: a soft tick, lower than the missile alarm so the two are not confused
+  shook() { tone('sine', 420, 880, 0.14, 0.2); },                             // thrown off
   charge() { tone('sine', 220, 1100, 1.25, 0.16); },
   beam() { tone('sawtooth', 150, 130, 1.7, 0.2); noise(1.7, 0.16, 2400, 0.03); },
   buy() { tone('triangle', 660, 990, 0.12, 0.3); tone('triangle', 990, 1320, 0.14, 0.3, 0.1); },
@@ -493,6 +497,7 @@ const geo = {
 const M = {
   hull: pbr(0xe9ecff, 0x1a1f44, 0.6, 0.3), wing: pbr(0x5fe8ff, 0x0b3d4a, 0.5, 0.35), canopy: glowing(basic(0x9ff3ff)), flame: glowMat(0xffb36b, 0.9),
   mite: pbr(0xff4f8b, 0x4a0f25), miteFin: pbr(0xffa3c2, 0x3a1020),
+  latch: pbr(0x7f89b5, 0x161a30, 0.7, 0.35), latchClaw: pbr(0x353b5c, 0x07080f, 0.8, 0.3), fuse: glowing(basic(ENEMY_RED)),
   wasp: pbr(0xffb02e, 0x4a2a00), waspWing: pbr(0xfff1c0, 0x40381a),
   weaver: pbr(0xa56bff, 0x24104a), splitA: pbr(0xff7a3c, 0x4a1c08), splitB: pbr(0xffd23c, 0x4a3a08),
   beetle: pbr(0x2ed6b5, 0x06382f, 0.7, 0.3), shell: pbr(0x127a6b, 0x03201b, 0.7, 0.35),
@@ -809,6 +814,7 @@ const ET = {
   triplet: { hp: 36, r: 13, speed: 205, scrap: 0.35, col: [0.24, 0.48, 1] },
   beetle: { hp: 85, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71], missiles: 2, missileGap: 0.8 },   // stops partway down and launches its missiles, missileGap seconds apart
   lancer: { hp: 34, r: 12, scrap: 0.7, col: [1, 0.25, 0.35] },
+  latcher: { hp: 16, r: 10, speed: 250, scrap: 0.5, col: [0.86, 0.9, 1], latch: true },   // fast: clamps onto the ship and blows up (LATCH)
   boss: { hp: 950, r: 34, col: [1, 0.31, 0.55], boss: true },      // the Hive Core
   cube: { hp: 1000, r: 36, col: [1, 0.6, 0.2], boss: true },        // the Fracture Cube: hp is all of its pieces together
   warden: { hp: 1050, r: 34, col: [1, 0.25, 0.4], boss: true },     // the Beam Warden
@@ -878,6 +884,7 @@ const UNLOCK = {
   waspSecondRow: 9,
   beetle: 10,          // some top-row spots
   beetleTopRow: 13,    // the whole top row
+  latcher: 11,
   triplet: 13,         // after the second boss
   lancer: [15, 20, 25] // the first, second and third lancer
 };
@@ -911,6 +918,16 @@ const BLAST = { r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
 // wall in front of it while it stops to launch its missiles). ahead: how far in front of it they fly; gap: how far
 // apart; from: the first wave it can happen on.
 const ESCORT = { beetle: { chance: 0.7, n: 3 }, wasp: { chance: 0.3, n: 2 }, weaver: { chance: 0.3, n: 2 }, splitter: { chance: 0.3, n: 2 }, ahead: 30, gap: 24, from: 4 };
+// The latcher: a fast enemy that clamps onto the side of the ship and blows up `fuse` seconds later, costing a hit.
+// The ship's shield stops it like any other rammer. It is thrown off, and destroyed, in two ways:
+//   by shaking: `flicks` changes of direction, each after at least `flick` units of travel (measured from where
+//     the ship actually went, so it means the same at any frame rate, and a ship pinned at the edge earns nothing);
+//   by a slam: reaching the edge of the field after a run of at least slamRun units at slamSpeed a second or more.
+// off: how far out from the ship's centre it sits. steerTo and turn: how far down the screen it keeps turning toward
+// the ship, and how hard; below that a sidestep clears it. chance, more and most: the share of the formation's back
+// rows that are latchers on the wave they arrive, how much that grows each wave, and its limit. lots: the share on
+// a test run with the bench's "Latchers: lots" on, from wave 1.
+const LATCH = { fuse: 2, off: 15, flick: 30, flicks: 3, slamRun: 60, slamSpeed: 200, steerTo: 0.74, turn: 3.2, chance: 0.04, more: 0.004, most: 0.1, lots: 0.3 };
 const CLEAR = { wave: 3, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
@@ -1060,6 +1077,10 @@ function buildEnemy(type, tint) {
   if (type === 'mite') { add(geo.oct, M.mite, 9, 11, 9); add(geo.tet, M.miteFin, 5, 5, 5, -10, 2); add(geo.tet, M.miteFin, 5, 5, 5, 10, 2); }
   else if (type === 'wasp') { add(geo.cone, M.wasp, 7, 22, 7, 0, 0, 0, Math.PI); add(geo.box, M.waspWing, 13, 3, 2, -9, 6, 0, 0.45); add(geo.box, M.waspWing, 13, 3, 2, 9, 6, 0, -0.45); add(geo.oct, M.eye, 2.5, 2.5, 2.5, 0, 3, 6); }
   else if (type === 'weaver') { add(geo.torus, M.weaver, 9, 9, 9); add(geo.ico, M.eye, 3.4, 3.4, 3.4); }
+  else if (type === 'latcher') {   // a mine with claws: a dull steel body (darker than the ship, so it shows against it), two claws reaching down, and a red light
+    add(geo.oct, M.latch, 10, 7, 8); add(geo.box, M.latchClaw, 3.5, 13, 3.5, -8, -7, 0, 0.5); add(geo.box, M.latchClaw, 3.5, 13, 3.5, 8, -7, 0, -0.5);
+    g.userData.fuse = add(geo.sph, M.fuse, 2.6, 2.6, 2.6, 0, 1, 7);
+  }
   else if (type === 'triplet') { for (let k = 0; k < 3; k++) { const a = Math.PI / 2 + k * TAU / 3; add(geo.cone, M.trip, 6, 11, 6, Math.cos(a) * 7, Math.sin(a) * 7, 0, a - Math.PI / 2); } add(geo.ico, M.eye, 3.6, 3.6, 3.6); }
   else if (type === 'splitter') { add(geo.box, M.splitA, 10, 10, 10, -5, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 10, 10, 10, 5, 0, 0, Math.PI / 4); }
   else if (type === 'lancer') { add(geo.oct, M.lancer, 8, 16, 8); add(geo.box, M.lancerShell, 4, 18, 5, -9, -2); add(geo.box, M.lancerShell, 4, 18, 5, 9, -2); g.userData.eye = add(geo.sph, M.eye, 3, 3, 3, 0, -13, 4); }
@@ -1092,7 +1113,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, side: 0, fuse: 0, tick: 0, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) {
@@ -1220,7 +1241,7 @@ function updateLancer(e, dt) {
 }
 function updateDive(e, dt) {
   e.t += dt;
-  const sp = e.def.speed * (1 + Math.min(0.5, G.wave * 0.02)) * (e.pace || 1), steer = e.y < H * 0.58;
+  const sp = e.def.speed * (1 + Math.min(0.5, G.wave * 0.02)) * (e.pace || 1), steer = e.y < H * (e.def.latch ? LATCH.steerTo : 0.58);
   if (e.type === 'beetle') {
     if (e.shots > 0 && e.y >= H * 0.38) {
       e.vy += (6 - e.vy) * Math.min(1, 4 * dt); e.vx += -e.vx * Math.min(1, 3 * dt); e.shootT -= dt;
@@ -1236,7 +1257,7 @@ function updateDive(e, dt) {
   } else {
     e.lead = null;   // nobody to escort (any more): an ordinary dive from here
     e.vy = Math.min(sp, e.vy + 330 * dt);
-    const k = e.type === 'splitter' ? (e.t < 0.55 ? 4 : 0) : e.type === 'weaver' ? 0.6 : 1.5;
+    const k = e.type === 'splitter' ? (e.t < 0.55 ? 4 : 0) : e.type === 'weaver' ? 0.6 : e.def.latch ? LATCH.turn : 1.5;
     if (e.lane != null) e.vx += (clamp((e.lane + clamp(P.x - e.lane, -28, 28) - e.x) * 3.5, -320, 320) - e.vx) * Math.min(1, 5 * dt);   // hold the lane, lean a little toward the player
     else if (steer && k) e.vx += (clamp((P.x + (e.aimOff || 0) - e.x) * k, -170, 170) - e.vx) * Math.min(1, 2.6 * dt);
     if (e.type === 'weaver') e.x += Math.cos(e.t * 4.6 + e.ph) * 150 * dt;
@@ -1249,6 +1270,42 @@ function updateDive(e, dt) {
   if (e.y > H + 34) {
     if (e.c != null) startReturn(e);
     else { e.y = -34; e.x = rand(40, W - 40); e.lane = null; e.vx = rand(-70, 70); e.vy = 30; e.t = 0; looseFlight(e); }   // slotless enemies keep diving: each pass from a new place, at a new pace, on a new line
+  }
+}
+// ---- the latcher (numbers in LATCH) ----
+// SHK follows how the ship has really moved: run is how far it has gone since it last changed direction, n the
+// changes of direction that came after a long enough run, off whether whatever is clamped on has been thrown off.
+const SHK = { x: 0, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false };
+function shakeStep(dt) {
+  const dx = P.x - SHK.x, edge = P.x <= 14.01 || P.x >= W - 14.01; SHK.x = P.x;
+  if (SHK.any && !SHK.off && P.alive) {
+    if (edge && !SHK.edge && Math.abs(SHK.run + dx) >= LATCH.slamRun && SHK.v >= LATCH.slamSpeed) { SHK.off = true; shake(6); burst(P.x + (P.x < W / 2 ? -14 : 14), P.y, FLASH_RGB, 14, 190, 0.35); }   // a slam into the edge
+    else if (dx * SHK.dir < 0 && Math.abs(SHK.run) >= LATCH.flick && ++SHK.n >= LATCH.flicks) SHK.off = true;   // enough flicks
+  }
+  if (dx * SHK.dir < 0) { SHK.run = 0; SHK.dir = Math.sign(dx); }
+  if (dx) { if (!SHK.dir) SHK.dir = Math.sign(dx); SHK.run += dx; SHK.v = Math.abs(dx) / Math.max(dt, 0.001); }
+  SHK.edge = edge;
+}
+// A latcher has touched the ship. It clamps onto the side it came in on, unless something stops it: the shield,
+// the blink after a hit, or both sides being taken already. Then it is an ordinary ram (false).
+function latchOn(e) {
+  if (P.shieldUp || P.inv > 0 || FIN.on) return false;
+  let side = e.x < P.x ? -1 : 1;
+  for (const o of G.enemies) if (!o.dead && o.state === 'latch' && o.side === side) { side = -side; break; }
+  for (const o of G.enemies) if (!o.dead && o.state === 'latch' && o.side === side) return false;
+  e.state = 'latch'; e.side = side; e.fuse = LATCH.fuse; e.tick = 0; e.z = 0; e.lead = null;
+  SFX.latch(); vibrate(40); toast('SHAKE IT OFF', finePointer ? 'Flick left and right, or hit the edge' : 'Flick left and right, or slam the edge');
+  return true;
+}
+function updateLatch(e, dt) {
+  e.x = P.x + e.side * LATCH.off; e.y = P.y + 2; e.z = 0; e.vx = P.vx;
+  if (!P.alive) { despawn(e); burst(e.x, e.y, e.def.col, 10, 150, 0.4); return; }   // the ship is gone: it goes with it
+  if (SHK.off) { SFX.shook(); ringFx(e.x, e.y, 5, 30, 0xffffff, 0.25); killEnemy(e); return; }   // thrown off: destroyed, and it counts
+  e.fuse -= dt; e.tick -= dt;
+  if (e.tick <= 0) { SFX.fuse(); ringFx(e.x, e.y, 5, 26, 0xff4a5e, 0.22); e.tick = 0.09 + 0.3 * Math.max(0, e.fuse) / LATCH.fuse; }   // a tick and a red pulse, closer together as the time runs out
+  if (e.fuse <= 0) {   // it goes off: no scrap and no credit, and the ship takes a hit (not with the bench's "cannot be hit": then it only pops)
+    despawn(e); SFX.boom(); shake(6); flash(e.x, e.y, 120000); ringFx(e.x, e.y, 6, 46, 0xff4a5e, 0.3); burst(e.x, e.y, ENEMY_RED_RGB, 18, 200, 0.45);
+    hitPlayer();
   }
 }
 // How far round the list of bosses this one is: 0 the first time each is met, 1 the second, and so on.
@@ -1515,6 +1572,7 @@ function queueFlight(n, at, most) {
   const pWeaver = chance(UNLOCK.weaver, Math.min(0.3, 0.1 + n * 0.012));
   const pSplit = chance(UNLOCK.splitter, Math.min(0.2, 0.06 + n * 0.01));
   const pTrip = chance(UNLOCK.triplet, Math.min(0.15, 0.06 + n * 0.008));
+  const pLatch = G.test && DBG.latch ? LATCH.lots : chance(UNLOCK.latcher, Math.min(LATCH.most, LATCH.chance + LATCH.more * (n - UNLOCK.latcher)));
   const pElite = eliteShare(n);
   let group = -1, i = 0, last = -1;
   for (const { c, r, side } of places) {
@@ -1525,6 +1583,7 @@ function queueFlight(n, at, most) {
     if (roll < pWeaver) type = 'weaver';
     else if (roll < pWeaver + pSplit) type = 'splitter';
     else if (roll < pWeaver + pSplit + pTrip) type = 'triplet';
+    else if (roll < pWeaver + pSplit + pTrip + pLatch) type = 'latcher';
     const elite = Math.random() < pElite;   // more of them each wave, until every enemy is one (ELITE)
     const tpl = (r + side + n) % 3;
     G.queue.push({ t: at + (0.4 + group * 0.75 + i++ * 0.15) / pace, fn: () => startEnter(spawnEnemy(type, c, r, { elite }), tpl, !!side) });
@@ -1834,8 +1893,9 @@ function afflicted(e, dt) {
   if (e.confRest > 0) e.confRest -= dt;
 }
 // Confusion: the enemy drops what it was doing and goes for the enemy furthest from it.
-function furthestFrom(e) { let t = null, far = 0; for (const o of G.enemies) { if (o === e || o.dead || o.z < -60 || o.state === 'ram') continue; const d = (o.x - e.x) ** 2 + (o.y - e.y) ** 2; if (d > far) { far = d; t = o; } } return t; }
+function furthestFrom(e) { let t = null, far = 0; for (const o of G.enemies) { if (o === e || o.dead || o.z < -60 || o.state === 'ram' || o.state === 'latch') continue; const d = (o.x - e.x) ** 2 + (o.y - e.y) ** 2; if (d > far) { far = d; t = o; } } return t; }
 function confuse(e) {
+  if (e.state === 'latch') return;   // clamped onto the ship: it stays there
   const t = furthestFrom(e); if (!t) return;   // alone on the field: nobody to turn on
   e.conf = CLOUD.conf; e.state = 'ram'; e.ramAt = t; e.z = 0; SFX.dive();
 }
@@ -1944,7 +2004,8 @@ function updatePicks(dt) {
 const formed = [];   // enemies sitting in the formation this frame (reused every frame)
 function updateEnemies(dt) {
   while (G.queue.length && G.queue[0].t <= G.waveT) G.queue.shift().fn();
-  formed.length = 0; let diving = 0;
+  formed.length = 0; let diving = 0, latched = 0;
+  shakeStep(dt);
   for (const e of G.enemies) {
     if (e.dead) continue;
     if (e.flash > 0) { e.flash -= dt; if (e.flash <= 0) restoreMats(e); }
@@ -1958,8 +2019,9 @@ function updateEnemies(dt) {
     } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; if (e.laser) updateLancer(e, dt); else formed.push(e); }
     else if (e.state === 'dive') { updateDive(e, dt); diving++; }
     else if (e.state === 'ram') { updateRam(e, dt); if (e.dead) continue; }
+    else if (e.state === 'latch') { updateLatch(e, dt); if (e.dead) continue; latched++; }
     else updateBoss(e, dt);
-    if (P.alive && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) { hitPlayer(); if (!e.def.boss) damageEnemy(e, 40); }
+    if (P.alive && e.state !== 'latch' && e.z > -25 && shipHit(e.x, e.y, e.rad - 2) && !(e.def.latch && latchOn(e))) { hitPlayer(); if (!e.def.boss) damageEnemy(e, 40); }
     if (e.dead) continue;
     // model
     const g = e.g; g.position.set(TX(e.x), TY(e.y), e.z);
@@ -1978,6 +2040,12 @@ function updateEnemies(dt) {
     else if (e.type === 'mite') { g.rotation.y = t * 2.2; g.rotation.z = tilt; }
     else if (e.type === 'wasp') { g.rotation.y = Math.sin(t * 3) * 0.5; g.rotation.z = tilt; }
     else if (e.type === 'weaver') { g.rotation.x = t * 1.7; g.rotation.y = t * 2.3; }
+    else if (e.type === 'latcher') {
+      const on = e.state === 'latch';   // clamped on: claws turned in toward the ship, and the fuse light blinking faster as the time runs out
+      g.rotation.set(0, on ? 0 : Math.sin(t * 2.4) * 0.5, on ? -e.side * Math.PI / 2 : tilt);
+      const el = LATCH.fuse - e.fuse, lit = on && Math.sin(el * el * 9 + el * 8) > -0.2, fs = on ? (lit ? 6 : 2) : 2.6;   // its light: small and steady until it clamps on, then big and blinking
+      g.userData.fuse.scale.set(fs, fs, fs);
+    }
     else if (e.type === 'splitter') { g.rotation.z = t * 2.5; g.rotation.y = Math.sin(t * 2) * 0.6; }
     else if (e.type === 'triplet') { g.rotation.z = t * 1.6; g.rotation.y = Math.sin(t * 1.4) * 0.4; }
     else if (e.type === 'beetle') { g.rotation.y = Math.sin(t * 1.5) * 0.35; g.rotation.z = tilt * 0.5; }
@@ -2008,6 +2076,7 @@ function updateEnemies(dt) {
     else { g.userData.core.rotation.y = t * 0.6; g.userData.core.rotation.x = t * 0.25; g.userData.ring.rotation.z = -t * (e.hp < e.maxHp * 0.35 ? 2.4 : 0.9); g.userData.ring.rotation.x = Math.sin(t * 0.8) * 0.5; }
     if (e.halo) { e.halo.rotation.x = t * 2; e.halo.rotation.y = t * 1.3; }
   }
+  SHK.any = latched > 0; if (!latched) { SHK.n = 0; SHK.off = false; }   // nothing clamped on: the count starts afresh for the next one
   if (G.state !== 'play' || G.waveT < 2.4) return;
   const alive = G.enemies.length, maxDive = Math.min(6, 2 + Math.floor(G.wave / 3));
   G.diveT -= dt * (alive <= 4 ? 4 : 1);
@@ -2288,6 +2357,7 @@ function startRun(test) {
   recalc();
   Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 2.5, lasOn: 0, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
+  Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
   if (mlv('head') && !test) openDraft('head');
   else { startCut('launch', nextWave); if (test) G.cut.t = G.cut.dur * 0.7; }   // a test run cuts most of the launch: it is run again and again
@@ -2446,6 +2516,7 @@ const INTRO_TEXT = {
   beetle: ['Armoured. It stops partway down and launches homing missiles.', 'Shoot the missiles down, or slip past them.'],
   triplet: ['Breaks into three when it leaves the formation.', 'Shoot it while it sits and it never splits.'],
   lancer: ['Charges up, then fires a laser down the whole screen.', 'A thin red line shows the lane first. Leave it.'],
+  latcher: ['Fast. It clamps onto your ship and blows up 2 seconds later.', 'Shake it off: flick left and right, or slam into the edge.'],
   boss: ['Sweeps across the top, firing fans and rings of shots, missiles and ships.', 'It attacks faster when it is badly hurt.'],
   cube: ['Destroy it and it breaks in two. So do the halves.', 'Finish one piece before you start on the next.'],
   warden: ['Stops, then fires a fan of laser beams down the screen.', 'Stand between the thin red lines.'],
@@ -2456,7 +2527,7 @@ const INTRO_TEXT = {
   heart: ['A green cross in a blue glow repairs your hull.', 'Fly into it to get 1 hull back.'],
   missile: ['A homing missile. It turns to follow you.', 'Shoot it down, or slip past it.'],
 };
-const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer', scrap: 'Scrap', heart: 'Repair Cross', missile: 'Missile' };   // bosses take theirs from BOSSES
+const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer', latcher: 'Latcher', scrap: 'Scrap', heart: 'Repair Cross', missile: 'Missile' };   // bosses take theirs from BOSSES
 const INTRO_KIND = { scrap: 'Salvage', heart: 'Repair', missile: 'New threat' };   // the small heading, where 'New enemy' would be wrong
 // The thing a card is about: an enemy of that kind, or the first scrap ring, repair cross or missile on the field.
 // A pickup's kind ('scrap' or 'heart') is its key.
@@ -2525,11 +2596,11 @@ function introStep(real) {
 // A hidden screen for trying things out: start on any wave, with any boosters, and with the ship unable to be hit
 // if wanted. Nothing a test run earns is saved. Open it from the title: tap SWARMFALL five times within three seconds, press
 // the ` key, or add ?debug to the address. What was chosen is remembered for next time.
-const DBG = { wave: 1, up: {}, god: false, intros: false, mod: null };   // mod: station module levels for the test (null until first shown, when the save's are copied in)
+const DBG = { wave: 1, up: {}, god: false, intros: false, latch: false, mod: null };   // mod: station module levels for the test (null until first shown, when the save's are copied in)
 const modsOfSave = () => { const m = {}; for (const x of SHOP) if (meta.up[x.id] > 0) m[x.id] = Math.min(x.cost.length, meta.up[x.id]); return m; };
 try {
   const d = JSON.parse(localStorage.getItem('swarmfall.debug') || 'null');
-  if (d) { DBG.wave = clamp(d.wave | 0, 1, 99); DBG.god = !!d.god; DBG.intros = !!d.intros; for (const u of UP) if (d.up && d.up[u.id] > 0) DBG.up[u.id] = Math.min(u.max, d.up[u.id] | 0);
+  if (d) { DBG.wave = clamp(d.wave | 0, 1, 99); DBG.god = !!d.god; DBG.intros = !!d.intros; DBG.latch = !!d.latch; for (const u of UP) if (d.up && d.up[u.id] > 0) DBG.up[u.id] = Math.min(u.max, d.up[u.id] | 0);
     if (d.mod) { DBG.mod = {}; for (const x of SHOP) if (d.mod[x.id] > 0) DBG.mod[x.id] = Math.min(x.cost.length, d.mod[x.id] | 0); } }
 } catch (e) {}
 function drawDebug() {
@@ -2541,6 +2612,7 @@ function drawDebug() {
   $('dbgMod').innerHTML = SHOP.map(x => { const lv = DBG.mod[x.id] | 0; return '<button class="chip' + (lv ? ' on' : '') + '" data-id="' + x.id + '">' + x.n + (lv ? '<b>' + lv + '</b>' : '') + '</button>'; }).join('');
   $('dbgGod').textContent = 'Ship cannot be hit: ' + (DBG.god ? 'on' : 'off');
   $('dbgIntro').textContent = 'Introduce enemies: ' + (DBG.intros ? 'on' : 'off');
+  $('dbgLatch').textContent = 'Latchers: ' + (DBG.latch ? 'lots' : 'usual');
   const seenN = Object.keys(meta.seen).length; $('dbgSeen').textContent = seenN ? 'Introduce every enemy again (' + seenN + ' met)' : 'No enemy introduced yet'; $('dbgSeen').disabled = !seenN;
   $('dbgScrap').textContent = 'Add ◆ 1000 (you have ' + meta.scrap + ')';
   $('dbgMods').textContent = meta.mods.length < SHOP.length ? 'Fit every module' : 'Every module is fitted'; $('dbgMods').disabled = meta.mods.length >= SHOP.length;
@@ -2563,6 +2635,7 @@ $('dbgModMax').onclick = () => { DBG.mod = {}; for (const x of SHOP) DBG.mod[x.i
 $('dbgClear').onclick = () => { DBG.up = {}; drawDebug(); };
 $('dbgAll').onclick = () => { for (const u of UP) if (u.id !== 'patch' && !DBG.up[u.id]) DBG.up[u.id] = 1; drawDebug(); };
 $('dbgGod').onclick = () => { DBG.god = !DBG.god; drawDebug(); };
+$('dbgLatch').onclick = () => { DBG.latch = !DBG.latch; drawDebug(); };   // lots: a test run has latchers in every wave, from wave 1
 $('dbgIntro').onclick = () => { DBG.intros = !DBG.intros; drawDebug(); };   // on: a test run introduces each kind of enemy the first time it appears in that run
 $('dbgSeen').onclick = () => { meta.seen = {}; save(); SFX.buy(); drawDebug(); };
 $('dbgScrap').onclick = () => { meta.scrap += 1000; save(); SFX.buy(); drawDebug(); };
@@ -2756,7 +2829,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
