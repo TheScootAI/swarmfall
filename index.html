@@ -813,7 +813,10 @@ const ET = {
   weaver: { hp: 16, r: 11, speed: 135, scrap: 0.4, col: [0.65, 0.42, 1] },
   splitter: { hp: 28, r: 12, speed: 230, scrap: 0.5, col: [1, 0.48, 0.24] },
   triplet: { hp: 36, r: 13, speed: 205, scrap: 0.35, col: [0.24, 0.48, 1] },
-  beetle: { hp: 85, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71], missiles: 2, missileGap: 0.8 },   // stops partway down and launches its missiles, missileGap seconds apart
+  // The beetle stops partway down and launches its missiles, missileGap seconds apart. Then it must not fly over them
+  // (the owner: "when the beetle moves it should go left or right and then diagonally"): it slides `aside` units to
+  // one side at asideSpeed, then dives on a diagonal, moving `slope` sideways for every unit down.
+  beetle: { hp: 85, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71], missiles: 2, missileGap: 0.8, aside: 70, asideSpeed: 160, slope: 0.8 },
   lancer: { hp: 34, r: 12, scrap: 0.7, col: [1, 0.25, 0.35] },
   latcher: { hp: 16, r: 10, speed: 420, scrap: 0.5, col: [0.86, 0.9, 1], latch: true },   // very fast: leaps at the ship, clamps on and blows up (LATCH)
   boss: { hp: 950, r: 34, col: [1, 0.31, 0.55], boss: true },      // the Hive Core
@@ -1120,7 +1123,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) {
@@ -1174,6 +1177,7 @@ function launchDive(e) {
 }
 function startDive(e) {
   e.state = 'dive'; e.t = 0; e.z = 0; e.lead = null; e.hookT = 0; e.flank = e.x < P.x ? -1 : 1;   // flank and hookT: only a latcher uses them
+  e.asideLeft = 0; e.asideDir = 0; e.diag = 0;   // only a beetle uses these
   e.vx = (e.x < W / 2 ? -1 : 1) * rand(40, 110) * (Math.random() < 0.7 ? 1 : -1); e.vy = -rand(60, 110);
   e.shots = e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.def.missiles || 0; e.shootT = rand(0.3, 0.6);
 }
@@ -1252,9 +1256,20 @@ function updateDive(e, dt) {
   if (e.type === 'beetle') {
     if (e.shots > 0 && e.y >= H * 0.38) {
       e.vy += (6 - e.vy) * Math.min(1, 4 * dt); e.vx += -e.vx * Math.min(1, 3 * dt); e.shootT -= dt;
-      if (e.shootT <= 0) { fireMissile(e.x, e.y + 12); e.shots--; e.shootT = e.def.missileGap; }
+      if (e.shootT <= 0) {
+        fireMissile(e.x, e.y + 12); e.shots--; e.shootT = e.def.missileGap;
+        if (!e.shots) {   // the last one is away: step aside, away from the ship if there is room (its missiles head for the ship), before the dive
+          e.asideDir = e.x < P.x ? -1 : 1; if (e.x + e.asideDir * (e.def.aside + 20) < 20 || e.x + e.asideDir * (e.def.aside + 20) > W - 20) e.asideDir = -e.asideDir;
+          e.asideLeft = e.def.aside;
+        }
+      }
+    } else if (e.asideLeft > 0) {   // sliding to one side, out from over its own missiles
+      e.vy += (8 - e.vy) * Math.min(1, 4 * dt); e.vx += (e.asideDir * e.def.asideSpeed - e.vx) * Math.min(1, 8 * dt); e.asideLeft -= Math.abs(e.vx) * dt;
+      if (e.asideLeft <= 0) e.diag = Math.abs(P.x - e.x) > 30 ? Math.sign(P.x - e.x) : e.asideDir;   // then the diagonal: back toward the ship's side of the field
+    } else if (e.diag) {
+      e.vy = Math.min(sp * 2.4, e.vy + 260 * dt); e.vx += (e.diag * e.vy * e.def.slope - e.vx) * Math.min(1, 5 * dt);
     } else {
-      e.vy = Math.min(e.shots > 0 ? sp : sp * 2.4, e.vy + 260 * dt);
+      e.vy = Math.min(sp, e.vy + 260 * dt);   // on its way down to where it stops
       if (steer) e.vx += (clamp((P.x - e.x) * 0.8, -70, 70) - e.vx) * Math.min(1, 2 * dt);
     }
   } else if (e.def.latch) {

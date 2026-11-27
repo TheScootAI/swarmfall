@@ -154,13 +154,17 @@ const GROUPS = {
       for (const e of G.enemies) e.dead = true; G.queue.length = 0; G.eb.length = 0; G.em.length = 0; G.wave = s.UNLOCK.beetle; G.state = 'play'; P.inv = 99;
       const e = s.spawnEnemy('beetle', 0, 0, { x: 70, y: 140 }), out = { hits: Math.ceil(e.hp / 10), gap: null, fired: 0, set: s.ET.beetle.missileGap }, t0 = performance.now();
       s.launchDive(e); e.x = 70; e.y = 250; e.vy = 60; let was = e.shots;   // it stops a little further down the screen
-      const tick = () => { P.inv = 99; e.hp = e.maxHp; G.queue.length = 0;
-        if (e.shots < was) { out.fired += was - e.shots; if (e.shots === 1) out.gap = e.shootT; was = e.shots; }
-        if (e.shots === 0 || e.dead || performance.now() - t0 > 15000) { out.started = was; return done(out); }
+      let x0 = null, y0 = 0;
+      const tick = () => { P.inv = 99; e.hp = e.maxHp; G.queue.length = 0; P.x = P.target = 250;
+        if (e.shots < was) { out.fired += was - e.shots; if (e.shots === 1) out.gap = e.shootT; was = e.shots; if (e.shots === 0) { x0 = e.x; y0 = e.y; out.aside = 0; } }
+        // after its last missile it must not fly over them: it slides to one side first, then dives on a diagonal
+        if (x0 !== null && !e.dead) { if (e.y - y0 < 20) out.aside = Math.max(out.aside, Math.round(Math.abs(e.x - x0))); else if (e.y - y0 > 150 && out.slope === undefined) { out.slope = +(Math.abs(e.vx) / e.vy).toFixed(2); out.toward = Math.sign(e.vx) === Math.sign(P.x - x0); } }
+        if (out.slope !== undefined || e.dead || performance.now() - t0 > 20000) { out.started = was; return done(out); }
         requestAnimationFrame(tick); };
       requestAnimationFrame(tick); }));
     check(bt.hits === 13, 'a beetle takes 13 hits on the wave it arrives', bt.hits + ' hits');
     check(bt.fired === 2 && bt.set === 0.8 && bt.gap > 0.7 && bt.gap <= 0.8, 'a beetle launches two missiles 0.8 seconds apart', JSON.stringify(bt));
+    check(bt.aside >= 55 && bt.slope > 0.5 && bt.slope < 1.1 && bt.toward === true, 'after its missiles a beetle slides to one side, then dives on a diagonal, not straight down over them', JSON.stringify({ aside: bt.aside, slope: bt.slope, toward: bt.toward }));
     // Escorts (ESCORT): mites that leave the formation with a stronger enemy fly side by side just ahead of it. A beetle's three
     // make a wall in front of it while it stops to launch its missiles. With the beetle gone they carry on as ordinary divers.
     const es = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s, E = s.ESCORT, out = { table: E.beetle.n + ' ' + E.beetle.chance + ' ' + E.wasp.n + ' ' + E.wasp.chance + ' from ' + E.from + ' ' + !!E.mite + !!E.triplet + !!E.lancer }, t0 = performance.now();
