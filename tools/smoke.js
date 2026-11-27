@@ -272,13 +272,47 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   check(cl.dartVx > 5 && cl.dartLean > 0.05 && cl.dartLean <= 0.105, 'a dart bends a little toward the ship, and only so far', 'lean after 1.5 s: ' + cl.dartLean + ' radians (the limit is 0.1)');
   check(cl.sidestepClears === true, 'a sidestep still clears a dart aimed at the ship');
 
+  // ---- sentry satellites and the Laser Drone ----
+  await page.reload(); await page.waitForTimeout(500);
+  await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await waitFor(x => x.state === 'play');
+  const sg = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, out = {}, t0 = performance.now(), light = s.sats[0], heavy = s.sats[1]; G.wave = 3; s.nextWave();
+    let step = 0, at = 0, sum0 = 0, seen3 = 0, lane = [], other = null, laneHp = 0, otherHp = 0;
+    const hpSum = () => G.enemies.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0), since = () => G.time - at, go = n => { step = n; at = G.time; };
+    const ball = o => G.eb.push({ x: o.x, y: o.y - 1, vx: 0, vy: 1, r: 4.5, kind: 0, turn: 0, dead: false });
+    (function f() {
+      P.inv = 9; P.fireT = 9; G.diveT = 99; G.shootT = 99;   // the ship does not fire, and nothing dives or shoots
+      const formed = G.enemies.filter(e => !e.dead && e.state === 'form'), fresh = G.pb.filter(b => b.kind === 3 && !b.counted); fresh.forEach(b => b.counted = true); seen3 = Math.max(seen3, fresh.length);
+      if (step === 0 && G.waveT > 5 && formed.length >= 8) { P.x = P.target = 180; G.up.sentry = 1; s.recalc(); light.cool = 0.05; sum0 = G.run.kills; go(1); }
+      else if (step === 1 && light.on && since() > 3) {   // the booster's satellite: set down ahead of the ship, firing on its own
+        out.ahead = Math.round(P.y - light.ty); out.life = light.t > 5 && light.t < 9; out.hp = light.hp; out.oneBarrel = seen3 === 1; out.hurtSwarm = G.run.kills - sum0 + G.enemies.filter(e => !e.dead && e.hp < e.maxHp).length; ball(light); go(2); }   // enemies it has destroyed or damaged
+      else if (step === 2 && since() > 0.3) { out.tookHit = light.on && light.hp === out.hp - 1 && !G.eb.length; ball(light); go(3); }   // a shot hits it and is stopped
+      else if (step === 3 && since() > 0.3) { out.destroyed = !light.on; out.rest = Math.round(light.cool); light.cool = 0.05; go(4); }   // its last health: shot down
+      else if (step === 4 && light.on) { light.t = 0.03; go(5); }
+      else if (step === 5 && since() > 0.3) { out.ranOut = !light.on; G.up.sentry = 0; s.meta.up.sentry = 1; s.recalc(); heavy.cool = 0.05; seen3 = 0; go(6); }   // now the station module's
+      else if (step === 6 && heavy.on && since() > 2.5) { out.heavyHp = heavy.hp; out.heavyLife = heavy.t > 10; out.twoBarrels = seen3 === 2; out.lightStaysAway = !light.on; s.meta.up.sentry = 0; s.recalc(); heavy.t = 0.03; go(7); }
+      else if (step === 7 && since() > 0.5) {   // the Laser Drone: line its lane up with one column of the formation
+        const E = formed[0]; if (!E) return res(out); P.x = P.target = Math.max(14, E.x - s.LASER.side); const bx = P.x + s.LASER.side;
+        lane = formed.filter(e => Math.abs(e.x - bx) < e.rad + s.LASER.half); other = formed.find(e => Math.abs(e.x - bx) > 70); laneHp = lane.reduce((a, e) => a + e.hp, 0); otherHp = other ? other.hp : 0;
+        G.up.beam = 1; s.recalc(); P.lasT = 0.05; go(8); }
+      else if (step === 8) {
+        if (P.lasOn > 0) out.fired = true;
+        if (out.fired && P.lasOn <= 0) { out.laneLost = +(laneHp - lane.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0)).toFixed(1); out.laneOf = +laneHp.toFixed(1); out.inLane = lane.length; out.otherUntouched = !!other && !other.dead && other.hp === otherHp; G.up.beam = 0; s.recalc(); return res(out); }
+      }
+      if (performance.now() - t0 > 120000) { out.stuckAt = step; return res(out); }
+      requestAnimationFrame(f); })(); }));
+  check(sg.ahead === 150 && sg.life && sg.hp === 2 && sg.oneBarrel && sg.hurtSwarm >= 2, 'Sentry Satellite: set down ahead of the ship, it fires at the swarm by itself', sg.hurtSwarm + ' enemies destroyed or damaged in 3 seconds · ' + JSON.stringify(sg));
+  check(sg.tookHit && sg.destroyed && sg.rest === 9, 'Sentry Satellite: it stops an enemy shot, takes the damage, and is shot down when its health is gone');
+  check(sg.ranOut === true, 'Sentry Satellite: it runs out when its time is up');
+  check(sg.heavyHp === 5 && sg.heavyLife && sg.twoBarrels && sg.lightStaysAway, 'Sentry Platform (station module): a tougher satellite with twin guns that lasts longer', 'health ' + sg.heavyHp);
+  check(sg.fired && sg.inLane > 0 && sg.laneLost > sg.laneOf * 0.5 && sg.otherUntouched, 'Laser Drone: its beam burns every enemy in its lane and nothing outside it', sg.inLane + ' in the lane lost ' + sg.laneLost + ' of ' + sg.laneOf);
+
   // Every system at once: all boosters on, late waves with lasers, missiles and triplets, while the ship
   // keeps firing. This exercises the effect pools (rings, lightning, particles), missiles being shot down,
   // shields and Reactive Nova clearing fire mid-loop, triplet splits and the lancer beam.
   await page.reload(); await page.waitForTimeout(500);   // a fresh page: the wave check above leaves its test enemies in the scene
   await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
   const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
-    for (const id of ['twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame']) s.G.up[id] = 2;
+    for (const id of ['twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
     s.recalc(); s.G.wave = 15; s.nextWave(); s.S.maxHp = 9; s.P.hp = 9;
     const seen = { kills: 0, maxShots: 0, maxMissiles: 0, splits: 0, beams: 0, waves: new Set() }; const t0 = performance.now(); let k0 = s.G.run.kills;
     (function f() { const G = s.G;

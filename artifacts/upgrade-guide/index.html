@@ -104,10 +104,10 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   <header>
     <p class="eyebrow">Swarmfall · field guide</p>
     <h1>Build the <b>ship</b></h1>
-    <p class="lede">Everything that makes your ship stronger: all 22 boosters and all 14 station modules, with what each one really does in numbers.</p>
+    <p class="lede">Everything that makes your ship stronger: all 24 boosters and all 15 station modules, with what each one really does in numbers.</p>
     <div class="kinds">
-      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every 3rd wave, and you get a stronger choice each time you leave the station after a boss. Passing on all three pays ◆ 10.</p><p><a href="#boosters">22 boosters</a></p></div>
-      <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has 2; each boss you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">14 modules</a></p></div>
+      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every 3rd wave, and you get a stronger choice each time you leave the station after a boss. Passing on all three pays ◆ 10.</p><p><a href="#boosters">24 boosters</a></p></div>
+      <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has 2; each boss you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">15 modules</a></p></div>
     </div>
   </header>
 
@@ -179,7 +179,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     </section>
 
     <section class="band rare" aria-labelledby="h-r1">
-      <div class="band-head"><h3 id="h-r1">Rare</h3><span>9 boosters</span></div>
+      <div class="band-head"><h3 id="h-r1">Rare</h3><span>10 boosters</span></div>
       <p class="note">New weapons and systems. These are what the booster after a boss is mostly made of.</p>
       <div class="grid">
         <article class="item rare" id="booster-twin">
@@ -236,13 +236,25 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
           <div class="stats"><span>Rare</span><span>Up to <b>2</b> levels</span></div>
           <p class="detail">Each level adds 50%: double scrap at level 2. It multiplies with the Salvage Rig module.</p>
         </article>
+        <article class="item rare" id="booster-sentry">
+          <div class="top"><h4>Sentry Satellite</h4><span class="tag">Specials</span></div>
+          <p class="says">Deploy a satellite that fires at the swarm. It can be shot down, and it runs out after a while.</p>
+          <div class="stats"><span>Rare</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">The ship sets a satellite down 150 units ahead of it. It fires at the nearest enemy about twice a second (1.8, 2.2, then 2.6 shots a second) for 60% of your shot damage. It lasts 9, 11, then 13 seconds, takes 2, 3, then 4 enemy shots (a missile counts as two, and an enemy flying into it destroys it), and stops the shots that hit it. Nine seconds after it is gone, the next one deploys.</p>
+        </article>
       </div>
     </section>
 
     <section class="band proto" aria-labelledby="h-r2">
-      <div class="band-head"><h3 id="h-r2">Prototype</h3><span>6 boosters</span></div>
+      <div class="band-head"><h3 id="h-r2">Prototype</h3><span>7 boosters</span></div>
       <p class="note">The strongest and strangest. Rare early, a little more likely each wave.</p>
       <div class="grid">
+        <article class="item proto" id="booster-beam">
+          <div class="top"><h4>Laser Drone</h4><span class="tag">Specials</span></div>
+          <p class="says">A drone at your wing fires a solid laser straight up, burning everything in its lane.</p>
+          <div class="stats"><span>Prototype</span><span>Up to <b>3</b> levels</span></div>
+          <p class="detail">A drone flies off your right wing. Every 4.5 seconds, then 4, then 3.5, it fires a solid beam straight up for 1.2, 1.5, then 1.8 seconds. Everything in that lane takes 2.2, 2.8, then 3.4 times your shot damage a second, right through the whole formation, and missiles in it are destroyed. Steer to sweep it.</p>
+        </article>
         <article class="item proto" id="booster-missile">
           <div class="top"><h4>Seeker Pod</h4><span class="tag">Specials</span></div>
           <p class="says">Launch homing missiles that deal 2.5× damage in a small blast.</p>
@@ -286,7 +298,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   <section class="part" id="modules" aria-labelledby="h-modules">
     <div class="part-head">
       <h2 id="h-modules">Station modules</h2>
-      <p class="note">In the order you get them. Bosses count across all your runs: the first one you ever destroy fits the first module, whichever boss and whichever wave it was. Buying every level of everything costs <b>◆ 3,590</b>.</p>
+      <p class="note">In the order you get them. Bosses count across all your runs: the first one you ever destroy fits the first module, whichever boss and whichever wave it was. Buying every level of everything costs <b>◆ 4,530</b>.</p>
     </div>
     <div class="timeline">
       <div class="stop start">
@@ -364,94 +376,106 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>5</div></div>
         <div class="body">
-          <article class="item module" id="module-scrap">
-            <div class="top"><h4>Salvage Rig</h4><span class="tag">Salvage</span></div>
-            <p class="says">+20% scrap from every run.</p>
-            <div class="stats"><span>Fitted after your <b>5th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>300</b> in all</span></div>
-            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 170</li></ol>
-            <p class="detail">+20% scrap per level: +60% with all 3.</p>
+          <article class="item module" id="module-sentry">
+            <div class="top"><h4>Sentry Platform</h4><span class="tag">Specials</span></div>
+            <p class="says">Start each run with a heavy sentry satellite: tougher than the booster's, with twin guns, and it lasts longer.</p>
+            <div class="stats"><span>Fitted after your <b>5th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>940</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 160</li><li><small>Level 2</small>◆ 300</li><li><small>Level 3</small>◆ 480</li></ol>
+            <p class="detail">A heavier satellite than the Sentry Satellite booster's, and both can be out together. Twin guns firing 2.6, 3, then 3.4 volleys a second at 90% of your shot damage each. It lasts 14, 17, then 20 seconds and takes 5, 7, then 9 enemy shots. Eight seconds after it is gone, the next one deploys.</p>
           </article>
         </div>
       </div>
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>6</div></div>
         <div class="body">
-          <article class="item module" id="module-charge">
-            <div class="top"><h4>Fast Recharge</h4><span class="tag">Shields</span></div>
-            <p class="says">Shields recharge 2 seconds sooner.</p>
-            <div class="stats"><span>Fitted after your <b>6th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>290</b> in all</span></div>
-            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 160</li></ol>
-            <p class="detail">2 seconds off the shield's recharge per level: 15 seconds down to 9 with all 3.</p>
+          <article class="item module" id="module-scrap">
+            <div class="top"><h4>Salvage Rig</h4><span class="tag">Salvage</span></div>
+            <p class="says">+20% scrap from every run.</p>
+            <div class="stats"><span>Fitted after your <b>6th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>300</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 170</li></ol>
+            <p class="detail">+20% scrap per level: +60% with all 3.</p>
           </article>
         </div>
       </div>
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>7</div></div>
         <div class="body">
-          <article class="item module" id="module-twin">
-            <div class="top"><h4>Twin Mount</h4><span class="tag">Weapons</span></div>
-            <p class="says">Start each run with a second barrel.</p>
-            <div class="stats"><span>Fitted after your <b>7th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>200</b></span></div>
-            
-            <p class="detail">Every volley is 2 shots from the first wave. Split Barrel boosters add to it.</p>
+          <article class="item module" id="module-charge">
+            <div class="top"><h4>Fast Recharge</h4><span class="tag">Shields</span></div>
+            <p class="says">Shields recharge 2 seconds sooner.</p>
+            <div class="stats"><span>Fitted after your <b>7th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>290</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 40</li><li><small>Level 2</small>◆ 90</li><li><small>Level 3</small>◆ 160</li></ol>
+            <p class="detail">2 seconds off the shield's recharge per level: 15 seconds down to 9 with all 3.</p>
           </article>
         </div>
       </div>
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>8</div></div>
         <div class="body">
-          <article class="item module" id="module-magnet">
-            <div class="top"><h4>Tractor Coil</h4><span class="tag">Salvage</span></div>
-            <p class="says">Wider scrap pickup range.</p>
-            <div class="stats"><span>Fitted after your <b>8th</b> boss</span><span><b>2</b> levels</span><span class="gold">◆ <b>70</b> in all</span></div>
-            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 20</li><li><small>Level 2</small>◆ 50</li></ol>
-            <p class="detail">Pickup reach grows from 42 to 64, then 86.</p>
+          <article class="item module" id="module-twin">
+            <div class="top"><h4>Twin Mount</h4><span class="tag">Weapons</span></div>
+            <p class="says">Start each run with a second barrel.</p>
+            <div class="stats"><span>Fitted after your <b>8th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>200</b></span></div>
+            
+            <p class="detail">Every volley is 2 shots from the first wave. Split Barrel boosters add to it.</p>
           </article>
         </div>
       </div>
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>9</div></div>
         <div class="body">
-          <article class="item module" id="module-missile">
-            <div class="top"><h4>Seeker Rack</h4><span class="tag">Specials</span></div>
-            <p class="says">Start each run with homing missiles.</p>
-            <div class="stats"><span>Fitted after your <b>9th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>220</b></span></div>
-            
-            <p class="detail">One homing missile every 1.7 seconds from the first wave. Seeker Pod boosters make them come faster.</p>
+          <article class="item module" id="module-magnet">
+            <div class="top"><h4>Tractor Coil</h4><span class="tag">Salvage</span></div>
+            <p class="says">Wider scrap pickup range.</p>
+            <div class="stats"><span>Fitted after your <b>9th</b> boss</span><span><b>2</b> levels</span><span class="gold">◆ <b>70</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 20</li><li><small>Level 2</small>◆ 50</li></ol>
+            <p class="detail">Pickup reach grows from 42 to 64, then 86.</p>
           </article>
         </div>
       </div>
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>10</div></div>
         <div class="body">
-          <article class="item module" id="module-reroll">
-            <div class="top"><h4>Reroll Chips</h4><span class="tag">Salvage</span></div>
-            <p class="says">+1 booster reroll each run.</p>
-            <div class="stats"><span>Fitted after your <b>10th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>230</b> in all</span></div>
-            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 30</li><li><small>Level 2</small>◆ 70</li><li><small>Level 3</small>◆ 130</li></ol>
-            <p class="detail">Each level is 1 more reroll per run. A reroll deals three new boosters of the same kind of offer.</p>
+          <article class="item module" id="module-missile">
+            <div class="top"><h4>Seeker Rack</h4><span class="tag">Specials</span></div>
+            <p class="says">Start each run with homing missiles.</p>
+            <div class="stats"><span>Fitted after your <b>10th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>220</b></span></div>
+            
+            <p class="detail">One homing missile every 1.7 seconds from the first wave. Seeker Pod boosters make them come faster.</p>
           </article>
         </div>
       </div>
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>11</div></div>
         <div class="body">
-          <article class="item module" id="module-head">
-            <div class="top"><h4>Head Start</h4><span class="tag">Salvage</span></div>
-            <p class="says">Pick a free booster before leaving the station.</p>
-            <div class="stats"><span>Fitted after your <b>11th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
-            
-            <p class="detail">A free booster before the first wave. 70% of the cards are common and 30% rare; never a prototype.</p>
+          <article class="item module" id="module-reroll">
+            <div class="top"><h4>Reroll Chips</h4><span class="tag">Salvage</span></div>
+            <p class="says">+1 booster reroll each run.</p>
+            <div class="stats"><span>Fitted after your <b>11th</b> boss</span><span><b>3</b> levels</span><span class="gold">◆ <b>230</b> in all</span></div>
+            <ol class="levels" aria-label="Cost of each level"><li><small>Level 1</small>◆ 30</li><li><small>Level 2</small>◆ 70</li><li><small>Level 3</small>◆ 130</li></ol>
+            <p class="detail">Each level is 1 more reroll per run. A reroll deals three new boosters of the same kind of offer.</p>
           </article>
         </div>
       </div>
       <div class="stop">
         <div class="rail"><div class="mark"><small>BOSS</small>12</div></div>
         <div class="body">
+          <article class="item module" id="module-head">
+            <div class="top"><h4>Head Start</h4><span class="tag">Salvage</span></div>
+            <p class="says">Pick a free booster before leaving the station.</p>
+            <div class="stats"><span>Fitted after your <b>12th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>150</b></span></div>
+            
+            <p class="detail">A free booster before the first wave. 70% of the cards are common and 30% rare; never a prototype.</p>
+          </article>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="rail"><div class="mark"><small>BOSS</small>13</div></div>
+        <div class="body">
           <article class="item module" id="module-revive">
             <div class="top"><h4>Emergency Reboot</h4><span class="tag">Armor</span></div>
             <p class="says">Once per run, survive a killing blow.</p>
-            <div class="stats"><span>Fitted after your <b>12th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>300</b></span></div>
+            <div class="stats"><span>Fitted after your <b>13th</b> boss</span><span><b>1</b> level</span><span class="gold">◆ <b>300</b></span></div>
             
             <p class="detail">The blow that would end the run leaves you on 1 hull instead, untouchable for 2.5 seconds, and blasts every enemy for 80 damage while wiping their shots.</p>
           </article>

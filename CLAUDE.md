@@ -25,6 +25,8 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **Clouds sit in the open lanes, and enemies have to fly through them.** A cloud is lobbed between the formation and the ship, never up among the parked enemies (the owner asked for this of the gas cloud; the flame cloud follows the same rule).
 - **Confusion gives no new ability.** A confused enemy breaks off, chases the enemy furthest from it and rams it: the rammer is destroyed and its target loses half its health. The owner rejected an earlier version in which confused enemies shot at each other.
 - **Flame Cloud weakens and never finishes an enemy off** (the owner: "just want it to weaken them slowly"). It takes a share of the enemy's own health, so it means the same on wave 3 and wave 30.
+- **Sentry satellites come in two strengths**, as the owner asked: a simple one from a booster (Sentry Satellite) and a tougher, twin-gun one from a station module that levels up (Sentry Platform). Both can be out at once. A satellite can be shot down and runs out after a set time.
+- **Your own beams and shots are never red.** The Laser Drone's beam is violet with a white core.
 - **One richer ring, not several.** An enemy that pays more than 1 scrap drops a single ring worth more, a little larger with a gem at its centre (`worth` on the pickup). A boss's scrap is always `BOSS_RINGS` rings. The owner found the field too full of rings.
 - **Sound must survive a pause.** The owner lost sound after pausing. Two guards: the sound switch is no longer beside Resume on the pause screen, and `audioInit()` restarts audio that a phone stopped or left silently stuck while the page was away (`audioStale`). This cannot be tested without a real phone.
 - **Waves gather faster as they go.** Enemies fly into the formation 5% faster each wave (`ENTER`), levelling off at 2.5 times the first wave's pace.
@@ -44,10 +46,10 @@ The script is split into sections, each marked with a `// ---------- name ------
 | save | `meta`: scrap, records, mute, the graphics setting (`meta.gfx`, `meta.autoQ`), bought modules (`meta.up`) and fitted modules (`meta.mods`), all in localStorage. |
 | audio | Web Audio synth: `tone()`, `noise()` and the `SFX` table. Phone unlock tricks are in `audioInit()`. |
 | three.js stage | Renderer, lights and the reflection environment, `geo` and `M` (shared geometries and materials), the nebula backdrop, stars, particles (`burst`), effect pools (`ringFx`, `zapFx`), instanced shots, the player ship, station and shuttle models, post-processing (`draw()`, `GFX`), `resize()`. |
-| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`, `ENTER` (how fast enemies fly into formation), `DART`, `CLOUD` (the gas and flame cloud boosters), `BOSSES` and each boss's table, `FINALE`. |
+| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`, `ENTER` (how fast enemies fly into formation), `DART`, `CLOUD` (the gas and flame cloud boosters), `SENTRY` (the satellites), `LASER` (the Laser Drone), `BOSSES` and each boss's table, `FINALE`. |
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
 | enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the five bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`, `updateSiege`, `updateTriad`), and `buildWave()`. |
-| player | Ship hit shape (`shipHit`), shields, shots, seekers, the cloud boosters (`launchCloud`, `updateClouds`, and `afflicted` for what a burning or confused enemy does), picking up scrap. |
+| player | Ship hit shape (`shipHit`), shields, shots, seekers, sentry satellites (`sats`, `updateSats`), the Laser Drone (`updateLaser`), the cloud boosters (`launchCloud`, `updateClouds`, `afflicted` for a burning enemy, `confuse` and `updateRam` for a confused one), picking up scrap. |
 | cutscenes | `CUTS` (durations), `startCut`, `updateCut`, docking at the station. A boss's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, next to `shake()`. |
 | drawing | `syncScene()`: copies game state into the three.js scene once a frame. |
 | UI | HUD, screens, booster choice (draft), the station shop, buttons. |
@@ -89,7 +91,7 @@ A hidden screen the owner uses to try things on their phone. Open it from the ti
   - The Beam Warden's beams are `e.bm` and `e.beams`, not `e.laser`: that field marks a lancer everywhere.
 - **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during a boss's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
-- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `DART`, `CLOUD`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
+- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `DART`, `CLOUD`, `SENTRY`, `LASER`, `sats`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
 
 ## Graphics
@@ -128,6 +130,7 @@ node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by
 - A full run: launch, booster shuttle, Hive Core, docking, the station, death and reload.
 - The four bosses after the Hive Core: each arrives on its wave, every attack happens, and destroying each leads to docking and a new module. Also: the cube breaks 1 to 2 to 4 with the bar following; a gap between the Warden's beams is safe and a beam is not; the Siege Beetle's shell lets 40% of a hit through shut and all of it open; losing a Triad core does not end the fight.
 - Checks that each enemy first appears on the wave `UNLOCK` says.
+- Sentry satellites and the Laser Drone: a satellite deploys ahead of the ship, fires by itself, stops enemy shots, is shot down or runs out; the station module's is tougher with two barrels; the laser burns everything in its lane and nothing outside it.
 - The cloud boosters: a Flame Cloud weakens an enemy and never destroys it; a confused enemy chases and rams the enemy furthest from it, with no new weapon, and flies home if its time runs out; the ship lobs clouds into the lanes below the formation. A dart bends a little toward the ship and a sidestep still clears it. A boss's scrap arrives over time and is all in before docking.
 - The test bench: the secret gesture, choosing a wave and boosters, that a test run starts as set up and leaves the save untouched, and `?debug`.
 - A stress run with every booster on, and pause.
