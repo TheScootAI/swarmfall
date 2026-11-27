@@ -64,11 +64,11 @@ The script is split into sections, each marked with a `// ---------- name ------
 
 A hidden screen the owner uses to try things on their phone. Open it from the title: tap SWARMFALL five times within three seconds, press the backquote key, or add `?debug` to the address.
 
-- It sets the wave to start on (with one-tap choices for each boss), any boosters at any level, and "ship cannot be hit".
+- It sets the wave to start on (with one-tap choices for each boss), any boosters at any level, any station modules at any level (for the test only: `testMods` stands in for the save's levels through `mlv()`), and "ship cannot be hit".
 - A run launched from it is a **test run** (`G.test`): nothing it earns is saved. No scrap is banked, no records change, a destroyed boss fits no module, and nothing can be bought while docked. "Test again" and "Restart run" repeat the same test.
 - Two buttons on it do change the real save, and say so: add 1000 scrap, and fit every module.
 - What was chosen is remembered in localStorage under `swarmfall.debug`, apart from the save.
-- **When you add something the owner will want to try** (a booster, a boss, an enemy), make sure the bench can reach it. Boosters and bosses appear on it by themselves, from `UP` and `BOSSES`.
+- **When you add something the owner will want to try** (a booster, a boss, an enemy), make sure the bench can reach it. Boosters, station modules and bosses appear on it by themselves, from `UP`, `SHOP` and `BOSSES`. Anything else new (an enemy, a setting) needs adding by hand, and the owner will ask whether it was.
 
 ## Conventions
 

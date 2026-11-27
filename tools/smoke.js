@@ -387,18 +387,20 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   check(await page.isHidden('#scrDebug'), 'test bench: stays hidden from ordinary taps on the title');
   await page.waitForTimeout(3200); for (let i = 0; i < 5; i++) await tapLogo();
   check(await page.isVisible('#scrDebug'), 'test bench: five taps on the title within three seconds open it');
-  await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="12"]'); await page.tap('#dbgUps [data-id="gas"]'); await page.tap('#dbgUps [data-id="flame"]'); await page.tap('#dbgUps [data-id="flame"]');
+  await page.tap('#dbgClear'); await page.tap('#dbgModNone'); await page.tap('#dbgMod [data-id="sentry"]'); await page.tap('#dbgMod [data-id="sentry"]'); await page.tap('#dbgMod [data-id="hull"]'); await page.tap('#dbgBoss [data-w="12"]'); await page.tap('#dbgUps [data-id="gas"]'); await page.tap('#dbgUps [data-id="flame"]'); await page.tap('#dbgUps [data-id="flame"]');
   if ((await page.textContent('#dbgGod')).endsWith('off')) await page.tap('#dbgGod');
-  const bench = await page.evaluate(() => ({ wave: document.getElementById('dbgWave').textContent, god: document.getElementById('dbgGod').textContent, on: [...document.querySelectorAll('#dbgUps .chip.on')].map(c => c.textContent) }));
-  check(bench.wave === 'Wave 12 · Fracture Cube' && bench.on.join() === 'Flame Cloud2,Confusion Gas1' && bench.god.endsWith('on'), 'test bench: a wave, boosters with levels and "cannot be hit" can be chosen', JSON.stringify(bench));
+  const bench = await page.evaluate(() => ({ wave: document.getElementById('dbgWave').textContent, god: document.getElementById('dbgGod').textContent, on: [...document.querySelectorAll('#dbgUps .chip.on')].map(c => c.textContent), mods: [...document.querySelectorAll('#dbgMod .chip.on')].map(c => c.textContent), offered: [...document.querySelectorAll('#dbgUps .chip')].map(c => c.textContent) }));
+  check(bench.wave === 'Wave 12 · Fracture Cube' && bench.on.join() === 'Flame Cloud2,Confusion Gas1' && bench.god.endsWith('on'), 'test bench: a wave, boosters with levels and "cannot be hit" can be chosen', JSON.stringify(bench.on));
+  check(bench.mods.join() === 'Reinforced Hull1,Sentry Platform2' && bench.offered.includes('Sentry Satellite') && bench.offered.includes('Laser Drone') && bench.offered.length === 23, 'test bench: station modules can be chosen for the test, and every booster is offered', bench.offered.length + ' boosters · modules: ' + bench.mods.join(', '));
   if (OUT) await page.screenshot({ path: path.join(OUT, '16-test-bench.png') });
   await page.tap('#dbgGo'); await waitFor(x => x.state === 'play', 15000);
   await page.waitForFunction(() => window.__swarmfall.G.boss, null, { timeout: 20000 });
   const run = await page.evaluate(() => { const s = window.__swarmfall; s.P.inv = 0; s.G.eb.push({ x: s.P.x, y: s.P.y - 3, vx: 0, vy: 5, r: 6, kind: 0, turn: 0, dead: false });
-    return { wave: s.G.wave, boss: s.G.boss.type, up: JSON.stringify(s.G.up), gas: s.S.gas, flame: s.S.flame, test: s.G.test }; });
+    return { wave: s.G.wave, boss: s.G.boss.type, up: JSON.stringify(s.G.up), gas: s.S.gas, flame: s.S.flame, test: s.G.test, platform: s.S.platform, maxHp: s.S.maxHp, shield: s.S.shield }; });
   await page.waitForTimeout(500);
   const hitless = await page.evaluate(() => { const s = window.__swarmfall; return s.P.alive && s.P.hp === s.S.maxHp && s.G.state === 'play'; });
   check(run.wave === 12 && run.boss === 'cube' && run.gas === 1 && run.flame === 2 && run.test && hitless, 'test run: starts on the chosen wave with the chosen boosters, and the ship cannot be hit', JSON.stringify(run) + ' unhurt ' + hitless);
+  check(run.platform === 2 && run.maxHp === 2 && run.shield === 0, 'test run: uses the station modules chosen on the bench, not the save\'s', 'Sentry Platform ' + run.platform + ', hull ' + run.maxHp + ', shield ' + run.shield);
   await page.evaluate(() => { window.__swarmfall.G.run.scrap += 80; });
   for (let i = 0; i < 40 && (await st()).state !== 'station'; i++) { await page.evaluate(() => { const s = window.__swarmfall; s.G.eb.length = 0; s.G.em.length = 0; for (const e of s.G.enemies) if (e.def.boss) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); }); await page.waitForTimeout(700); }
   s = await st(); const note = await page.textContent('#stNote');
