@@ -216,12 +216,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <h2 id="pauseWave">Wave 1</h2>
         <div class="loadout" id="pauseLoadout"></div>
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Anything red is enemy fire.</p>
-        <div class="row quietrow"><button id="btnGfx" class="btn quiet">Graphics: auto</button></div>
+        <div class="row quietrow"><button id="btnSound2" class="btn quiet">Turn sound off</button><button id="btnGfx" class="btn quiet">Graphics: auto</button></div>
         <div class="row quietrow"><button id="btnRestart" class="btn quiet">Restart run</button><button id="btnQuit" class="btn quiet">End this run</button></div>
         <div class="row dockbar">
           <button class="more" type="button" hidden>More below</button>
           <button id="btnResume" class="btn primary">Resume</button>
-          <button id="btnSound2" class="btn">Turn sound off</button>
         </div>
       </div>
     </section>
@@ -328,7 +327,7 @@ const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta));
 const mlv = id => meta.up[id] || 0;
 
 // ---------- audio ----------
-let AC = null, master = null, noiseBuf = null, hush = null;
+let AC = null, master = null, noiseBuf = null, hush = null, audioStale = false;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 // A short silent clip. On iPhones and iPads the ring/silent switch mutes game audio unless the page counts as
 // "playing media"; looping this is the long-standing way to make it count where the newer setting is missing.
@@ -346,12 +345,18 @@ function audioInit() {
   if (!AC) {
     try {
       const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-      AC = new C(); master = AC.createGain(); master.gain.value = 0.45; master.connect(AC.destination);
+      AC = new C(); AC.onstatechange = () => { if (AC && AC.state !== 'running') audioStale = true; }; master = AC.createGain(); master.gain.value = 0.45; master.connect(AC.destination);
       noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);   // two seconds of hiss; noise() loops it for longer sounds
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     } catch (e) { AC = null; return; }
   }
-  if (AC.state !== 'running') { try { const r = AC.resume(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+  // A phone can stop the audio, or leave it running but silent, when the page goes to the background, the screen
+  // locks or a call comes in. audioStale is set when any of that may have happened; the next touch (this function
+  // runs on every one) then stops and restarts the audio, which is what brings a stuck one back.
+  if (AC.state === 'closed') { AC = null; return audioInit(); }
+  if (audioStale && AC.state === 'running') { audioStale = false; try { const p = AC.suspend(); if (p && p.then) p.then(() => AC.resume()).catch(() => {}); } catch (e) {} }
+  else if (AC.state !== 'running') { audioStale = false; try { const r = AC.resume(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+  if (hush && hush.paused && !meta.mute) { try { const r = hush.play(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }   // the silent clip that keeps an iPhone's sound on is stopped by the same things
   if (isIOS && !navigator.audioSession && !meta.mute && !hush) {
     try { hush = new Audio(silentClip()); hush.loop = true; hush.setAttribute('playsinline', ''); const r = hush.play(); if (r && r.catch) r.catch(() => { hush = null; }); } catch (e) { hush = null; }
   }
@@ -618,7 +623,7 @@ function commitInst(im, n) {
 const heading = (vx, vy) => Math.atan2(-vy, vx) - Math.PI / 2;   // rotation that points a model along its velocity
 const PB_MAX = 180, EB_MAX = 240, EM_MAX = 24;
 const pbMesh = instanced(new THREE.BoxGeometry(3.6, 14, 3.6), PB_MAX), ebMesh = instanced(geo.sph, EB_MAX, ENEMY_RED), emMesh = instanced(geo.cone, EM_MAX, ENEMY_RED);
-const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff, 0x7dffa0], CRIT_COL = 0xffe27a;   // shots on your side: cannon, seeker, drone, and a confused enemy's
+const PB_COL = [0x9ff3ff, 0xff9a4d, 0xc7b0ff], CRIT_COL = 0xffe27a;   // player shots: cannon, seeker, drone
 
 // player ship
 const ship = new THREE.Group();
@@ -802,6 +807,7 @@ const UNLOCK = {
   lancer: [15, 20, 25] // the first, second and third lancer
 };
 const SKIP_SCRAP = 10;   // scrap for passing up a booster
+const BOSS_RINGS = 8;    // a boss's scrap comes as this many rings, however much it is
 // How fast enemies fly into their places in the formation, and back to them after a dive. faster: the share
 // quicker each wave (the owner asked for 5%). max: it never gets quicker than this many times the wave-1 pace,
 // which it reaches on wave 31; past that the flight would be too quick to follow.
@@ -813,14 +819,17 @@ const DART = { rate: 0.14, total: 0.1 };
 // The two cloud boosters, Confusion Gas and Flame Cloud. every: seconds between clouds at levels 1, 2 and 3.
 // r: a cloud's radius, and rMore: how much wider per level past the first. fly: seconds it takes to reach the
 // enemy it was lobbed at. hang: seconds it then stays.
+// Clouds do not go up among the parked enemies: one is lobbed into the open lanes between the formation and the
+// ship (from `near` to `far` above the ship, within `side` of it to left or right), and an enemy has to fly through it.
 // Gas: conf is the seconds an enemy stays confused, and confRest the seconds before it can be confused again.
-// While confused it does not fire at you or dive; every confShot seconds it fires at the enemy furthest from it,
-// and that shot takes confShare of its target's full health (confBoss of a boss's). Bosses cannot be confused.
+// A confused enemy gets no new weapon. It breaks off, flies at the enemy furthest from it at ramSpeed and rams
+// it: the rammer is destroyed and its target loses ramShare of its full health (ramBoss of a boss's). If the 5
+// seconds run out first it goes back to what it was doing. Bosses cannot be confused.
 // Flame is meant to weaken, never to finish an enemy off. An enemy burns while it is in the cloud and for burn
 // seconds after it leaves, losing burnShare of its full health every second (plus burnMore for each level past
 // the first; a boss loses burnBoss times as much). Burning never takes an enemy below burnFloor of its health.
 const CLOUD = { every: [7, 5.5, 4], r: 46, rMore: 8, fly: 0.8, hang: 4.5,
-  conf: 5, confRest: 3, confShot: 1.25, confShare: 0.15, confBoss: 0.01, confSpeed: 280,
+  near: 150, far: 270, side: 70, conf: 5, confRest: 3, ramSpeed: 300, ramShare: 0.5, ramBoss: 0.03,
   burn: 3, burnShare: 0.06, burnMore: 0.03, burnBoss: 0.125, burnFloor: 0.1 };
 const GAS_RGB = [0.45, 1, 0.6], FLAME_RGB = [1, 0.6, 0.15];
 const enterPace = () => Math.min(ENTER.max, 1 + ENTER.faster * (Math.max(1, G.wave) - 1));
@@ -848,13 +857,13 @@ const UP = [
   { id: 'crit', c: 'w', n: 'Weak-Point Scanner', r: 1, max: 4, d: '+15% chance for a shot to deal 2.5× damage.' },
   { id: 'blast', c: 'w', n: 'Volatile Payload', r: 1, max: 3, d: 'Destroyed enemies explode and damage their neighbours.' },
   { id: 'rico', c: 'w', n: 'Ricochet', r: 1, max: 2, d: 'After a hit, shots bounce to another enemy.' },
-  { id: 'flame', c: 'w', n: 'Flame Cloud', r: 1, max: 3, d: 'Lob a cloud of flame at the swarm. Enemies that pass through it burn slowly.' },
+  { id: 'flame', c: 'w', n: 'Flame Cloud', r: 1, max: 3, d: 'Lob a cloud of flame ahead of your ship. Enemies that fly through it burn slowly.' },
   { id: 'scav', c: 's', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
   { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
   { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
   { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
   { id: 'slow', c: 'h', n: 'Time Dilation', r: 2, max: 2, d: 'Enemy shots travel 20% slower.' },
-  { id: 'gas', c: 's', n: 'Confusion Gas', r: 2, max: 3, d: 'Lob a gas cloud at the swarm. Enemies that pass through it fire on their own side for 5 seconds.' },
+  { id: 'gas', c: 's', n: 'Confusion Gas', r: 2, max: 3, d: 'Lob a gas cloud ahead of your ship. An enemy that flies through it turns and rams one of its own.' },
   { id: 'nova', c: 'h', n: 'Reactive Nova', r: 2, max: 2, d: 'Taking a hit wipes every enemy shot and blasts the whole swarm.' },
 ];
 const UPBY = {}; UP.forEach(u => UPBY[u.id] = u);
@@ -963,7 +972,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confT: 0, confRest: 0 };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? 3 : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo); hint('elite', 3, 'ELITE', 'Red-ringed enemies are tougher and drop extra scrap'); }
@@ -1054,7 +1063,7 @@ function updateLancer(e, dt) {
   if (L.phase === 'idle') {
     let busy = 0;
     if (L.t <= 0 && G.state === 'play' && P.alive) for (const o of G.enemies) if (o.laser && o.laser.phase !== 'idle') busy++;
-    if (L.t <= 0 && G.state === 'play' && P.alive && busy < 2 && !(e.conf > 0)) {   // no more than two lasers charge or fire at once, and a confused lancer does not
+    if (L.t <= 0 && G.state === 'play' && P.alive && busy < 2) {   // no more than two lasers charge or fire at once
       L.phase = 'charge'; L.t = 1.3; SFX.charge();
       hint('lancer', 6, 'LASER', 'The thin red line shows where the beam will fire');
     }
@@ -1070,7 +1079,7 @@ function updateDive(e, dt) {
   if (e.type === 'beetle') {
     if (e.shots > 0 && e.y >= H * 0.38) {
       e.vy += (6 - e.vy) * Math.min(1, 4 * dt); e.vx += -e.vx * Math.min(1, 3 * dt); e.shootT -= dt;
-      if (e.shootT <= 0) { if (!(e.conf > 0)) fireMissile(e.x, e.y + 12); e.shots--; e.shootT = 1.5; }
+      if (e.shootT <= 0) { fireMissile(e.x, e.y + 12); e.shots--; e.shootT = 1.5; }
     } else {
       e.vy = Math.min(e.shots > 0 ? sp : sp * 2.4, e.vy + 260 * dt);
       if (steer) e.vx += (clamp((P.x - e.x) * 0.8, -70, 70) - e.vx) * Math.min(1, 2 * dt);
@@ -1082,7 +1091,7 @@ function updateDive(e, dt) {
     else if (steer && k) e.vx += (clamp((P.x - e.x) * k, -170, 170) - e.vx) * Math.min(1, 2.6 * dt);
     if (e.type === 'weaver') e.x += Math.cos(e.t * 4.6 + e.ph) * 150 * dt;
     else if (e.type === 'mite' && e.lane == null) e.x += Math.sin(e.t * 3.4 + e.ph) * 62 * dt;   // a gentle side-to-side wobble all the way down
-    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6 && !(e.conf > 0)) { e.shootT -= dt; if (e.shootT <= 0) { fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
+    if (e.shots > 0 && e.y > 110 && e.y < H * 0.6) { e.shootT -= dt; if (e.shootT <= 0) { fireDart(e.x, e.y + 8, aimAt(e.x, e.y)); e.shots--; e.shootT = 0.75; SFX.eshoot(); } }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
   if (e.x < 12) { e.x = 12; e.vx = Math.abs(e.vx); } else if (e.x > W - 12) { e.x = W - 12; e.vx = -Math.abs(e.vx); }
@@ -1396,13 +1405,15 @@ function damageEnemy(e, d, quiet) {   // quiet: no blink and no sound, for the s
   }
   if (e.hp <= 0) killEnemy(e);
 }
-function spawnPick(kind, x, y) {
+// worth: how much scrap one ring is. An enemy that pays out more than 1 drops a single richer ring, a little
+// larger and with a gem at its centre, in place of several: the field was filling up with rings.
+function spawnPick(kind, x, y, worth = 1) {
   // everything worth grabbing sits inside a pulsing halo in the ship's own colour
-  const mesh = new THREE.Group(), core = new THREE.Group(), halo = part(geo.ring, M.halo, 13, 13, 1);
+  const mesh = new THREE.Group(), core = new THREE.Group(), halo = part(geo.ring, M.halo, 13, 13, 1), big = 1 + 0.13 * Math.min(4, worth - 1);
   if (kind === 'heart') core.add(part(geo.box, M.heart, 13, 5, 5), part(geo.box, M.heart, 5, 13, 5));
-  else core.add(part(geo.torus, M.scrap, 6.5, 6.5, 6.5));
+  else { core.add(part(geo.torus, M.scrap, 6.5 * big, 6.5 * big, 6.5 * big)); if (worth > 1) core.add(part(geo.oct, M.scrap, 2.4 * big, 3.2 * big, 2.4 * big)); }
   mesh.add(core, halo); scene.add(mesh);
-  const p = { kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU), sp: 1 };   // sp: how fast it flies to the ship when the field is swept, as a share of full speed
+  const p = { kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU), sp: 1, worth, big };   // sp: how fast it flies to the ship when the field is swept, as a share of full speed
   G.picks.push(p);
   if (G.bossDown) return p;   // the post-boss shower of scrap is no time for a lesson
   if (kind === 'heart') hint(kind, 3, 'REPAIR', 'Fly into the green cross to restore 1 hull'); else hint(kind, 3, 'SCRAP', 'Fly into the gold rings to collect them');
@@ -1421,13 +1432,14 @@ function killEnemy(e) {
     SFX.core(); shake(16); vibrate(200); ringFx(e.x, e.y, 20, 240, 0xffffff, 0.7); finaleStart(e);
     G.bossDown = true; clearBoss();   // its shots already in flight finish their course
     for (const o of G.enemies) if (!o.dead && o !== e) killEnemy(o);
-    // each ring flies to the ship at its own speed, so they arrive one after another in a line and not all at once
-    for (let i = 0, n = 10 + 4 * e.tier; i < n; i++) spawnPick('scrap', e.x + rand(-40, 40), e.y + rand(-30, 30)).sp = 1 - 0.45 * i / (n - 1);
+    // A boss pays 10 + 4 for each time round in BOSS_RINGS rings, each worth a share of it. Each ring flies to
+    // the ship at its own speed, so they arrive one after another in a line and not all at once.
+    for (let i = 0, n = BOSS_RINGS, total = 10 + 4 * e.tier; i < n; i++) spawnPick('scrap', e.x + rand(-40, 40), e.y + rand(-30, 30), Math.floor(total / n) + (i < total % n ? 1 : 0)).sp = 1 - 0.45 * i / (n - 1);
     spawnPick('heart', e.x, e.y);
     return;
   }
   SFX.boom(); shake(e.elite ? 5 : 2);
-  if (Math.random() < e.def.scrap || e.elite) { const n = e.elite ? 3 : e.type === 'beetle' ? 2 : 1; for (let i = 0; i < n; i++) spawnPick('scrap', e.x, e.y); }
+  if (Math.random() < e.def.scrap || e.elite) spawnPick('scrap', e.x, e.y, e.elite ? 3 : e.type === 'beetle' ? 2 : 1);   // one ring, worth more, in place of several
   if (P.hp < S.maxHp && Math.random() < (e.elite ? 0.3 : 0.03)) spawnPick('heart', e.x, e.y);
   if (S.blast > 0) G.blastQ.push({ x: e.x, y: e.y });
   if (e.type === 'splitter') for (const s of [-1, 1]) { const m = spawnEnemy('mite', null, null, { x: e.x + s * 8, y: e.y }); startDive(m); m.vx = s * 120; m.vy = -60; }
@@ -1548,13 +1560,14 @@ function launchCloud(kind, tx, ty, lv) {
   c.mesh.material.uniforms.color.value.set(CLOUD_COL[kind]); c.mesh.visible = true; SFX.puff();
   return true;
 }
-// The ship lobs each kind of cloud it has at a random enemy on the field, on that kind's own timer.
+// The ship lobs each kind of cloud it has, on that kind's own timer, into the open lanes above it.
 function cloudTimer(kind, lv, left, dt) {
   if (!lv) return left;
   left -= dt;
   if (left > 0) return left;
-  let t = null, n = 0; for (const e of G.enemies) if (!e.dead && e.z > -60 && Math.random() < 1 / ++n) t = e;   // any one of them, with equal chance
-  return t && launchCloud(kind, t.x, t.y, lv) ? CLOUD.every[Math.min(lv, 3) - 1] : 0.3;   // nothing to aim at, or all four clouds in use: try again shortly
+  if (!G.enemies.length) return 0.3;   // nothing on the field: try again shortly
+  const C = CLOUD;
+  return launchCloud(kind, clamp(P.x + rand(-C.side, C.side), 40, W - 40), P.y - rand(C.near, C.far), lv) ? C.every[Math.min(lv, 3) - 1] : 0.3;   // all four clouds in use: try again shortly
 }
 function clearClouds() { for (const c of clouds) { c.on = false; c.mesh.visible = false; } }
 function updateClouds(dt) {
@@ -1573,7 +1586,7 @@ function updateClouds(dt) {
       const dx = e.x - c.x, dy = e.y - c.y, rr = c.r + e.rad * 0.5;
       if (dx * dx + dy * dy > rr * rr) continue;
       if (c.kind === 1) { e.burn = C.burn; e.burnLv = c.lv; }
-      else if (!e.def.boss && e.conf <= 0 && e.confRest <= 0) { e.conf = C.conf; e.confT = C.confShot * 0.4; }   // 5 seconds from first touch, not for as long as it sits in the cloud
+      else if (!e.def.boss && !e.laser && e.conf <= 0 && e.confRest <= 0) confuse(e);
     }
   }
 }
@@ -1588,18 +1601,34 @@ function afflicted(e, dt) {
       if (e.hp > floor) e.hp = Math.max(floor, e.hp - d);   // straight off its health: no blink, no sound, and never the last of it
     }
   }
-  if (e.conf > 0) {
-    e.conf -= dt; e.confT -= dt; if (e.conf <= 0) e.confRest = CLOUD.confRest;
-    if (Math.random() < 0.3) burst(e.x + rand(-9, 9), e.y - e.rad, GAS_RGB, 1, 14, 0.45);
-    if (e.confT <= 0) {
-      e.confT = CLOUD.confShot;
-      let t = null, far = 0; for (const o of G.enemies) { if (o === e || o.dead || o.z < -60) continue; const d = (o.x - e.x) ** 2 + (o.y - e.y) ** 2; if (d > far) { far = d; t = o; } }
-      if (t && G.pb.length < PB_MAX) {   // its shot is on your side now: it flies like one of yours and cannot hit the enemy that fired it
-        const a = Math.atan2(t.y - e.y, t.x - e.x);
-        G.pb.push({ x: e.x, y: e.y, vx: Math.cos(a) * CLOUD.confSpeed, vy: Math.sin(a) * CLOUD.confSpeed, dmg: t.maxHp * (t.def.boss ? CLOUD.confBoss : CLOUD.confShare), pierce: 0, rico: 0, crit: false, kind: 3, hit: [e], dead: false });
-      }
-    }
-  } else if (e.confRest > 0) e.confRest -= dt;
+  if (e.confRest > 0) e.confRest -= dt;
+}
+// Confusion: the enemy drops what it was doing and goes for the enemy furthest from it.
+function furthestFrom(e) { let t = null, far = 0; for (const o of G.enemies) { if (o === e || o.dead || o.z < -60 || o.state === 'ram') continue; const d = (o.x - e.x) ** 2 + (o.y - e.y) ** 2; if (d > far) { far = d; t = o; } } return t; }
+function confuse(e) {
+  const t = furthestFrom(e); if (!t) return;   // alone on the field: nobody to turn on
+  e.conf = CLOUD.conf; e.state = 'ram'; e.ramAt = t; e.z = 0; SFX.dive();
+}
+function updateRam(e, dt) {
+  const C = CLOUD;
+  e.conf -= dt;
+  if (Math.random() < 0.35) burst(e.x + rand(-9, 9), e.y + rand(-9, 9), GAS_RGB, 1, 14, 0.45);   // the gas still clinging to it
+  if (!e.ramAt || e.ramAt.dead) e.ramAt = furthestFrom(e);
+  const t = e.ramAt;
+  if (e.conf <= 0 || !t) {   // it comes to its senses: back to its place in the formation, or back to diving if it has none
+    e.conf = 0; e.confRest = C.confRest; e.ramAt = null;
+    if (e.c != null) {   // it flies home from where it is (startReturn would bring it in from the top of the screen)
+      const sl = slotPos(e), hx = sl.x, hy = sl.y;
+      e.p0 = { x: e.x, y: e.y }; e.p1 = { x: e.x, y: e.y - 70 }; e.p2 = { x: hx, y: hy + 60 }; e.state = 'enter'; e.u = 0; e.dur = 1.5 / enterPace(); e.z0 = 0;
+    } else startDive(e);
+    return;
+  }
+  const dx = t.x - e.x, dy = t.y - e.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 6 * dt);
+  e.vx += (dx / d * C.ramSpeed - e.vx) * k; e.vy += (dy / d * C.ramSpeed - e.vy) * k; e.x += e.vx * dt; e.y += e.vy * dt;
+  if (d < e.rad + t.rad) {   // it rams: the rammer is destroyed, and its target is badly hurt
+    e.conf = 0; e.ramAt = null;
+    ringFx(e.x, e.y, 6, 44, 0x7dffa0, 0.3); damageEnemy(t, t.maxHp * (t.def.boss ? C.ramBoss : C.ramShare)); killEnemy(e);
+  }
 }
 function onHit(b, e) {
   damageEnemy(e, b.dmg);
@@ -1666,7 +1695,7 @@ function updatePicks(dt) {
     if (P.alive && d < 20) {
       gone = true;
       if (p.kind === 'heart') { repair(1); SFX.heal(); }
-      else { G.run.scrap += S.scrapMul; SFX.pick(); gotScrap = true; }
+      else { G.run.scrap += S.scrapMul * p.worth; SFX.pick(); gotScrap = true; }
       burst(p.x, p.y, p.kind === 'heart' ? [0.5, 1, 0.7] : [1, 0.85, 0.35], 6, 90, 0.3);
       got = true;
     }
@@ -1674,7 +1703,7 @@ function updatePicks(dt) {
     else {
       p.mesh.position.set(TX(p.x), TY(p.y), 0);
       if (p.kind === 'heart') p.core.rotation.y = Math.sin(G.time * 3 + p.ph) * 0.7; else p.core.rotation.y += 5 * dt;
-      const hs = 13 * (1 + Math.sin(G.time * 7 + p.ph) * 0.16); p.halo.scale.set(hs, hs, 1);
+      const hs = 13 * p.big * (1 + Math.sin(G.time * 7 + p.ph) * 0.16); p.halo.scale.set(hs, hs, 1);
     }
   }
   if (got) drawHud();   // once a frame, however many were collected
@@ -1687,15 +1716,16 @@ function updateEnemies(dt) {
   for (const e of G.enemies) {
     if (e.dead) continue;
     if (e.flash > 0) { e.flash -= dt; if (e.flash <= 0) restoreMats(e); }
-    if ((e.burn > 0 || e.conf > 0 || e.confRest > 0) && inPlay()) afflicted(e, dt);   // not on the ship-lost screen, where the swarm still drifts
+    if ((e.burn > 0 || e.confRest > 0) && inPlay()) afflicted(e, dt);   // not on the ship-lost screen, where the swarm still drifts
     if (e.state === 'enter') {
       e.u += dt / e.dur; const u = Math.min(1, e.u), s = slotPos(e), m = 1 - u;
       const w0 = m * m * m, w1 = 3 * m * m * u, w2 = 3 * m * u * u, w3 = u * u * u;
       const nx = w0 * e.p0.x + w1 * e.p1.x + w2 * e.p2.x + w3 * s.x; e.vx = (nx - e.x) / Math.max(dt, 0.001); e.x = nx;
       e.y = w0 * e.p0.y + w1 * e.p1.y + w2 * e.p2.y + w3 * s.y; e.z = e.z0 * (1 - smooth(Math.min(1, u / 0.55)));
       if (u >= 1) { e.state = 'form'; e.vx = 0; }
-    } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; if (e.laser) updateLancer(e, dt); else if (!(e.conf > 0)) formed.push(e); }   // a confused enemy is not picked to dive or to fire at the ship
+    } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; if (e.laser) updateLancer(e, dt); else formed.push(e); }
     else if (e.state === 'dive') { updateDive(e, dt); diving++; }
+    else if (e.state === 'ram') { updateRam(e, dt); if (e.dead) continue; }
     else updateBoss(e, dt);
     if (P.alive && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) { hitPlayer(); if (!e.def.boss) damageEnemy(e, 40); }
     if (e.dead) continue;
@@ -1961,7 +1991,7 @@ function loadoutHtml() {
   return ids.length ? ids.map(id => '<span>' + UPBY[id].n + ' <b>' + G.up[id] + '</b></span>').join('') : '<span>No boosters yet</span>';
 }
 function gfxLabels() { $('btnGfx').textContent = 'Graphics: ' + GFX.mode + (GFX.mode === 'auto' && GFX.q < 2 ? (GFX.q ? ' (reduced)' : ' (effects off)') : ''); }
-function soundLabels() { $('btnSound').textContent = $('btnSound2').textContent = meta.mute ? 'Turn sound on' : 'Turn sound off'; }
+function soundLabels() { $('btnSound').textContent = $('btnSound2').textContent = meta.mute ? 'Sound is off: turn on' : 'Turn sound off'; }
 function toggleMute() {
   meta.mute = !meta.mute; save(); soundLabels();
   if (meta.mute && hush) { try { hush.pause(); } catch (e) {} hush = null; }
@@ -2313,7 +2343,8 @@ const endDrag = e => { if (drag && drag.id === e.pointerId) drag = null; };
 addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 for (const ev of ['pointerup', 'touchend', 'click']) addEventListener(ev, audioInit, { capture: true, passive: true });   // releases count as gestures on phones; presses do not
-document.addEventListener('visibilitychange', () => { drewPaused = false; if (document.hidden && inPlay()) togglePause(); });   // a hidden tab may lose its canvas: redraw on return
+document.addEventListener('visibilitychange', () => { drewPaused = false; audioStale = true; if (document.hidden && inPlay()) togglePause(); });
+addEventListener('pageshow', () => { audioStale = true; }); addEventListener('focus', () => { audioStale = true; });   // a hidden tab may lose its canvas: redraw on return
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
 if (finePointer) $('howto').textContent = 'Steer with the mouse, or ← → / A D. Your ship fires on its own. P pauses, M mutes.';
 

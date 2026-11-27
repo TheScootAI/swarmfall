@@ -61,7 +61,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   // watch the Hive Core's death scene from inside the page: slowest game speed, closest camera, and hull lost during it
   await page.evaluate(() => { const s = window.__swarmfall, w = window.__fin = { slowest: 1, closest: 1, far: s.camera.position.z, hp: null, hurt: false };
     (function f() {
-      if (s.FIN.on && !w.sps) w.sps = s.G.picks.filter(p => p.kind === 'scrap').map(p => +p.sp.toFixed(2));   // how fast each ring of the scrap shower will fly to the ship
+      if (s.FIN.on && !w.sps) { const rings = s.G.picks.filter(p => p.kind === 'scrap'); w.sps = rings.map(p => +p.sp.toFixed(2)); w.worth = rings.reduce((a, p) => a + p.worth, 0); }   // how fast each ring of the scrap shower will fly to the ship
       if (w.sps && s.G.run.scrap !== w.lastScrap) { w.lastScrap = s.G.run.scrap; w.gotLast = s.G.time; if (w.gotFirst === undefined) w.gotFirst = s.G.time; }
       if (s.FIN.on && !w.done) {   // a shot is dropped on the ship every frame, with its usual protection taken away
         w.slowest = Math.min(w.slowest, s.G.speed); w.closest = Math.min(w.closest, s.camera.position.z / w.far);
@@ -75,7 +75,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   check(fin.slowest < 0.3 && fin.closest > 0.999, 'the Hive Core dies in slow motion, and the camera stays where it is', JSON.stringify(fin));
   check(!fin.hurt && fin.grace > 0.3, 'the ship cannot be hit during the core\'s death scene, nor for a moment after', 'grace ' + fin.grace);
   check(!fin.on && fin.speed === 1 && Math.abs(fin.z - fin.far) < 0.01, 'speed and camera are back to normal by the time docking starts', JSON.stringify(fin));
-  check(new Set(fin.sps).size >= 10 && Math.max(...fin.sps) === 1 && Math.min(...fin.sps) < 0.6 && fin.gotLast - fin.gotFirst > 0.3 && fin.picksLeft === 0, 'the boss\'s scrap flies to the ship at different speeds, arrives one after another, and is all in before docking', fin.sps.length + ' rings, speeds ' + Math.min(...fin.sps) + ' to 1, collected over ' + (fin.gotLast - fin.gotFirst).toFixed(2) + ' s of game time');
+  check(fin.sps.length === 8 && fin.worth === 14 && new Set(fin.sps).size === 8 && Math.max(...fin.sps) === 1 && Math.min(...fin.sps) < 0.6 && fin.gotLast - fin.gotFirst > 0.3 && fin.picksLeft === 0, 'the boss\'s scrap is 8 rings worth 14 in all, which fly to the ship at different speeds and are all in before docking', fin.sps.length + ' rings worth ' + fin.worth + ', speeds ' + Math.min(...fin.sps) + ' to 1, collected over ' + (fin.gotLast - fin.gotFirst).toFixed(2) + ' s of game time');
   s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);
   check(s.scrap >= 60, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
   await shot('05-station');
@@ -225,7 +225,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   await page.reload(); await page.waitForTimeout(500);
   await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await waitFor(x => x.state === 'play');
   const cl = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, C = s.CLOUD, out = {}, t0 = performance.now(); G.wave = 3; s.nextWave();
-    let step = 0, at = 0, A = null, B = null, hpB = 0, sum0 = 0, dart = null, last = G.time, confSecs = 0, hp0 = 0;
+    let step = 0, at = 0, A = null, B = null, hpB = 0, sum0 = 0, dart = null, last = G.time, hp0 = 0, T = null, tHp = 0, tMax = 1, count0 = 0, home = null, hx = 0, hy = 0, wasRam = false, gaveUp = 0;
     const hpSum = () => G.enemies.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0), since = () => G.time - at, go = n => { step = n; at = G.time; };
     (function f() {
       const dt = G.time - last; last = G.time;
@@ -237,11 +237,24 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
       else if (step === 2 && since() > 7.5) {   // the cloud has gone and the burn is over: the enemy must have been weakened, not destroyed
         out.flameGone = !s.clouds.some(c => c.on); out.survived = !B.dead && B.burn <= 0; out.healthLeft = +(B.hp / B.maxHp).toFixed(2);
         A = formed[0]; sum0 = hpSum(); if (!A) return res(out); s.launchCloud(0, A.x, A.y, 1); go(3); }   // now gas, on an enemy at the other end
-      else if (step === 3) {
-        if (A.conf > 0) { out.confused = true; confSecs += dt; } if (G.pb.some(b => b.kind === 3)) out.greenShots = true;
-        if (since() > 8) { out.confSecs = +confSecs.toFixed(2); out.swarmHealth = +sum0.toFixed(0); out.hurtEachOther = +(sum0 - hpSum()).toFixed(1); G.up.gas = 1; s.recalc(); P.gasT = 0.05; go(4); }
+      else if (step === 3) {   // the confused enemy must break off, chase the enemy furthest from it and ram it
+        if (A.state === 'ram' && !out.chased) { out.chased = true; T = A.ramAt; tHp = T.hp; tMax = T.maxHp; count0 = G.enemies.filter(e => !e.dead).length; }
+        if (out.chased && A.dead && out.rammed === undefined) { out.rammed = true; out.targetLost = T.dead ? 1 : +((tHp - T.hp) / tMax).toFixed(2); }
+        if (G.pb.some(b => b.kind === 3) || G.eb.length) out.newWeapon = true;   // it must not shoot: there is no such shot any more, and nobody else is firing
+        if (since() > 7) {
+          out.left = G.enemies.filter(e => !e.dead).length + ' of ' + count0; out.cleared = G.enemies.filter(e => !e.dead).length < count0 * 0.5;
+          // one that runs out of time flies home from where it is
+          const C2 = formed.find(e => e.c != null); if (C2) { s.launchCloud(0, C2.x, C2.y, 1); home = C2; } go(3.5);
+        }
+      } else if (step === 3.5) {
+        if (home && home.state === 'ram' && !gaveUp) { home.conf = 0.02; hx = home.x; hy = home.y; wasRam = true; }   // cut its 5 seconds short
+        else if (home && wasRam && ++gaveUp === 3) {   // three frames after it gave up: it should be flying home from where it was, not from the top of the screen
+          out.wentHome = !home.dead && home.state === 'enter'; out.jump = +Math.hypot(home.x - hx, home.y - hy).toFixed(0);
+          for (const c of s.clouds) { c.on = false; c.mesh.visible = false; }
+        }
+        if (since() > 4) { for (const c of s.clouds) { c.on = false; c.mesh.visible = false; } G.up.gas = 1; s.recalc(); P.gasT = 0.05; go(4); }
       } else if (step === 4) {
-        if (s.clouds.some(c => c.on && c.kind === 0)) out.auto = true;
+        const mine = s.clouds.find(c => c.on && c.kind === 0); if (mine) { out.auto = true; out.cloudAbove = +(P.y - mine.ty).toFixed(0); out.belowFormation = mine.ty > Math.max(...formed.map(e => e.y), 0) + 30; }
         if (since() > 1) { G.up.gas = 0; s.recalc(); dart = { x: 60, y: 100, vx: 0, vy: 240, r: 3.4, kind: 1, turn: s.DART.total, dead: false }; G.eb.push(dart); go(5); }   // a dart fired straight down, far to the ship's left
       } else if (step === 5 && since() > 1.5) {
         out.dartVx = +dart.vx.toFixed(1); out.dartLean = +Math.atan2(dart.vx, dart.vy).toFixed(3);
@@ -252,9 +265,10 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
       requestAnimationFrame(f); })(); }));
   check(cl.burning && cl.burnDrop > 0.1 && cl.burnDrop < cl.ofHp * 0.3 && cl.flameGone, 'Flame Cloud: an enemy in it burns, losing health slowly, and the cloud goes', JSON.stringify(cl));
   check(cl.survived === true && cl.healthLeft >= 0.1 && cl.healthLeft < 0.8, 'Flame Cloud weakens an enemy and never finishes it off', 'a mite that sat in the cloud for its whole life is left with ' + Math.round(cl.healthLeft * 100) + '% of its health');
-  check(cl.confused && cl.greenShots && cl.confSecs > 4.5 && cl.confSecs < 5.3, 'Confusion Gas: an enemy that touches it is confused for 5 seconds, once', 'confused for ' + cl.confSecs + ' s while the cloud hung for 4.5');
-  check(cl.hurtEachOther > 1 && cl.hurtEachOther < cl.swarmHealth * 0.35, 'Confusion Gas: confused enemies hurt the swarm, but one cloud does not clear it', 'health lost: ' + cl.hurtEachOther + ' of ' + cl.swarmHealth);
-  check(cl.auto === true, 'with the booster, the ship lobs a cloud by itself');
+  check(cl.chased && cl.rammed && cl.targetLost >= 0.45 && !cl.newWeapon, 'Confusion Gas: a confused enemy chases the enemy furthest from it and rams it, with no new weapon', 'the rammer was destroyed; its target lost ' + Math.round(cl.targetLost * 100) + '% of its health');
+  check(cl.cleared === false, 'Confusion Gas: one cloud does not clear the swarm', cl.left + ' enemies left');
+  check(cl.wentHome === true && cl.jump < 60, 'Confusion Gas: an enemy whose 5 seconds run out flies home from where it is', 'moved ' + cl.jump + ' in the frame it gave up');
+  check(cl.auto === true && cl.belowFormation === true && cl.cloudAbove >= 150 && cl.cloudAbove <= 270, 'with the booster, the ship lobs a cloud into the open lanes below the formation', cl.cloudAbove + ' above the ship');
   check(cl.dartVx > 5 && cl.dartLean > 0.05 && cl.dartLean <= 0.105, 'a dart bends a little toward the ship, and only so far', 'lean after 1.5 s: ' + cl.dartLean + ' radians (the limit is 0.1)');
   check(cl.sidestepClears === true, 'a sidestep still clears a dart aimed at the ship');
 
