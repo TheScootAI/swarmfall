@@ -881,7 +881,8 @@ const SKIP_SCRAP = 10;   // scrap for passing up a booster
 // which it reaches on wave 31; past that the flight would be too quick to follow.
 // How many enemies a wave holds. The formation starts cols0 wide and rows0 deep and grows to maxCols by maxRows
 // (wave 1 is rows1 deep). It cannot usefully grow further: a ninth column would leave it no room to sway, and a
-// sixth row would reach the lanes the clouds are lobbed into on a short phone. So the rest arrive as
+// sixth row would reach the lanes the clouds are lobbed into on a short phone (and sit below where a beetle
+// stops to launch its missiles). So the rest arrive as
 // reinforcements: when the formation is down to `thin` of its places, a fresh flight fills empty places, up to
 // `refill` of the formation. flights: the wave from which there is one such flight, then two, and so on.
 const SWARM = { cols0: 4, colsPer: 0.5, maxCols: 8, rows1: 2, rows0: 3, rowsPer: 0.25, maxRows: 5, elites: 3, flights: [2, 10], thin: 0.35, refill: 0.5 };
