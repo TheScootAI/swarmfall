@@ -820,7 +820,7 @@ const GROUPS = {
     for (let i = 0; i < 40 && (await st()).state !== 'station'; i++) { await page.evaluate(() => { const s = window.__swarmfall; s.G.eb.length = 0; s.G.em.length = 0; for (const e of s.G.enemies) if (e.def.boss) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); }); await page.waitForTimeout(700); }
     s = await st(); const note = await page.textContent('#stNote');
     await page.locator('#shop .item button').first().tap(); await page.waitForTimeout(200);
-    check(s.state === 'station' && /saves nothing/.test(note) && await saved() === before, 'test run: destroying the boss docks, but fits no module, banks no scrap and sells nothing', s.state + ' · ' + note.split('\n')[0]);
+    check(s.state === 'station' && /saves nothing/.test(note) && /This run collected ◆ \d+\. A real run would bank it here\./.test(note) && await saved() === before, 'test run: destroying the boss docks, but fits no module, banks no scrap and sells nothing, and the station says what the run collected', s.state + ' · ' + note.split('\n')[0]);
     await page.tap('#btnUndock'); await page.tap('.card'); await waitFor(x => x.state === 'play', 15000);
     await page.tap('#btnPause'); await page.waitForTimeout(200); await page.tap('#btnQuit'); await waitFor(x => x.state === 'dead', 5000);
     const over = await page.evaluate(() => ({ eyebrow: document.getElementById('deadEyebrow').textContent, again: document.getElementById('btnAgain').textContent }));

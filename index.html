@@ -2795,7 +2795,7 @@ function drawShop() {
   $('stEyebrow').textContent = docked ? 'Docked · ' + bossFor(G.wave).name + ' down' : 'Space station';   // short enough to clear the feedback button at phone width
   const test = docked && G.test;
   $('stTitle').textContent = test ? 'Docked on a test run' : docked ? (nm ? 'New module installed' : 'All modules installed') : 'Upgrade your modules';
-  $('stNote').textContent = test ? 'A test run saves nothing: no module is fitted, no scrap is banked, and nothing can be bought.\nUndock for a rare booster.' : docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach boss you destroy earns a new module.';
+  $('stNote').textContent = test ? 'A test run saves nothing: no module is fitted, no scrap is banked, and nothing can be bought.\nThis run collected ◆ ' + unbanked() + '. A real run would bank it here.\nUndock for a rare booster.' : docked ? (nm ? nm.n + ' is fitted and ready to upgrade.\n' : '') + 'Scrap from this run is banked.\nSpend it here, then undock for a rare booster.' : 'Spend scrap on the modules your ship carries.\nEach boss you destroy earns a new module.';
   $('btnUndock').hidden = !docked; $('btnStationLaunch').hidden = $('btnStationBack').hidden = docked;
   $('bank').textContent = '◆ ' + meta.scrap + ' scrap';
   $('shop').innerHTML = GROUPS.map(([key, name, blurb]) => {
