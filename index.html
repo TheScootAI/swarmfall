@@ -209,7 +209,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <h1 id="logo">SWARM<b>FALL</b></h1>
         <p class="lede">One hit destroys a new ship. A booster shuttle arrives after wave 1, then every few waves. Destroy a boss to dock at the station for a new module, upgraded with the scrap you salvage.</p>
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
-        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Anything red is enemy fire.</p>
+        <p class="fine">Grab anything inside a halo: gold rings in blue are scrap, green crosses in green repair hull. Anything red is enemy fire.</p>
         <p class="fine" id="bestLine"></p>
         <div class="row quietrow"><button id="btnSound" class="btn quiet">Turn sound off</button><button id="btnReset" class="btn quiet">Start over</button></div>
         <div class="row dockbar">
@@ -239,7 +239,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <p class="eyebrow">Paused</p>
         <h2 id="pauseWave">Wave 1</h2>
         <div class="loadout" id="pauseLoadout"></div>
-        <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Anything red is enemy fire.</p>
+        <p class="fine">Grab anything inside a halo: gold rings in blue are scrap, green crosses in green repair hull. Anything red is enemy fire.</p>
         <div class="row quietrow"><button id="btnSound2" class="btn quiet">Turn sound off</button><button id="btnGfx" class="btn quiet">Graphics: auto</button></div>
         <div class="row quietrow"><button id="btnRestart" class="btn quiet">Restart run</button><button id="btnQuit" class="btn quiet">End this run</button></div>
         <div class="row dockbar">
@@ -509,7 +509,8 @@ const M = {
   lancer: pbr(0xff3355, 0x5a0a18), lancerShell: pbr(0x3a1638, 0x12061a, 0.7, 0.35), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: addMat(0xffffff, 0.95),   // no halo on the white core: blurred, it would turn the red beam pink
  
   siegeCore: glowing(basic(0xfff1c0)), eye: basic(0xffffff), elite: basic(ENEMY_RED), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
-  scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), drone: pbr(0xc7b0ff, 0x2a1a5a), laserOn: glowMat(0xffd23f, 0.5), laserCore: addMat(0xfff3c4, 0.9),
+  scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), haloRepair: glowMat(0x4dff8a, 0.85),   // a pickup's ring: blue round scrap, green round a repair cross, so the two are told apart at a glance
+  drone: pbr(0xc7b0ff, 0x2a1a5a), laserOn: glowMat(0xffd23f, 0.5), laserCore: addMat(0xfff3c4, 0.9),
   // the shield: an energy bubble that is bright at its rim, with bands rising through it
   shield: glowing(new THREE.ShaderMaterial({
     uniforms: { time: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -1678,8 +1679,8 @@ function damageEnemy(e, d, quiet) {   // quiet: no blink and no sound, for the s
 // little larger and with a gem at its centre, in place of several: mid-wave, the field was filling up with rings.
 // A boss's shower is the exception: lots of single rings, because by then the field is empty.
 function spawnPick(kind, x, y, worth = 1) {
-  // everything worth grabbing sits inside a pulsing halo in the ship's own colour
-  const mesh = new THREE.Group(), core = new THREE.Group(), halo = part(geo.ring, M.halo, 13, 13, 1), big = 1 + 0.13 * Math.min(4, worth - 1);
+  // everything worth grabbing sits inside a pulsing halo: blue (the ship's own colour) round scrap, green round a repair cross
+  const mesh = new THREE.Group(), core = new THREE.Group(), halo = part(geo.ring, kind === 'heart' ? M.haloRepair : M.halo, 13, 13, 1), big = 1 + 0.13 * Math.min(4, worth - 1);
   if (kind === 'heart') core.add(part(geo.box, M.heart, 13, 5, 5), part(geo.box, M.heart, 5, 13, 5));
   else { core.add(part(geo.torus, M.scrap, 6.5 * big, 6.5 * big, 6.5 * big)); if (worth > 1) core.add(part(geo.oct, M.scrap, 2.4 * big, 3.2 * big, 2.4 * big)); }
   mesh.add(core, halo); scene.add(mesh);
@@ -2595,7 +2596,7 @@ const INTRO_TEXT = {
   triad: ['Three cores circling one centre.', 'Each one you destroy makes the others faster.'],
   // not enemies, but introduced the same way, at the owner's request: the first scrap ring, repair cross and missile
   scrap: ['A gold ring in a blue glow is scrap.', 'Fly into it. Scrap buys upgrades at the station.'],
-  heart: ['A green cross in a blue glow repairs your hull.', 'Fly into it to get 1 hull back.'],
+  heart: ['A green cross in a green ring repairs your hull.', 'Fly into it to get 1 hull back.'],
   missile: ['A homing missile. It turns to follow you.', 'Shoot it down, or slip past it.'],
 };
 const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer', latcher: 'Latcher', scrap: 'Scrap', heart: 'Repair Cross', missile: 'Missile' };   // bosses take theirs from BOSSES
