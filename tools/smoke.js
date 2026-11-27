@@ -60,6 +60,10 @@ const GROUPS = {
     s = await waitFor(x => x.state === 'cut'); check(s.cut === 'launch', 'Launch opens the launch cutscene');
     s = await waitFor(x => x.state === 'play'); check(s.wave === 1, 'wave 1 starts after the launch');
     await page.waitForTimeout(400); await shot('02-wave1');
+    // a touch on the playfield refuses the phone's own gestures (its text magnifier on a double tap, zoom); a button keeps its tap
+    const tch = await page.evaluate(() => { const fire = el => { const ev = new TouchEvent('touchstart', { bubbles: true, cancelable: true }); el.dispatchEvent(ev); return ev.defaultPrevented; };
+      return { field: fire(document.getElementById('stage')), hud: fire(document.getElementById('wave')), button: fire(document.getElementById('btnPause')) }; });
+    check(tch.field === true && tch.hud === true && tch.button === false, 'a touch on the playfield refuses the phone\'s own double-tap and held-press gestures; a button keeps its tap', JSON.stringify(tch));
     s = await playTo(x => x.state === 'clear' && x.wave === 1);
     check((await page.textContent('#toast')).includes('Booster shuttle inbound'), 'the shuttle is announced after wave 1');
     // the quiet after a wave lasts 3 seconds (CLEAR.wave) before the next wave, or the shuttle

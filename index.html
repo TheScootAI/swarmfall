@@ -26,7 +26,7 @@ html{box-sizing:border-box;height:100%}
 [hidden]{display:none!important}
 body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink);
   font:400 16px/1.4 var(--body);touch-action:none;overscroll-behavior:none;
-  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 #ui{position:fixed;inset:0;display:flex;justify-content:center;pointer-events:none;
   padding-top:env(safe-area-inset-top, 0px);padding-bottom:env(safe-area-inset-bottom, 0px)}
@@ -2721,6 +2721,12 @@ addEventListener('pointermove', e => {
 const endDrag = e => { if (drag && drag.id === e.pointerId) drag = null; };
 addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
+// A phone has gestures of its own for a double tap or a held press: its text magnifier (a glass bubble that the owner
+// kept bringing up over the game by accident), zooming, a menu. Refusing the touch's default on the playfield stops them
+// before they start. Buttons, links, text boxes and the scrolling screens keep theirs. Steering uses pointer events,
+// which this does not affect. It has to be a non-passive listener to be allowed to refuse.
+addEventListener('touchstart', e => { const t = e.target; if (e.cancelable && !(t && t.closest && t.closest('button, a, input, textarea, select, label, .screen, #fb'))) e.preventDefault(); }, { passive: false });
+addEventListener('dblclick', e => { if (!(e.target.closest && e.target.closest('input, textarea'))) e.preventDefault(); });
 for (const ev of ['pointerup', 'touchend', 'click']) addEventListener(ev, audioInit, { capture: true, passive: true });   // releases count as gestures on phones; presses do not
 document.addEventListener('visibilitychange', () => { drewPaused = false; audioStale = true; if (document.hidden && inPlay()) togglePause(); });
 addEventListener('pageshow', () => { audioStale = true; }); addEventListener('focus', () => { audioStale = true; });   // a hidden tab may lose its canvas: redraw on return
