@@ -80,6 +80,16 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 #simMiss{color:var(--dim);font-size:.9rem}
 #simGo{margin-top:4px!important;font:700 .8rem/1 var(--display);letter-spacing:.18em;text-transform:uppercase;color:var(--dim);opacity:0}
 #simGo.on{animation:introGo 1.2s ease-in-out infinite}
+/* The simulation's frame: fine lines down the screen, a mark in each corner and the count of hits. It does not move
+   and uses plain see-through colour only, so it costs the phone nothing each frame. */
+#simFx{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(120,210,255,.05) 0 1px,transparent 1px 4px),radial-gradient(ellipse 80% 70% at 50% 55%,transparent 60%,rgba(60,150,255,.13) 100%)}
+#simFx i{position:absolute;width:22px;height:22px;border:solid rgba(140,225,255,.6);border-width:0}
+#simFx i:nth-of-type(1){left:10px;top:calc(env(safe-area-inset-top) + 58px);border-left-width:2px;border-top-width:2px}
+#simFx i:nth-of-type(2){right:10px;top:calc(env(safe-area-inset-top) + 58px);border-right-width:2px;border-top-width:2px}
+#simFx i:nth-of-type(3){left:10px;bottom:calc(env(safe-area-inset-bottom) + 10px);border-left-width:2px;border-bottom-width:2px}
+#simFx i:nth-of-type(4){right:10px;bottom:calc(env(safe-area-inset-bottom) + 10px);border-right-width:2px;border-bottom-width:2px}
+#simTally{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 62px);text-align:center;font:700 .8rem/1 var(--display);letter-spacing:.2em;color:rgba(160,230,255,.85);font-variant-numeric:tabular-nums}
 #introA{font-size:1rem;line-height:1.4}
 #introB{font-size:1rem;line-height:1.4;color:var(--arc)}
 #introGo{margin-top:6px!important;font:700 .8rem/1 var(--display);letter-spacing:.18em;text-transform:uppercase;color:var(--dim);animation:introGo 1.2s ease-in-out infinite}
@@ -210,6 +220,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       <p id="introGo">Tap to continue</p>
     </div>
   </div>
+  <div id="simFx" hidden><i></i><i></i><i></i><i></i><p id="simTally"></p></div>
   <div id="simEnd" hidden>
     <div id="simCard" role="dialog" aria-labelledby="simKind">
       <p class="eyebrow" id="simKind">Simulation over</p>
@@ -520,6 +531,23 @@ const glowing = m => { m.userData.glow = true; return m; };   // part() puts mes
 const basic = c => new THREE.MeshBasicMaterial({ color: c, fog: false });
 const addMat = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });   // adds its light to what is behind it
 const glowMat = (c, o = 1) => glowing(addMat(c, o));   // the same, with a halo
+// A hologram: no surface, only light. It is brightest where a face turns away from the eye, so a shape shows as its
+// edges, and the light comes in thin bands that climb through it, with a brighter band passing now and then.
+// `power` fades it in and out. The faces' directions come from the picture itself, so any model can wear it.
+const holoMat = (c, bands = 2.4) => glowing(new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, power: { value: 1 }, tint: { value: new THREE.Color(c) }, bands: { value: bands } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: 'varying vec3 vV; varying float vY; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vY = w.y; vec4 mv = viewMatrix * w; vV = -mv.xyz; gl_Position = projectionMatrix * mv; }',
+  fragmentShader: `uniform float time, power, bands; uniform vec3 tint; varying vec3 vV; varying float vY;
+    void main() {
+      vec3 n = normalize(cross(dFdx(vV), dFdy(vV)));
+      float rim = pow(1.0 - abs(dot(n, normalize(vV))), 1.4);
+      float line = 0.35 + 0.65 * step(0.45, fract(vY / bands - time * 1.6));
+      float sweep = smoothstep(0.9, 1.0, sin(vY * 0.045 - time * 2.4));
+      gl_FragColor = vec4(tint * (0.34 + rim * 1.5) * line * (1.0 + sweep) * power, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+}));
 // All enemy fire is this red, and nothing good is ever red: red means danger.
 const ENEMY_RED = 0xff2f45, ENEMY_RED_RGB = [1, 0.3, 0.38];
 // particle colours used every frame or on every hit, kept as constants so bursts do not allocate them
@@ -533,7 +561,7 @@ const geo = {
 const M = {
   hull: pbr(0xe9ecff, 0x1a1f44, 0.6, 0.3), wing: pbr(0x5fe8ff, 0x0b3d4a, 0.5, 0.35), canopy: glowing(basic(0x9ff3ff)), flame: glowMat(0xffb36b, 0.9),
   mite: pbr(0xff4f8b, 0x4a0f25), miteFin: pbr(0xffa3c2, 0x3a1020),
-  holo: addMat(0x9fd8ff, 0.62), holoShip: addMat(0x8fe9ff, 0.8),   // the simulation: pale, see-through light. Not glowing: forty of them would flood the screen
+  holo: holoMat(0x6fc8ff), holoShip: holoMat(0x8ff0ff, 1.7),   // the simulation: targets and the ship's projection, made of light. They glow: no more than sixteen targets are out at once, and each is small
   latch: pbr(0x7f89b5, 0x161a30, 0.7, 0.35), latchClaw: pbr(0x353b5c, 0x07080f, 0.8, 0.3), fuse: glowing(basic(ENEMY_RED)),
   wasp: pbr(0xffb02e, 0x4a2a00), waspWing: pbr(0xfff1c0, 0x40381a),
   weaver: pbr(0xa56bff, 0x24104a), splitA: pbr(0xff7a3c, 0x4a1c08), splitB: pbr(0xffd23c, 0x4a3a08),
@@ -1009,7 +1037,7 @@ const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, lift: 46, per: 0.25, perfec
     [['climb', 1], ['loop', 0], ['zig', 0], ['sweep', 1], ['drop', 0]],
   ] };
 const SIM_KINDS = ['mite', 'wasp', 'weaver', 'splitter', 'beetle'];   // the shapes the holograms take, one kind to a line
-const HOLO_RGB = [0.62, 0.86, 1];
+const HOLO_RGB = [0.44, 0.78, 1];
 const CLEAR = { wave: 3, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
@@ -1760,7 +1788,7 @@ function spawnPick(kind, x, y, worth = 1) {
   return p;
 }
 function killEnemy(e) {
-  if (e.holo) { despawn(e); SIMS.hits++; SFX.holo(); burst(e.x, e.y, HOLO_RGB, 12, 170, 0.4); ringFx(e.x, e.y, 4, 26, 0x9fd8ff, 0.22); return; }   // a hologram: it counts toward the drill and nothing else
+  if (e.holo) { despawn(e); SIMS.hits++; simTally(); SFX.holo(); burst(e.x, e.y, HOLO_RGB, 12, 170, 0.4); ringFx(e.x, e.y, 4, 26, 0x6fc8ff, 0.22); return; }   // a hologram: it counts toward the drill and nothing else
   despawn(e); G.run.kills++;
   const boss = !!e.def.boss;
   flash(e.x, e.y, boss ? 600000 : e.elite ? 160000 : 70000);
@@ -2317,7 +2345,7 @@ const unbanked = () => Math.floor(G.run.scrap) - G.run.banked;   // scrap collec
 // ---- the simulation (numbers in SIM) ----
 const simOff = new URLSearchParams(location.search).get('sim') === 'off';   // the tests switch it off with ?sim=off, as they do introductions
 const SIMS = { on: false, hits: 0, total: 0, rise: 0, ended: false, shield: false, reward: 0, perfect: false, x0: 0,
-  t: 0, step: 0, at: [0, 0, 0, 0], shown: -1, owed: 0, readyT: 0, leaving: false, outT: 0, lifted: false, liftT: 0 }, simDock = { ship: null };   // from t on: the result card
+  t: 0, step: 0, at: [0, 0, 0, 0], shown: -1, owed: 0, readyT: 0, leaving: false, outT: 0, lifted: false, liftT: 0 }, simDock = { ship: null, beam: null };   // from t on: the result card
 // Each path is worked out once into SIM_STEPS points (a smooth curve through the table's points), for both its hands.
 const SIM_STEPS = 160, simPaths = {};
 function simPath(name, mirror) {
@@ -2332,6 +2360,23 @@ function simPath(name, mirror) {
   }
   return simPaths[key] = out;
 }
+function simBeam() {
+  const g = new THREE.BufferGeometry(), hw = W * 0.85, h = H * 1.15;
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, hw, h, 0, -hw, h, 0]), 3)); g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0.5, 0, 1, 1, 0, 1]), 2));
+  const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 }, power: { value: 0 }, tint: { value: new THREE.Color(0x3fa8ff) } }, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float time, power; uniform vec3 tint; varying vec2 vUv;
+      void main() {
+        float x = abs(vUv.x - 0.5) / max(0.001, vUv.y * 0.5), edge = 1.0 - smoothstep(0.55, 1.0, x);
+        float fall = mix(0.38, 0.04, smoothstep(0.0, 0.55, vUv.y)), line = 0.8 + 0.2 * step(0.5, fract(vUv.y * 90.0 - time * 0.8));
+        gl_FragColor = vec4(tint * edge * fall * line * power, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  }));
+  m.renderOrder = -1; m.frustumCulled = false; return m;
+}
 const simY = () => lerp(dockY() - DOCK_TOP, dockY() - DOCK_TOP - SIM.lift, smooth(SIMS.rise));   // the projection rises out of the docked ship
 const simStageOf = wave => Math.max(0, Math.ceil(wave / BOSS_EVERY) - 1) % SIM.stages.length;
 function startSim() {
@@ -2340,21 +2385,23 @@ function startSim() {
   Object.assign(SIMS, { on: true, hits: 0, total: stage.length * SIM.n, rise: 0, ended: false, shield: P.shieldUp, reward: 0, perfect: false, x0: P.x, owed: 0, leaving: false });
   P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearSats(); ST.on = true; ST.y = dockY();
   // the real ship stays docked; what the player flies is its projection
-  if (!simDock.ship) { simDock.ship = ship.clone(); scene.add(simDock.ship); }
+  if (!simDock.ship) { simDock.ship = ship.clone(); scene.add(simDock.ship); simDock.beam = simBeam(); scene.add(simDock.beam); }
+  simDock.beam.visible = true; simDock.beam.position.set(TX(P.x), TY(dockY() - DOCK_TOP) + 10, -6);
   simDock.ship.visible = true; simDock.ship.position.set(TX(P.x), TY(dockY() - DOCK_TOP), 0); simDock.ship.rotation.set(0, 0, 0);
   simDock.ship.traverse(m => { if (m.isMesh && m.material === M.shield) m.visible = false; });
-  ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.material = M.holoShip; } });
+  ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.userData.wasGlow = m.layers.isEnabled(GLOW); m.material = M.holoShip; m.layers.enable(GLOW); } });
   G.queue = []; G.waveT = 0;
   stage.forEach(([name, mirror], g) => { const path = simPath(name, mirror), kind = SIM_KINDS[g % SIM_KINDS.length];
     for (let k = 0; k < SIM.n; k++) G.queue.push({ t: 1.5 + g * SIM.every + k * SIM.gap, fn: () => spawnHolo(kind, path) }); });
   G.queue.sort((a, b) => a.t - b.t);
-  show(null); $('hud').hidden = false; drawHud(); SFX.card();
+  show(null); $('hud').hidden = false; drawHud(); SFX.card(); $('simFx').hidden = false; simTally();
   toast('SIMULATION', 'Holograms. Your own guns only: hit them all');
 }
+function simTally() { $('simTally').textContent = 'HIT ' + SIMS.hits + ' / ' + SIMS.total; }
 function spawnHolo(kind, path) {
   const e = spawnEnemy(kind, null, null, { x: path[0] * W, y: path[1] * H });
   e.holo = true; e.path = path; e.state = 'sim'; e.u = 0; e.hp = e.maxHp = 1; e.z = 0;
-  for (const m of e.meshes) m.material = m.userData.base = M.holo;
+  for (const m of e.meshes) { m.material = m.userData.base = M.holo; m.layers.enable(GLOW); }   // its model was built for it alone, so the layer goes no further
 }
 function updateHolo(e, dt) {
   e.u += dt / SIM.dur; if (e.u >= 1) { despawn(e); return; }   // it has flown its line and gone
@@ -2383,7 +2430,7 @@ function simStep(dt) {
     return;
   }
   if (SIMS.step === 0 && SIMS.t >= a[0]) {
-    SIMS.step = 1; $('simTotal').textContent = SIMS.total; $('simHits').textContent = '0'; $('simKind').textContent = 'Simulation over';
+    SIMS.step = 1; $('simTally').textContent = ''; $('simTotal').textContent = SIMS.total; $('simHits').textContent = '0'; $('simKind').textContent = 'Simulation over';
     $('simScrap').textContent = '◆ +' + (SIMS.reward - (SIMS.perfect ? SIM.perfect : 0)); $('simBonus').textContent = '◆ +' + SIM.perfect;
     $('simPerf').hidden = !SIMS.perfect; $('simMiss').hidden = SIMS.perfect; $('simMiss').textContent = 'Hit every one for ◆ ' + SIM.perfect + ' more';
     for (const id of ['simPay', 'simPerf', 'simMiss', 'simGo']) $(id).classList.remove('on');
@@ -2411,8 +2458,9 @@ function simOver() {
   if (!SIMS.on) return;
   SIMS.on = SIMS.ended = SIMS.leaving = false; SIMS.owed = 0; G.sim = false; recalc(); P.shieldUp = SIMS.shield; hudWas.wave = -1;
   $('simEnd').hidden = true; $('simEnd').classList.remove('on');
-  ship.traverse(m => { if (m.isMesh && m.userData.real) { m.material = m.userData.real; m.userData.real = null; } });
-  if (simDock.ship) simDock.ship.visible = false;
+  ship.traverse(m => { if (m.isMesh && m.userData.real) { m.material = m.userData.real; m.userData.real = null; if (!m.userData.wasGlow) m.layers.disable(GLOW); } });
+  if (simDock.ship) simDock.ship.visible = simDock.beam.visible = false;
+  $('simFx').hidden = true;
   for (const e of G.enemies) if (e.holo && !e.dead) despawn(e);
   G.pb.length = 0; P.y = dockY() - DOCK_TOP; P.x = W / 2; P.vx = 0; P.target = null;
 }
@@ -2439,7 +2487,11 @@ function syncScene(dt) {
   if (P.alive) ship.visible = P.inv <= 0 || G.state === 'cut' || Math.floor(G.time * 14) % 2 === 0;   // no hit-blink during cutscenes
   flame.scale.y = 12 + Math.sin(G.time * 40) * 3;
   shieldMesh.visible = P.shieldUp; M.shield.uniforms.time.value = G.time;
-  if (SIMS.on) M.holoShip.opacity = (0.72 + Math.sin(G.time * 31) * 0.1) * Math.min(1, SIMS.rise * 1.6);   // the projection flickers a little, and fades as it rises out of the docked ship or sinks back into it
+  if (SIMS.on) {   // the projection flickers a little, and fades as it rises out of the docked ship or sinks back into it; the projector's beam comes and goes with it
+    const k = Math.min(1, SIMS.rise * 1.6), u = M.holoShip.uniforms;
+    u.time.value = M.holo.uniforms.time.value = simDock.beam.material.uniforms.time.value = G.time;
+    u.power.value = (0.9 + Math.sin(G.time * 31) * 0.1) * k; simDock.beam.material.uniforms.power.value = k * (0.92 + Math.sin(G.time * 23) * 0.08);
+  }
   // lights: a cool glow that travels with the ship, and the fading flash of the last explosion
   shipLight.position.set(TX(P.x), TY(P.y) + 6, 34); shipLight.intensity = P.alive && G.state !== 'title' && G.state !== 'browse' ? 9000 : 0;
   flashPower *= Math.max(0, 1 - 9 * realDt); flashLight.intensity = flashPower;   // real time, so a flash does not linger while game time runs slow
