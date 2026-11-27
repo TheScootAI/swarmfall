@@ -903,7 +903,7 @@ const eliteShare = n => n < UNLOCK.elite ? 0 : Math.min(1, ELITE.share + ELITE.m
 const SCRAP_RATE = 0.5;
 // Volatile Payload, by level: a destroyed enemy hurts whatever is within r of it for dmg of one shot. An enemy
 // that a blast destroys sets off no blast of its own: at levels 2 and 3 that chain cleared the whole formation.
-const BLAST = { r: [40, 45, 50], dmg: [0.6, 0.75, 0.9] };
+const BLAST = { r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
 const CLEAR = { wave: 3, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
