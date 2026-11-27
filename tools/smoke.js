@@ -546,41 +546,73 @@ const GROUPS = {
   },
   // The simulation: the holographic drill the station runs once the ship has docked after a boss.
   sim: async () => {
-    const { page, st, waitFor, clearWave, playTo, shot } = await open('?gfx=low&intro=off&debug'); let s;   // the simulation is on here; every other group switches it off with ?sim=off
+    let { page, st, waitFor, playTo, shot } = await open('?gfx=low&intro=off&debug'), s;   // the simulation is on here; every other group switches it off with ?sim=off
     // An aiming bot: it goes for the lowest hologram, leading it by the time a shot takes to get there. It also watches the rules.
     const drill = () => page.evaluate(() => new Promise(res => { const w = window.__swarmfall, { G, P, S, SIMS } = w, out = { fire: 0, hurt: false, paused: null, kills0: G.run.kills, scrap0: G.run.scrap }, t0 = performance.now(); let touched = 0, pausedAt = 0;
       (function f() {
         if (performance.now() - t0 > 120000) { out.timeout = G.state; return res(out); }
-        if (G.state === 'station') { out.afterShots = S.shots; out.simOff = !G.sim && !SIMS.on; return res(out); }
+        if (G.state === 'station') { out.early = true; return res(out); }   // it must not get here by itself: the result waits for a touch
+        if (G.state === 'sim' && SIMS.ended) { const sc = +document.getElementById('scrap').textContent.replace(/\D/g, '');
+          if (out.hudAtEnd === undefined) { out.hudAtEnd = sc; out.fireAtEnd = P.fireT; out.pb = G.pb.length; }
+          document.getElementById('btnPause').click(); if (G.state === 'pause') out.pausedCard = true;   // no pausing while the result is up
+          if (SIMS.step === 2 && out.hudAtPay === undefined) out.hudAtPay = sc;
+          if (SIMS.step === 4) { out.hudAtGo = sc; return res(out); } }
         if (G.state === 'sim') {
           if (out.shots === undefined) { out.shots = S.shots; out.drones = S.drones; out.beam = S.beam; out.docked = w.ST.on; out.hud = document.getElementById('wave').textContent; out.total = SIMS.total; out.hp0 = P.hp; }
           out.fire = Math.max(out.fire, G.eb.length + G.em.length);
           let t = null; for (const e of G.enemies) if (!e.dead && e.holo && (!t || e.y > t.y)) t = e;
           if (t && touched < 3 && G.waveT > 3) { t.u = t.u; touched++; out.touchAt = Math.hypot(t.x - P.x, t.y - P.y) < 400; const x = t.x, y = t.y; t.x = P.x; t.y = P.y; requestAnimationFrame(() => { if (P.hp < out.hp0 || !P.alive) out.hurt = true; }); }   // a hologram put right on top of the ship: nothing must come of it
           if (t) P.target = Math.max(14, Math.min(346, t.x + t.vx * Math.max(0, P.y - t.y) / S.shotSpeed));
-          if (SIMS.ended && out.hits === undefined) { out.hits = SIMS.hits; out.reward = SIMS.reward; out.perfect = SIMS.perfect; out.took = +G.waveT.toFixed(1); out.paid = +(G.run.scrap - out.scrap0).toFixed(2); out.kills = G.run.kills - out.kills0; out.toast = document.getElementById('toast').textContent; }
+          if (SIMS.ended && out.hits === undefined) { out.hits = SIMS.hits; out.reward = SIMS.reward; out.perfect = SIMS.perfect; out.took = +G.waveT.toFixed(1); out.paid = +(G.run.scrap - out.scrap0).toFixed(2); out.kills = G.run.kills - out.kills0; out.scrapShown0 = +document.getElementById('scrap').textContent.replace(/\D/g, ''); }
           if (out.paused === null && G.waveT > 6) { document.getElementById('btnPause').click(); out.paused = G.state === 'pause' ? document.getElementById('pauseWave').textContent : 'not paused'; pausedAt = performance.now(); }
         } else if (G.state === 'pause' && performance.now() - pausedAt > 400) { document.getElementById('btnResume').click(); out.resumedTo = G.state; }
         requestAnimationFrame(f); })(); }));
     // straight in from the test bench, with boosters chosen: they must not fire in the drill
     await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="6"]'); await page.tap('#dbgUps [data-id="twin"]'); await page.tap('#dbgUps [data-id="drone"]'); await page.tap('#dbgUps [data-id="beam"]');
     await page.tap('#dbgSim'); s = await waitFor(x => x.state === 'sim'); check(s.state === 'sim', 'test bench: Simulation goes straight into the drill');
-    const d1 = await drill(); await shot('18-simulation-result');
+    // What the result card says, whether it is all on screen, and what comes of touches: it stays until a fresh one, and
+    // that touch (put where the station's Undock button will be) must not press anything on the station.
+    const card = () => page.evaluate(() => { const g = id => document.getElementById(id), on = id => !g(id).hidden && g(id).classList.contains('on'), r = g('simCard').getBoundingClientRect(), w = window.__swarmfall;
+      return { up: !g('simEnd').hidden && g('simEnd').classList.contains('on'), kind: g('simKind').textContent, hits: g('simHits').textContent, total: g('simTotal').textContent, pay: on('simPay') && g('simScrap').textContent, perf: on('simPerf') && g('simBonus').textContent, miss: on('simMiss') && g('simMiss').textContent, go: on('simGo'),
+        fits: r.left >= 0 && r.top >= 44 && r.right <= innerWidth && r.bottom <= innerHeight, step: w.SIMS.step, state: w.G.state, hud: +g('scrap').textContent.replace(/\D/g, ''), run: Math.floor(w.G.run.scrap) }; });
+    const carryOn = async () => { const o = {}; await page.waitForTimeout(1500); o.held = (await st()).state;
+      const b = await page.evaluate(() => ({ x: innerWidth / 2, y: innerHeight - 36 }));   // where the station's bottom bar will be
+      await page.touchscreen.tap(b.x, b.y); o.at = b; await waitFor(x => x.state === 'station', 5000); await page.waitForTimeout(700);
+      Object.assign(o, await page.evaluate(() => { const w = window.__swarmfall; return { state: w.G.state, cardGone: document.getElementById('simEnd').hidden, shots: w.S.shots, simOff: !w.G.sim && !w.SIMS.on && !w.SIMS.ended, undock: !document.getElementById('scrStation').hidden }; }));
+      o.onUndock = await page.evaluate(b => { const el = document.elementFromPoint(b.x, b.y); return !!(el && el.closest('#btnUndock')); }, b); return o; };
+    const d1 = await drill(), c1 = await card(); await shot('18-simulation-result'); const e1 = await carryOn(); d1.afterShots = e1.shots; d1.simOff = e1.simOff;
     check(d1.docked === true && d1.hud === 'SIMULATION' && d1.total === 40, 'the simulation runs with the ship docked: forty holograms in five lines of eight', JSON.stringify({ docked: d1.docked, hud: d1.hud, total: d1.total }));
     check(d1.shots === 1 && d1.drones === 0 && d1.beam === 0 && d1.afterShots === 2 && d1.simOff === true, 'only the bare ship\'s own gun fires in it, whatever boosters are fitted; they are back afterwards', JSON.stringify({ shots: d1.shots, drones: d1.drones, beam: d1.beam, after: d1.afterShots }));
     check(d1.fire === 0 && d1.hurt === false && d1.touchAt !== undefined, 'nothing in it can hurt the ship: no fire, and a hologram on top of the ship does nothing', JSON.stringify({ fire: d1.fire, hurt: d1.hurt }));
-    check(d1.hits === 40 && d1.perfect === true && d1.reward === 20 && d1.paid === 20 && d1.kills === 0 && d1.toast.includes('PERFECT'), 'a perfect score can be had with the bare ship: 40 of 40, paid into the run\'s scrap, and none of it counted as kills', JSON.stringify({ hits: d1.hits, reward: d1.reward, paid: d1.paid, kills: d1.kills, seconds: d1.took, toast: d1.toast }));
+    check(d1.hits === 40 && d1.perfect === true && d1.reward === 20 && d1.paid === 20 && d1.kills === 0, 'a perfect score can be had with the bare ship: 40 of 40, paid into the run\'s scrap, and none of it counted as kills', JSON.stringify({ hits: d1.hits, reward: d1.reward, paid: d1.paid, kills: d1.kills, seconds: d1.took }));
+    check(c1.up && c1.fits && c1.kind === 'Perfect' && c1.hits === '40' && c1.total === '40' && c1.pay === '◆ +10' && c1.perf === '◆ +10' && c1.miss === false && c1.go === true, 'when it ends a card counts up the result: 40 of 40 hit, the scrap bonus, the perfect bonus, then "Tap to continue"', JSON.stringify(c1));
+    check(d1.scrapShown0 === d1.hudAtEnd && d1.hudAtPay === d1.hudAtEnd + 10 && d1.hudAtGo === d1.hudAtEnd + 20 && c1.run === c1.hud, 'the scrap counter at the top goes up as the card reaches each line', JSON.stringify({ atEnd: d1.hudAtEnd, atPay: d1.hudAtPay, atGo: d1.hudAtGo }));
+    check(!d1.early && !d1.pausedCard && e1.held === 'sim', 'the result stays until a touch: it does not go by itself, and it cannot be paused', JSON.stringify({ early: !!d1.early, paused: !!d1.pausedCard, held: e1.held }));
+    check(e1.state === 'station' && e1.cardGone && e1.undock && e1.onUndock, 'a fresh touch carries on to the station, and that touch presses nothing there (it was put on Undock)', JSON.stringify(e1));
     check(d1.paused === 'Simulation' && d1.resumedTo === 'sim', 'pausing in the simulation and resuming goes back into it', JSON.stringify({ paused: d1.paused, resumedTo: d1.resumedTo }));
-    check((await st()).state === 'station', 'after the simulation the station opens');
     // the second stage flies the same lines the other way round: a perfect score can be had there too
     await page.reload(); await page.waitForTimeout(600); await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="12"]'); await page.tap('#dbgSim'); await waitFor(x => x.state === 'sim');
-    const d2 = await drill();
+    const d2 = await drill(); await carryOn();
     check(d2.hits === 40 && d2.perfect === true, 'the second stage (the lines mirrored) can be cleared perfectly too', JSON.stringify({ hits: d2.hits, seconds: d2.took }));
-    // in a real run: the Hive Core destroyed, the ship docks, the simulation runs, then the station
-    await page.reload(); await page.waitForTimeout(600); await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="6"]'); if ((await page.textContent('#dbgGod')).endsWith('off')) await page.tap('#dbgGod');
-    await page.tap('#dbgGo'); await waitFor(x => x.state === 'play');
+    // In a real run, on a short phone, with no aiming: the Hive Core destroyed, the ship docks, the simulation runs, and
+    // the ship sits still, so only some holograms are hit. The card says how many and what that paid; a touch while it
+    // is still counting finishes the count and does not skip it; what it paid is banked at the station.
+    await page.context().close();
+    const o2 = await open('?gfx=low&intro=off', 'iPhone SE'); page = o2.page; st = o2.st; waitFor = o2.waitFor; playTo = o2.playTo; shot = o2.shot;
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'play', 20000);
+    await page.evaluate(() => { const w = window.__swarmfall, G = w.G; for (const e of G.enemies) { e.dead = true; w.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.wave = 5; w.nextWave(); });
     s = await playTo(x => x.state === 'sim' || x.state === 'station'); check(s.state === 'sim' && s.wave === 6, 'in a run: the boss destroyed, the ship docks and the simulation starts', s.state + ' on wave ' + s.wave);
-    s = await waitFor(x => x.state === 'station', 60000); check(s.state === 'station', 'and when it is over the station opens');
+    const before = await page.evaluate(() => { const w = window.__swarmfall; return { run: Math.floor(w.G.run.scrap), banked: w.G.run.banked, meta: w.meta.scrap }; });
+    await page.waitForFunction(() => window.__swarmfall.SIMS.step >= 1, null, { timeout: 60000 });
+    await page.waitForTimeout(150); const mid = await card(); await shot('18b-result-counting');
+    await page.touchscreen.tap(160, 300); await page.waitForTimeout(250); const c3 = await card(); await shot('18c-result-partial');
+    const r3 = await page.evaluate(() => { const S = window.__swarmfall.SIMS; return { hits: S.hits, total: S.total, reward: S.reward, perfect: S.perfect }; });
+    check(r3.hits > 0 && r3.hits < 40 && r3.reward === Math.round(r3.hits * 0.25), 'a ship that only sits there hits some and not all, and is paid 1 scrap for every 4', JSON.stringify(r3));
+    check(mid.up && mid.step < 4 && c3.state === 'sim' && c3.step === 4 && c3.up, 'a touch while the card is counting finishes the count and does not skip the card', JSON.stringify({ midStep: mid.step, midHits: mid.hits, after: c3.state, step: c3.step }));
+    check(c3.fits && c3.kind === 'Simulation over' && c3.hits === '' + r3.hits && c3.pay === '◆ +' + r3.reward && c3.perf === false && /every one/.test(c3.miss || '') && c3.go === true && c3.hud === before.run + r3.reward, 'a part score on a short phone: the card fits, says how many were hit and what that paid, and how to earn the perfect bonus', JSON.stringify(c3));
+    await page.keyboard.press('Space'); s = await waitFor(x => x.state === 'station', 5000);
+    const after = await page.evaluate(() => { const w = window.__swarmfall; return { meta: w.meta.scrap, run: Math.floor(w.G.run.scrap) }; });
+    check(s.state === 'station' && after.meta - before.meta === before.run - before.banked + r3.reward, 'a key carries on too, and the station banks what the simulation paid with the rest of the run\'s scrap', JSON.stringify({ before, after }));
     await page.context().close();
   },
   // The latcher: clamps onto the ship, goes off after 1.5 seconds, and is thrown off by flicks or by a slam into the edge.
@@ -852,7 +884,7 @@ const ABOUT = {
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
-  sim: 'the simulation after a boss: docked, bare ship only, harmless, a perfect score, the reward, pause, then the station',
+  sim: 'the simulation after a boss: docked, bare ship only, harmless, a perfect score, the reward, pause, the result card and the touch that carries on, a part score in a real run on a short phone',
   latcher: 'the latcher: leaping by itself, clamping on, going off, shaken off, slammed off; the shield; no harm by touch',
   stress: 'Volatile Payload in a full formation; the hull cap; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',
