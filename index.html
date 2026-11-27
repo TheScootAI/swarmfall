@@ -54,6 +54,18 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 #toast{position:absolute;left:0;right:0;top:32%;text-align:center;font:700 1.9rem/1.1 var(--display);letter-spacing:.14em;
   color:var(--ink);text-shadow:0 0 18px rgba(95,232,255,.55);opacity:0;pointer-events:none;padding-inline:16px}
 #toast.go{animation:toast 1.7s ease-out both}
+/* A new enemy's introduction: the game has stopped, the field dims but for a spotlight on the enemy, and a card says
+   what it is. The ring is white: a blue one would look like the halo that marks something good to grab. */
+#intro{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .2s}   /* nothing to press: it goes by itself */
+#intro.on{opacity:1}
+#introRing{position:absolute;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px var(--ink),0 0 18px 2px rgba(238,240,255,.45);animation:introRing 1.2s ease-in-out infinite}
+@keyframes introRing{50%{box-shadow:0 0 0 3px var(--ink),0 0 28px 6px rgba(238,240,255,.6)}}
+#introCard{position:absolute;left:50%;transform:translateX(-50%);width:min(calc(100% - 32px),350px);display:flex;flex-direction:column;gap:8px;padding:16px 16px 14px;
+  background:var(--panel);box-shadow:0 0 0 1.5px var(--line) inset}
+#introCard h2{margin:0;font:700 1.5rem/1.1 var(--display);letter-spacing:.08em;text-transform:uppercase}
+#introCard p{margin:0}
+#introA{font-size:1rem;line-height:1.4}
+#introB{font-size:1rem;line-height:1.4;color:var(--arc)}
 #toast small{display:block;margin-top:8px;font:500 .95rem/1.2 var(--body);letter-spacing:.04em;color:var(--dim);text-shadow:none}
 @keyframes toast{0%{opacity:0;transform:translateY(12px)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0}}
 
@@ -164,12 +176,21 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 .fb-row .btn{min-height:44px;padding:0 14px;font-size:.85rem;display:inline-grid;place-items:center;text-decoration:none}
 #fbSend[aria-disabled="true"]{opacity:.45;cursor:default}
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;background:var(--void)}
-@media (prefers-reduced-motion:reduce){#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}.more::after{animation:none}}
+@media (prefers-reduced-motion:reduce){#introRing{animation:none}#intro{transition:none}#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}.more::after{animation:none}}
 </style>
 </head>
 <body>
 <canvas id="stage" aria-label="Swarmfall playfield"></canvas>
 <div id="ui">
+  <div id="intro" hidden>
+    <div id="introRing"></div>
+    <div id="introCard" role="dialog" aria-labelledby="introName">
+      <p class="eyebrow" id="introKind">New enemy</p>
+      <h2 id="introName"></h2>
+      <p id="introA"></p>
+      <p id="introB"></p>
+    </div>
+  </div>
   <div id="col">
     <header id="hud" hidden>
       <div id="hull" aria-label="Hull"></div>
@@ -274,9 +295,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <div class="chips" id="dbgMod"></div>
         <div class="row quietrow"><button id="dbgModSave" class="btn quiet">As in my save</button><button id="dbgModNone" class="btn quiet">None</button><button id="dbgModMax" class="btn quiet">All at top level</button></div>
         <h3 class="grp">Ship</h3>
-        <div class="row quietrow"><button id="dbgGod" class="btn quiet">Ship cannot be hit: off</button></div>
-        <h3 class="grp">Your save <span>These two do change your real save</span></h3>
-        <div class="row quietrow"><button id="dbgScrap" class="btn quiet">Add ◆ 1000</button><button id="dbgMods" class="btn quiet">Fit every module</button></div>
+        <div class="row quietrow"><button id="dbgGod" class="btn quiet">Ship cannot be hit: off</button><button id="dbgIntro" class="btn quiet">Introduce enemies: off</button></div>
+        <h3 class="grp">Your save <span>These do change your real save</span></h3>
+        <div class="row quietrow"><button id="dbgScrap" class="btn quiet">Add ◆ 1000</button><button id="dbgMods" class="btn quiet">Fit every module</button><button id="dbgSeen" class="btn quiet">Introduce every enemy again</button></div>
         <div class="row dockbar">
           <button class="more" type="button" hidden>More below</button>
           <button id="dbgGo" class="btn primary">Launch test</button>
@@ -317,13 +338,14 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------- save ----------
 const SAVE_KEY = 'swarmfall.v1';
-const meta = { scrap: 0, best: 0, runs: 0, mute: false, up: {}, mods: null, gfx: 'auto', autoQ: 2 };
+const meta = { scrap: 0, best: 0, runs: 0, mute: false, up: {}, mods: null, gfx: 'auto', autoQ: 2, seen: {} };   // seen: the enemies that have been introduced
 try {
   const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
   if (s && typeof s === 'object') {
     meta.scrap = +s.scrap || 0; meta.best = +s.best || 0; meta.runs = +s.runs || 0;
     meta.mute = !!s.mute; meta.up = Object.assign({}, s.up); if (Array.isArray(s.mods)) meta.mods = s.mods.filter(m => typeof m === 'string');
     if (s.gfx === 'high' || s.gfx === 'low') meta.gfx = s.gfx; if (s.autoQ === 0 || s.autoQ === 1) meta.autoQ = s.autoQ;
+    if (s.seen && typeof s.seen === 'object') for (const k in s.seen) if (s.seen[k]) meta.seen[k] = true;
   }
 } catch (e) { /* storage unavailable: play without saving */ }
 const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch (e) {} };
@@ -770,6 +792,7 @@ function resize() {
   wallL.position.set(-W / 2 - 3, 0, 0); wallR.position.set(W / 2 + 3, 0, 0); wallL.scale.y = wallR.scale.y = visH;
   drewPaused = false;   // resizing clears the canvas, so a paused frame must be drawn again
   fitScreens();
+  if (IN.on && IN.phase === 'hold') introPlace();
 }
 addEventListener('resize', resize);
 
@@ -1033,7 +1056,7 @@ function spawnEnemy(type, c, r, o = {}) {
   const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? 3 : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
-  if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo); hint('elite', 3, 'ELITE', 'Red-ringed enemies are tougher and drop extra scrap'); }
+  if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo); }
   e.meshes = []; e.g.traverse(m => { if (m.isMesh) { m.userData.base = m.material; e.meshes.push(m); } });
   if (type === 'lancer') {   // its beam: added after the list above so the hit-flash leaves it alone
     e.laser = { phase: 'idle', t: rand(1.5, 4) }; e.pt = 0; e.pv = 1; e.beam = part(geo.plane, M.beamAim, 1, 1, 1); e.core = part(geo.plane, M.beamCore, 1, 1, 1, 0, 0, 0.5);
@@ -1075,7 +1098,6 @@ function launchDive(e) {
     const m = spawnEnemy('triplet', null, null, { x: e.x + (i - 1) * 12, y: e.y, hpMul: 0.45 });
     m.g.scale.setScalar(0.74); m.rad = e.def.r * 0.74; diveToLane(m, W * (i + 0.5) / 3, -40);
   }
-  hint('triplet', 6, 'TRIPLET', 'Splits into three when it attacks. Shoot it while it sits');
 }
 function startDive(e) {
   e.state = 'dive'; e.t = 0; e.z = 0;
@@ -1127,7 +1149,6 @@ function updateLancer(e, dt) {
     if (L.t <= 0 && G.state === 'play' && P.alive) for (const o of G.enemies) if (o.laser && o.laser.phase !== 'idle') busy++;
     if (L.t <= 0 && G.state === 'play' && P.alive && busy < 2) {   // no more than two lasers charge or fire at once
       L.phase = 'charge'; L.t = 1.3; SFX.charge();
-      hint('lancer', 6, 'LASER', 'The thin red line shows where the beam will fire');
     }
   } else if (L.phase === 'charge') { if (L.t <= 0) { L.phase = 'fire'; L.t = 1.7; SFX.beam(); shake(3); } }
   else {
@@ -1928,7 +1949,7 @@ function clearedToast() {
 function updateGame(dt) {
   if (G.state === 'dying') dt *= 0.45;
   G.waveT += dt;
-  updatePlayer(dt); updateClouds(dt); updateSats(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt);
+  updatePlayer(dt); updateClouds(dt); updateSats(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt); introScan(dt);
   sweepDead(G.enemies);
   if (G.boss) { const f = Math.round(clamp(bossLeft() / G.bossMax, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
   if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; clearedToast(); }
@@ -2154,7 +2175,7 @@ function toggleMute() {
 }
 
 function resetField() {
-  FIN.on = FIN.toast = false; clearClouds(); clearSats();
+  FIN.on = FIN.toast = false; clearClouds(); clearSats(); introEnd();
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; clearBoss();
@@ -2176,7 +2197,7 @@ function showTitle() {
 function startRun(test) {
   test = test === true;
   audioInit(); resetField();
-  G.test = test; G.god = test && DBG.god; testMods = test ? DBG.mod : null;
+  G.test = test; G.god = test && DBG.god; testMods = test ? DBG.mod : null; G.seen = {}; IN.cool = 0.4;
   G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
   G.run = { scrap: 0, kills: 0, banked: 0 }; G.hint = {}; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
@@ -2238,6 +2259,7 @@ function choose(i) {
   applyUpgrade(u); SFX.card(); afterDraft(true);
 }
 function togglePause() {
+  if (IN.on) return;   // the game is already stopped for an introduction
   if (G.state === 'play' || G.state === 'clear') {
     G.prev = G.state; G.state = 'pause'; $('pauseWave').textContent = 'Wave ' + G.wave; $('pauseLoadout').innerHTML = loadoutHtml(); show('scrPause', 'btnResume');
   } else if (G.state === 'pause') { G.state = G.prev; show(null); }
@@ -2302,7 +2324,7 @@ const resetLabel = () => { const b = $('btnReset'); b.textContent = resetArmed ?
 $('btnReset').onclick = () => {
   if (!resetArmed) { resetArmed = setTimeout(() => { resetArmed = 0; resetLabel(); }, 5000); resetLabel(); return; }
   clearTimeout(resetArmed); resetArmed = 0; resetLabel();
-  meta.scrap = 0; meta.best = 0; meta.runs = 0; meta.up = {}; meta.mods = START_MODS.slice(); save();
+  meta.scrap = 0; meta.best = 0; meta.runs = 0; meta.up = {}; meta.mods = START_MODS.slice(); meta.seen = {}; save();
   showTitle(); toast('PROGRESS ERASED', 'Back to a new ship and two modules');
 };
 $('btnReroll').onclick = () => { if (G.state === 'draft' && G.rerolls > 0) { G.rerolls--; G.cards = rollCards(G.draftKind); drawDraft(); SFX.pick(); } };   // a rare booster rerolls as a rare booster
@@ -2320,15 +2342,91 @@ $('shop').onclick = e => {
   drawShop();
 };
 
+// ---------- enemy introductions ----------
+// The first time a kind of enemy takes its place, the game slows quickly to a stop, the field dims but for a
+// spotlight on that enemy, and a card says what it is and what to do about it. After a moment the game speeds up
+// again by itself: there is nothing to press (the owner asked for that).
+// Each kind is introduced once per save (meta.seen). ramp: seconds to slow to a stop and to speed back up.
+// hold: seconds the card stays up. gap: game seconds between two introductions when a wave brings two new kinds.
+const INTRO = { ramp: 0.3, hold: 1.5, gap: 1.6 };
+// what it does, then what to do about it: two short lines each
+const INTRO_TEXT = {
+  mite: ['The pawns of the swarm. They dive at you and ram.', 'One shot each. Thin them out while they sit.'],
+  wasp: ['Fires fast darts as it dives. The darts lean toward you.', 'Keep moving, and shoot it before it leaves the top row.'],
+  weaver: ['Zigzags as it dives, so it is hard to line up.', 'Shoot it while it sits.'],
+  splitter: ['Breaks into two mites when it is destroyed.', 'Be ready for the pair that comes out.'],
+  elite: ['A red ring marks a tougher enemy, with three times the health.', 'Worth the effort: it always drops a ring worth 3.'],
+  beetle: ['Armoured. It stops partway down and launches homing missiles.', 'Shoot the missiles down, or slip past them.'],
+  triplet: ['Breaks into three when it leaves the formation.', 'Shoot it while it sits and it never splits.'],
+  lancer: ['Charges up, then fires a laser down the whole screen.', 'A thin red line shows the lane first. Leave it.'],
+  boss: ['Sweeps across the top, firing fans and rings of shots, missiles and ships.', 'It attacks faster when it is badly hurt.'],
+  cube: ['Destroy it and it breaks in two. So do the halves.', 'Finish one piece before you start on the next.'],
+  warden: ['Stops, then fires a fan of laser beams down the screen.', 'Stand between the thin red lines.'],
+  siege: ['Its shell stops most shots. It marks a lane, then charges down it.', 'Step aside, then hit it while its shell is open.'],
+  triad: ['Three cores circling one centre.', 'Each one you destroy makes the others faster.'],
+};
+const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer' };   // bosses take theirs from BOSSES
+const introOff = new URLSearchParams(location.search).get('intro') === 'off';   // the tests switch them off with ?intro=off
+const IN = { on: false, phase: '', t: 0, key: '', e: null, cool: 0 }, introV = new THREE.Vector3();
+const introSeen = () => G.test ? G.seen : meta.seen;   // a test run keeps its own list and leaves the save alone
+function introEnd() { IN.on = false; IN.e = null; $('intro').hidden = true; $('intro').classList.remove('on'); }
+// Looks for an enemy of a kind not yet introduced that has taken its place. Called every frame of play.
+function introScan(dt) {
+  if (IN.on || introOff || (G.test && !DBG.intros) || G.state !== 'play' || FIN.on || G.bossDown) return;
+  if (IN.cool > 0) { IN.cool -= dt; return; }
+  const seen = introSeen();
+  for (const e of G.enemies) {
+    if (e.dead || e.z < -25) continue;
+    if (!(e.state === 'form' || (e.state === 'boss' && !(e.intro > 0) && !(e.hub && e.hub.intro > 0) && !(e.gen > 0)))) continue;   // sitting in the formation, or a boss whose entrance is over
+    const key = !seen[e.type] ? e.type : e.elite && !seen.elite ? 'elite' : '';
+    if (key && INTRO_TEXT[key]) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = key; IN.e = e; return; }
+  }
+}
+// Puts the spotlight, ring and card where the enemy is on screen.
+function introPlace() {
+  const e = IN.e; if (!e) return;
+  const cx = e.hub ? e.hub.x : e.x, cy = e.hub ? e.hub.y : e.y;
+  introV.set(TX(cx), TY(cy), 0).project(camera);
+  const vw = window.innerWidth, vh = window.innerHeight, px = (introV.x * 0.5 + 0.5) * vw, py = (0.5 - introV.y * 0.5) * vh;
+  const r = Math.round(((e.hub ? TRIAD.orbit : 0) + e.rad + 14) / unitsPerPx), ring = $('introRing'), card = $('introCard');
+  ring.style.left = px + 'px'; ring.style.top = py + 'px'; ring.style.width = ring.style.height = r * 2 + 'px';
+  $('intro').style.background = 'radial-gradient(circle at ' + px + 'px ' + py + 'px, rgba(8,11,31,0) ' + r + 'px, rgba(8,11,31,.66) ' + (r + 46) + 'px)';
+  const h = card.offsetHeight, below = py + r + 22;
+  card.style.top = (below + h < vh - 16 ? below : Math.max(16, py - r - 22 - h)) + 'px';   // under the enemy if it fits, else above it
+}
+function introShow() {
+  const key = IN.key, seen = introSeen();
+  if (!IN.e || IN.e.dead) IN.e = G.enemies.find(e => !e.dead && (key === 'elite' ? e.elite : e.type === key)) || null;   // the one first seen has gone: show another of its kind
+  seen[key] = true; if (!G.test) save();
+  if (!IN.e) { introEnd(); return; }
+  const boss = BOSSES.find(b => b.type === key), text = INTRO_TEXT[key];
+  $('introKind').textContent = boss ? 'New boss' : 'New enemy'; $('introName').textContent = boss ? boss.name : INTRO_NAME[key]; $('introA').textContent = text[0]; $('introB').textContent = text[1];
+  $('intro').hidden = false; introPlace(); $('intro').offsetWidth; $('intro').classList.add('on');   // reading its width makes the fade-in start from clear
+  restoreMats(IN.e); IN.e.flash = 0;   // not caught white in the middle of a hit-blink
+  IN.phase = 'hold'; IN.t = 0; SFX.card();
+}
+// Moves the introduction on by real time and returns how fast game time runs this frame: quickly down to 0, held
+// there while the card is up, and quickly back to 1.
+function introStep(real) {
+  if (!IN.on) return 1;
+  if (!inPlay()) { introEnd(); return 1; }
+  IN.t += real;
+  if (IN.phase === 'hold') { if (IN.t >= INTRO.hold) { IN.phase = 'out'; IN.t = 0; $('intro').classList.remove('on'); } return 0; }
+  const k = Math.min(1, IN.t / (reduceMotion ? 0.01 : INTRO.ramp));
+  if (IN.phase === 'in') { if (k < 1) return 1 - smooth(k); introShow(); return 0; }
+  if (k < 1) return smooth(k);
+  introEnd(); IN.cool = INTRO.gap; return 1;
+}
+
 // ---------- test bench ----------
 // A hidden screen for trying things out: start on any wave, with any boosters, and with the ship unable to be hit
 // if wanted. Nothing a test run earns is saved. Open it from the title: tap SWARMFALL five times within three seconds, press
 // the ` key, or add ?debug to the address. What was chosen is remembered for next time.
-const DBG = { wave: 1, up: {}, god: false, mod: null };   // mod: station module levels for the test (null until first shown, when the save's are copied in)
+const DBG = { wave: 1, up: {}, god: false, intros: false, mod: null };   // mod: station module levels for the test (null until first shown, when the save's are copied in)
 const modsOfSave = () => { const m = {}; for (const x of SHOP) if (meta.up[x.id] > 0) m[x.id] = Math.min(x.cost.length, meta.up[x.id]); return m; };
 try {
   const d = JSON.parse(localStorage.getItem('swarmfall.debug') || 'null');
-  if (d) { DBG.wave = clamp(d.wave | 0, 1, 99); DBG.god = !!d.god; for (const u of UP) if (d.up && d.up[u.id] > 0) DBG.up[u.id] = Math.min(u.max, d.up[u.id] | 0);
+  if (d) { DBG.wave = clamp(d.wave | 0, 1, 99); DBG.god = !!d.god; DBG.intros = !!d.intros; for (const u of UP) if (d.up && d.up[u.id] > 0) DBG.up[u.id] = Math.min(u.max, d.up[u.id] | 0);
     if (d.mod) { DBG.mod = {}; for (const x of SHOP) if (d.mod[x.id] > 0) DBG.mod[x.id] = Math.min(x.cost.length, d.mod[x.id] | 0); } }
 } catch (e) {}
 function drawDebug() {
@@ -2339,6 +2437,8 @@ function drawDebug() {
   $('dbgUps').innerHTML = UP.filter(u => u.id !== 'patch').map(u => { const lv = DBG.up[u.id] | 0; return '<button class="chip' + (lv ? ' on' : '') + '" data-id="' + u.id + '">' + u.n + (lv ? '<b>' + lv + '</b>' : '') + '</button>'; }).join('');
   $('dbgMod').innerHTML = SHOP.map(x => { const lv = DBG.mod[x.id] | 0; return '<button class="chip' + (lv ? ' on' : '') + '" data-id="' + x.id + '">' + x.n + (lv ? '<b>' + lv + '</b>' : '') + '</button>'; }).join('');
   $('dbgGod').textContent = 'Ship cannot be hit: ' + (DBG.god ? 'on' : 'off');
+  $('dbgIntro').textContent = 'Introduce enemies: ' + (DBG.intros ? 'on' : 'off');
+  const seenN = Object.keys(meta.seen).length; $('dbgSeen').textContent = seenN ? 'Introduce every enemy again (' + seenN + ' met)' : 'No enemy introduced yet'; $('dbgSeen').disabled = !seenN;
   $('dbgScrap').textContent = 'Add ◆ 1000 (you have ' + meta.scrap + ')';
   $('dbgMods').textContent = meta.mods.length < SHOP.length ? 'Fit every module' : 'Every module is fitted'; $('dbgMods').disabled = meta.mods.length >= SHOP.length;
   fitScreens();
@@ -2360,6 +2460,8 @@ $('dbgModMax').onclick = () => { DBG.mod = {}; for (const x of SHOP) DBG.mod[x.i
 $('dbgClear').onclick = () => { DBG.up = {}; drawDebug(); };
 $('dbgAll').onclick = () => { for (const u of UP) if (u.id !== 'patch' && !DBG.up[u.id]) DBG.up[u.id] = 1; drawDebug(); };
 $('dbgGod').onclick = () => { DBG.god = !DBG.god; drawDebug(); };
+$('dbgIntro').onclick = () => { DBG.intros = !DBG.intros; drawDebug(); };   // on: a test run introduces each kind of enemy the first time it appears in that run
+$('dbgSeen').onclick = () => { meta.seen = {}; save(); SFX.buy(); drawDebug(); };
 $('dbgScrap').onclick = () => { meta.scrap += 1000; save(); SFX.buy(); drawDebug(); };
 $('dbgMods').onclick = () => { for (const m of SHOP) if (!meta.mods.includes(m.id)) meta.mods.push(m.id); save(); SFX.buy(); drawDebug(); };
 $('dbgGo').onclick = () => startRun(true);
@@ -2530,7 +2632,7 @@ function frame(now) {
   drewPaused = paused;
   const frozen = G.state === 'pause' || G.state === 'draft' || G.state === 'station';
   realDt = paused ? 0 : real;
-  G.speed = frozen ? 1 : finaleStep(real);   // below 1 only during the Hive Core's death scene
+  G.speed = frozen ? 1 : Math.min(finaleStep(real), introStep(real));   // below 1 during a boss's death scene, and around a new enemy's introduction
   const dt = real * G.speed;
   if (!frozen) G.time += dt;
   if (inPlay() || G.state === 'dying') updateGame(dt);
@@ -2543,7 +2645,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

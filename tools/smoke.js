@@ -35,7 +35,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
 
   // The main run has the effects off (?gfx=low): software rendering is slow, and these checks are about the game's rules.
   // The graphics checks at the end turn them on.
-  await page.goto('file://' + GAME + '?gfx=low'); await page.waitForTimeout(600);
+  await page.goto('file://' + GAME + '?gfx=low&intro=off'); await page.waitForTimeout(600);
   check(await page.evaluate(() => !!window.__swarmfall), 'game boots');
   let s = await st();
   check(s.state === 'title' && s.mods === 'dmg,hull', 'new save: title screen, two station modules', JSON.stringify(s));
@@ -369,7 +369,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   fx.on('pageerror', e => errors.push('[gfx] ' + e.message)); fx.on('console', m => { if (m.type() === 'error') errors.push('[gfx] ' + m.text()); });
   await fx.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
   const startRun = async () => { await fx.tap('#btnPlay'); await fx.waitForTimeout(400); await fx.touchscreen.tap(195, 400); await fx.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 60000 }); };
-  await fx.goto('file://' + GAME + '?gfx=high'); await fx.waitForTimeout(600); await startRun();
+  await fx.goto('file://' + GAME + '?gfx=high&intro=off'); await fx.waitForTimeout(600); await startRun();
   const pic = await fx.evaluate(() => new Promise(res => { const s = window.__swarmfall; let n = 0;
     (function f() { s.P.inv = 9; if (++n < 12) return requestAnimationFrame(f);
       const gl = document.querySelector('canvas'), c = document.createElement('canvas'); c.width = 97; c.height = 211; const g = c.getContext('2d'); g.drawImage(gl, 0, 0, c.width, c.height);
@@ -379,7 +379,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   if (OUT) await fx.screenshot({ path: path.join(OUT, '10-effects-on.png') });
 
   // auto: a device that cannot keep up (software rendering here) must step the effects down by itself
-  await fx.goto('file://' + GAME); await fx.waitForTimeout(600);
+  await fx.goto('file://' + GAME + '?intro=off'); await fx.waitForTimeout(600);
   await fx.evaluate(() => { const s = window.__swarmfall; s.meta.gfx = 'auto'; s.meta.autoQ = 2; s.GFX.mode = 'auto'; window.dispatchEvent(new Event('resize')); });
   await startRun();
   const auto = await fx.evaluate(() => new Promise(res => { const s = window.__swarmfall, t0 = performance.now();
@@ -419,14 +419,54 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   const over = await page.evaluate(() => ({ eyebrow: document.getElementById('deadEyebrow').textContent, again: document.getElementById('btnAgain').textContent }));
   check(await saved() === before && /nothing saved/.test(over.eyebrow) && over.again === 'Test again', 'test run: ending it leaves scrap, records and modules as they were', JSON.stringify(over));
   await page.tap('#btnAgain'); s = await waitFor(x => x.state === 'play', 15000); check(s.wave === 12, '"Test again" repeats the same test', 'wave ' + s.wave);
-  await page.goto('file://' + GAME + '?gfx=low&debug'); await page.waitForTimeout(600);
+  await page.goto('file://' + GAME + '?gfx=low&intro=off&debug'); await page.waitForTimeout(600);
   check(await page.isVisible('#scrDebug') && (await page.textContent('#dbgWave')).startsWith('Wave 12'), 'test bench: ?debug in the address opens it, with the last set-up remembered');
+
+  // ---- enemy introductions (every other page here switches them off with ?intro=off) ----
+  const ip = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
+  ip.on('pageerror', e => errors.push('[intro] ' + e.message)); ip.on('console', m => { if (m.type() === 'error') errors.push('[intro] ' + m.text()); });
+  await ip.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
+  await ip.goto('file://' + GAME + '?gfx=low'); await ip.waitForTimeout(600);
+  const startIp = async () => { await ip.tap('#btnPlay'); await ip.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 30000 }); };
+  // watches one introduction from the page: the speeds on the way in and out, whether time stood still, how long the card stayed
+  const watchIntro = ms => ip.evaluate(ms => new Promise(res => { const s = window.__swarmfall, IN = s.IN, el = document.getElementById('intro'), out = { in: [], out: [], held: 0 }, t0 = performance.now(); let g0 = null;
+    (function f() {
+      if (IN.on) {
+        out.started = true; out.key = IN.key; s.P.inv = 9;
+        if (IN.phase === 'in') out.in.push(+s.G.speed.toFixed(2));
+        else if (IN.phase === 'hold') { if (g0 === null) { g0 = s.G.time; out.name = document.getElementById('introName').textContent; out.kind = document.getElementById('introKind').textContent; out.text = document.getElementById('introA').textContent + ' / ' + document.getElementById('introB').textContent;
+            const r = document.getElementById('introRing').getBoundingClientRect(), c = document.getElementById('introCard').getBoundingClientRect(); out.ring = Math.round(r.width); out.cardOnScreen = c.top >= 0 && c.bottom <= innerHeight && c.left >= 0 && c.right <= innerWidth; out.cardClearOfRing = c.top >= r.bottom || c.bottom <= r.top; out.button = !!el.querySelector('button'); }
+          out.frozen = s.G.time === g0 && s.G.speed === 0; out.held = +IN.t.toFixed(2); out.shown = !el.hidden; }
+        else out.out.push(+s.G.speed.toFixed(2));
+      } else if (out.started) { out.after = s.G.speed; out.hidden = el.hidden; return res(out); }
+      if (performance.now() - t0 > ms) return res(out);
+      requestAnimationFrame(f); })(); }), ms);
+  const ramps = a => a.length >= 3 && a.some(v => v > 0.1 && v < 0.9);
+  await startIp(); const i1 = await watchIntro(40000);
+  check(i1.started && i1.key === 'mite' && i1.name === 'Mite' && i1.kind === 'New enemy' && i1.shown && i1.ring > 20 && i1.cardOnScreen && i1.cardClearOfRing, 'a new enemy is introduced when it takes its place: a spotlight on it and a card with its name and what to do', JSON.stringify({ name: i1.name, text: i1.text, ring: i1.ring }));
+  check(ramps(i1.in) && i1.in[0] > i1.in[i1.in.length - 1] && i1.frozen && ramps(i1.out) && i1.out[0] < i1.out[i1.out.length - 1] && i1.after === 1 && i1.hidden, 'the game slows quickly to a stop for it, then speeds quickly back up', 'in ' + i1.in.join(' ') + ' · out ' + i1.out.join(' '));
+  check(!i1.button && i1.held >= 1.4 && i1.held <= 1.6, 'the card goes by itself after about a second and a half, with nothing to press', 'held ' + i1.held + ' s');
+  await ip.evaluate(() => { const s = window.__swarmfall; for (const e of s.G.enemies) { e.dead = true; e.g.visible = false; } s.G.wave = 1; s.nextWave(); });
+  const i2 = await watchIntro(40000);
+  const seenSaved = await ip.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('swarmfall.v1')).seen || {}).sort().join());
+  check(i2.key === 'wasp' && i2.name === 'Wasp' && seenSaved === 'mite,wasp', 'the next new kind is introduced in its turn, and the save remembers which have been', 'saved as seen: ' + seenSaved);
+  await ip.reload(); await ip.waitForTimeout(600); await startIp();
+  const i3 = await watchIntro(9000);
+  check(!i3.started, 'an enemy already introduced is not introduced again in a later run');
+  // on the test bench: introductions can be switched on for a test run, which leaves the save's list alone
+  await ip.goto('file://' + GAME + '?gfx=low&debug'); await ip.waitForTimeout(600);
+  if ((await ip.textContent('#dbgIntro')).endsWith('off')) await ip.tap('#dbgIntro');
+  await ip.tap('#dbgClear'); await ip.tap('#dbgBoss [data-w="6"]'); if ((await ip.textContent('#dbgGod')).endsWith('off')) await ip.tap('#dbgGod');
+  await ip.tap('#dbgGo'); await ip.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 30000 });
+  const i4 = await watchIntro(60000);
+  const seenAfter = await ip.evaluate(() => Object.keys(window.__swarmfall.meta.seen).sort().join());
+  check(i4.key === 'boss' && i4.name === 'Hive Core' && i4.kind === 'New boss' && seenAfter === 'mite,wasp', 'test bench: "Introduce enemies" shows them on a test run (a boss here) without touching the save', i4.name + ' · save still has ' + seenAfter);
 
   // ---- a short phone: every screen keeps its main buttons on screen and says when there is more below ----
   const sm = await (await browser.newContext({ ...devices['iPhone SE'] })).newPage();
   sm.on('pageerror', e => errors.push('[small] ' + e.message));
   await sm.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
-  await sm.goto('file://' + GAME + '?gfx=low'); await sm.waitForTimeout(600);
+  await sm.goto('file://' + GAME + '?gfx=low&intro=off'); await sm.waitForTimeout(600);
   const barOf = id => sm.evaluate(id => { const el = document.getElementById(id), inView = [...el.querySelectorAll('.dockbar .btn')].filter(b => !b.hidden).every(b => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
     return { scrolls: el.scrollHeight > el.clientHeight + 2, more: !el.querySelector('.more').hidden, inView }; }, id);
   const okBar = b => b.inView && b.more === b.scrolls;   // buttons on screen; the tab shows exactly when there is something to scroll to

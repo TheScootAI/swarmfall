@@ -4,7 +4,7 @@
 // enemy fire must read red, pickup halos blue, scrap gold, and nothing good may look red.
 const { chromium, devices } = require('playwright');
 const fs = require('fs'), path = require('path');
-const OUT = process.argv[2] || path.join(__dirname, 'out', 'shots'), QUERY = process.argv[3] ? '?' + process.argv[3] : '';
+const OUT = process.argv[2] || path.join(__dirname, 'out', 'shots'), QUERY = '?intro=off' + (process.argv[3] ? '&' + process.argv[3] : '');   // enemy introductions off: they would stop the game mid-picture
 const BOSSES_ONLY = process.argv[4] === 'bosses';   // only the pictures of the four bosses after the Hive Core, and of the clouds
 const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
 

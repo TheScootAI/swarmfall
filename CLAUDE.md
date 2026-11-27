@@ -7,6 +7,7 @@ A roguelite swarm shooter played mostly on phones. The whole game is `index.html
 - **Enemy guide artifact:** https://claude.ai/artifact/18YkQbSpHhSxGimJ2GmKNq (source in `artifacts/enemy-guide/`).
 - **Upgrade guide artifact:** https://claude.ai/artifact/EALugShxKLeMhoE6pxT3TC (every booster and station module; written by `node tools/upgrade-guide.js` into `artifacts/upgrade-guide/`).
 - **Repo:** `TheScootAI/swarmfall`. `main` is the live game, and ordinary changes go straight onto it.
+- **Branch `enemy-intros`:** new-enemy introductions (this branch), staged for the owner to try before it is merged. Do not merge it into `main` or publish it to the live game artifact until the owner says so.
 - **Staging artifact:** https://claude.ai/artifact/TDjavC3eeknZRiZyJmQsWR. For a big change the owner should try before it goes live (the graphics upgrade was one), work on a branch, build with `node tools/artifact.js <out.html> "Swarmfall Staging"` and publish there. Merge into `main` only when the owner says so.
 
 The `swarmfall-dev` skill (`.claude/skills/swarmfall-dev/`) has the step-by-step workflow for a change. Use it.
@@ -19,6 +20,7 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **Main buttons never scroll away, and a screen says when it has more.** Every screen ends in a bar holding its main buttons (`.dockbar`). When a screen is taller than the phone, the bar stays at the bottom while the rest scrolls under it, and a "More below" tab shows until the screen has been scrolled to its end (`fitScreens()`, `moreHint()`). The owner asked for this on every screen after twice missing things below the fold at the station. A new screen needs a `.dockbar` with a `.more` button in it, and its id in `screens`.
 - **One hit ends a new ship's run.** Hull, shields and everything else are bought with scrap (station modules) or picked as boosters.
 - **Colours carry meaning.** All enemy fire is the same red (`ENEMY_RED`), and nothing good is red. Anything good to grab sits in a pulsing blue halo: gold rings are scrap, green crosses repair hull.
+- **New enemies are introduced.** The first time a kind of enemy (or a boss) takes its place, the game slows quickly to a stop, the field dims but for a white spotlight ring on that enemy, and a card gives its name, what it does and what to do (`INTRO`, `INTRO_TEXT`). After a second and a half it goes by itself and the game speeds quickly back up: the owner asked for no button. Once per kind per save (`meta.seen`). The ring is white because a blue one would read as a pickup's halo.
 - **Mites are the pawns.** They are the largest group in every wave and hold the front two rows. Stronger enemies sit behind them.
 - **Darts lean toward the ship** a little as they fly (`DART`), so they do not always come straight down. Each dart may turn about 6 degrees in all, so a sidestep still clears it.
 - **A boss's scrap arrives in a line.** Each ring of the shower flies to the ship at its own speed (`sp` on the pickup), so they are collected one after another.
@@ -54,6 +56,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 | cutscenes | `CUTS` (durations), `startCut`, `updateCut`, docking at the station. A boss's death scene is separate: `FINALE` (its numbers) and `finaleStart`, `finaleStep`, next to `shake()`. |
 | drawing | `syncScene()`: copies game state into the three.js scene once a frame. |
 | UI | HUD, screens, booster choice (draft), the station shop, buttons. |
+| enemy introductions | `INTRO` (timings), `INTRO_TEXT` and `INTRO_NAME` (the words), `introScan`, `introShow`, `introStep`. |
 | test bench | The hidden screen for trying things out (`DBG`, `drawDebug`, `openDebug`), and what makes a test run different (`G.test`, `G.god`). |
 | feedback | The speech-bubble button that opens a prefilled GitHub issue. |
 | input, loop | Keyboard, touch and mouse, then `frame()`. |
@@ -64,9 +67,9 @@ The script is split into sections, each marked with a `// ---------- name ------
 
 A hidden screen the owner uses to try things on their phone. Open it from the title: tap SWARMFALL five times within three seconds, press the backquote key, or add `?debug` to the address.
 
-- It sets the wave to start on (with one-tap choices for each boss), any boosters at any level, any station modules at any level (for the test only: `testMods` stands in for the save's levels through `mlv()`), and "ship cannot be hit".
+- It sets the wave to start on (with one-tap choices for each boss), any boosters at any level, any station modules at any level (for the test only: `testMods` stands in for the save's levels through `mlv()`), "ship cannot be hit", and "Introduce enemies" (off by default, so testing is not interrupted; on, a test run introduces each kind the first time it appears in that run, whatever the save has seen).
 - A run launched from it is a **test run** (`G.test`): nothing it earns is saved. No scrap is banked, no records change, a destroyed boss fits no module, and nothing can be bought while docked. "Test again" and "Restart run" repeat the same test.
-- Two buttons on it do change the real save, and say so: add 1000 scrap, and fit every module.
+- Three buttons on it do change the real save, and say so: add 1000 scrap, fit every module, and introduce every enemy again (clears `meta.seen`).
 - What was chosen is remembered in localStorage under `swarmfall.debug`, apart from the save.
 - **When you add something the owner will want to try** (a booster, a boss, an enemy), make sure the bench can reach it. Boosters, station modules and bosses appear on it by themselves, from `UP`, `SHOP` and `BOSSES`. Anything else new (an enemy, a setting) needs adding by hand, and the owner will ask whether it was.
 
@@ -93,7 +96,7 @@ A hidden screen the owner uses to try things on their phone. Open it from the ti
 - **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during a boss's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
 - **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `DART`, `CLOUD`, `SENTRY`, `LASER`, `SH`, `sats`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
-- **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
+- **Writing for players.** Plain words, phone-sized lines. Every new enemy and boss gets an introduction: two short lines in `INTRO_TEXT` (what it does, then what to do about it), and for an ordinary enemy its name in `INTRO_NAME`. `hint()` is still used for things that are not enemies (scrap, repair, missiles).
 
 ## Graphics
 
@@ -134,6 +137,7 @@ node shots.js <dir> "gfx=high"   # twenty fixed pictures for judging the look by
 - Sentry satellites and the Laser Drone: a satellite deploys ahead of the ship, fires by itself, stops enemy shots, is shot down or runs out; the station module's is tougher with two barrels; the laser burns everything in its lane and nothing outside it.
 - Ships a boss releases: lanes on the first pass, then new places, paces and lines.
 - The cloud boosters: a Flame Cloud weakens an enemy and never destroys it; a confused enemy chases and rams the enemy furthest from it, with no new weapon, and flies home if its time runs out; the ship lobs clouds into the lanes below the formation. A dart bends a little toward the ship and a sidestep still clears it. A boss's scrap arrives over time and is all in before docking.
+- Enemy introductions: the slow-down and speed-up, the frozen game, the card going by itself, each kind once per save, and the bench's switch. Every other test page turns them off with `?intro=off`, as `shots.js` and `portraits.js` do.
 - The test bench: the secret gesture, choosing a wave and boosters, that a test run starts as set up and leaves the save untouched, and `?debug`.
 - A stress run with every booster on, and pause.
 - The station: Undock stays on screen while the list scrolls, and "More below" shows until its end. On a short phone (iPhone SE size), the same for the title, pause and booster screens.

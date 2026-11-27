@@ -30,7 +30,7 @@ This installs three.js and esbuild, which are only needed to rebuild `vendor/thr
   - a model branch in `buildEnemy()`
   - a rotation branch in the per-frame chain in `updateEnemies()` (the final `else` there is the Hive Core)
   - a probability in `buildWave()` and an entry in `UNLOCK`
-  - a `hint()` the first time it appears
+  - its introduction: two lines in `INTRO_TEXT` and its name in `INTRO_NAME`
   - a card in the enemy guide, and a portrait added to `tools/portraits.js`
 
 ## 3. Follow the conventions
