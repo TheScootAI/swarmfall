@@ -7,6 +7,7 @@
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const table = name => { const m = src.match(new RegExp('const ' + name + ' = (\\[[\\s\\S]*?\\n?\\]);')); if (!m) throw new Error('cannot find ' + name + ' in index.html'); return (0, eval)('(' + m[1] + ')'); };
+globalThis.HULL_UPGRADES = +src.match(/\bHULL_UPGRADES = (\d+)/)[1];   // the UP table names it
 const UP = table('UP'), SHOP = table('SHOP'), GROUPS = table('GROUPS'), START_MODS = table('START_MODS'), UNLOCK_ORDER = table('UNLOCK_ORDER'), RARITY = table('RARITY');
 const CATEGORY = (0, eval)('(' + src.match(/const CATEGORY = (\{[^}]*\});/)[1] + ')');
 const num = name => +src.match(new RegExp('\\b' + name + ' = (\\d+)'))[1];
@@ -24,7 +25,7 @@ const NOTES = {
   rapid: 'Each level adds 20% of your base fire rate. A new ship fires 2.75 volleys a second; all 8 levels make that 7.2.',
   heavy: 'Each level adds 25% of your base damage. A shot does 10; all 8 levels make that 30.',
   thrust: 'Each level adds 15% steering speed. All 4 make the ship 60% quicker side to side.',
-  plate: 'Each level adds 1 hull and repairs 1 on the spot. All 5 let you take 5 more hits.',
+  plate: 'Each level adds 1 hull and repairs 1 on the spot. A ship can add 3 hull at the most, counting the station\'s Reinforced Hull: with that at level 3, Hull Plate is never offered.',
   velocity: 'Each level adds 25% shot speed and 10% damage. All 4 double shot speed and add 40% damage.',
   magnet: 'Pickup reach grows from 42 to 102, 162, then 222: about five times as far at level 3.',
   patch: 'Repairs 2 hull now and nothing else. Only offered while your hull is damaged. No limit on how often.',
@@ -50,7 +51,7 @@ const NOTES = {
   'm:rate': '+6% fire rate per level: +30% with all 5.',
   'm:speed': '+8% bullet speed per level: +40% with all 5.',
   'm:twin': 'Every volley is 2 shots from the first wave. Split Barrel boosters add to it.',
-  'm:hull': '+1 hull per level. With all 3, a new ship takes 3 hits and the 4th ends the run.',
+  'm:hull': '+1 hull per level. With all 3, a new ship takes 3 hits and the 4th ends the run. That is also the most hull a ship can have: Hull Plate boosters count toward the same 3.',
   'm:revive': 'The blow that would end the run leaves you on 1 hull instead, untouchable for 2.5 seconds, and blasts every enemy for 80 damage while wiping their shots.',
   'm:shield': 'The same shield as the Aegis Shell booster. With both, the recharge is 3.5 seconds shorter.',
   'm:charge': '2 seconds off the shield\'s recharge per level: 15 seconds down to 9 with all 3.',

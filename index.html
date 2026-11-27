@@ -949,11 +949,14 @@ const enterPace = () => Math.min(ENTER.max, 1 + ENTER.faster * (Math.max(1, G.wa
 // shot that reaches it then could not have been dodged.
 const FINALE = { dur: 2.5, slow: 0.2, easeIn: 0.25, easeOut: 0.6, blastEvery: 0.2, grace: 0.6 };
 const FLASH_RGB = [1, 1, 0.8];
+// The most hull a ship can add, counting the station's Reinforced Hull levels and Hull Plate boosters together.
+// The owner: "should not be able to have more than 3 hull upgrades. 5 plus shield is nuts."
+const HULL_UPGRADES = 3;
 const UP = [
   { id: 'rapid', c: 'w', n: 'Rapid Feed', r: 0, max: 8, d: '+20% fire rate.' },
   { id: 'heavy', c: 'w', n: 'Heavy Rounds', r: 0, max: 8, d: '+25% damage.' },
   { id: 'thrust', c: 's', n: 'Side Thrusters', r: 0, max: 4, d: '+15% steering speed.' },
-  { id: 'plate', c: 'a', n: 'Hull Plate', r: 0, max: 5, d: '+1 max hull, so you can take 1 more hit. Repairs 1 now.' },
+  { id: 'plate', c: 'a', n: 'Hull Plate', r: 0, max: HULL_UPGRADES, d: '+1 max hull, so you can take 1 more hit. Repairs 1 now.', ok: () => mlv('hull') + ulv('plate') < HULL_UPGRADES },
   { id: 'velocity', c: 'w', n: 'Rail Coils', r: 0, max: 4, d: '+25% shot speed and +10% damage.' },
   { id: 'magnet', c: 's', n: 'Tractor Field', r: 0, max: 3, d: 'Pull scrap in from much farther away.' },
   { id: 'patch', c: 'a', n: 'Patch Kit', r: 0, max: 99, d: 'Repair 2 hull now.', ok: () => P.hp < S.maxHp },
@@ -1023,7 +1026,7 @@ function recalc() {
   S.shotSpeed = 366 * (1 + 0.08 * mlv('speed')) * (1 + 0.25 * ulv('velocity'));
   S.shots = 1 + mlv('twin') + ulv('twin'); S.pierce = ulv('pierce'); S.rico = ulv('rico');
   S.move = 240 * (1 + 0.15 * ulv('thrust'));
-  S.maxHp = Math.max(1, 1 + mlv('hull') + ulv('plate') - od);   // a new ship has 1 hull: one hit ends the run until hull is added
+  S.maxHp = Math.max(1, 1 + Math.min(HULL_UPGRADES, mlv('hull') + ulv('plate')) - od);   // a new ship has 1 hull: one hit ends the run until hull is added
   S.rate = 2.75 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
   S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
   S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame'); S.sentry = ulv('sentry'); S.platform = mlv('sentry'); S.beam = ulv('beam');
@@ -2707,7 +2710,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
