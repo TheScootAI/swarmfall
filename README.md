@@ -29,6 +29,7 @@ The speech-bubble button in the top-right corner opens a box for a bug or an ide
 - **New enemies are introduced.** The first time each kind of enemy or boss appears, the game slows to a stop for a moment, puts a spotlight on it and tells you what it does and what to do about it, then waits for you to touch the screen again before it carries on.
 - **What to grab:** anything inside a pulsing blue halo. Gold rings are scrap; green crosses repair one hull. Everything else is a hit, and all enemy fire is red: balls, darts, missiles and laser beams.
 - **The latcher** (from wave 11) leaps on its own, very fast, drops down one side of your ship out of the line of fire, then hooks in and clamps onto its side; touching never hurts by itself. A second and a half later it blows up for one hit (a shield takes the blast). Shake it off by flicking the ship left and right, or by running hard into the edge of the field.
+- **Quiet waves.** On every 14th wave (14, 28, 56 and so on; never a boss wave) the swarm holds its fire: no darts, no missiles, no lasers. It still dives, and latchers still leap.
 - **Escorts.** From wave 2, when a wasp, weaver, splitter or beetle leaves the formation it usually takes mites with it, flying just ahead of it as pawns. A wasp, weaver or splitter brings two; a beetle brings three, which hold a wall in front of it while it launches its missiles.
 - **Reinforcements.** From wave 2 a wave holds more than the formation you first see: when about a third of the formation is left, a fresh flight fills half of its places. From wave 10 that happens twice a wave. Bosses and wave 1 have none.
 - **Waves** grow in size and add enemy types: mites (the pawns: the largest group in every wave, holding the front two rows), wasps (fire fast darts, while diving and from their place in the formation; nothing else fires from the formation), weavers (from wave 5; zigzag), splitters (from wave 8; break into two mites when destroyed), triplets (from wave 13, after the second boss; break into three smaller copies that fan out across the screen when they leave the formation, so shoot them while they sit), lancers (one from wave 15, two from 20, three from 25; patrol above the top row from one side of the screen to the other, then stop, charge up and fire a laser beam down the screen that blocks a lane for a couple of seconds), beetles (from wave 10, taking over the top row from wave 13; armoured, launch homing missiles you can shoot down), and red-ringed elites (from wave 8; three times the health, extra scrap).
@@ -50,7 +51,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `ET`: enemy stats.
 - `UP`: boosters.
 - `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER`: station modules, their costs and the order they are earned.
-- `SHUTTLE` and `BOSS_EVERY`: when the booster shuttle and the bosses come.
+- `SHUTTLE` and `BOSS_EVERY`: when the booster shuttle and the bosses come. `QUIET_EVERY`: how often a wave comes on which nothing fires.
 - `ELITE`: how many enemies are elites as the waves go (all of them by wave 40), and what an elite pays.
 - `SCRAP_RATE`: one number that scales every enemy's scrap chance (bosses pay in full).
 - `BLAST`: Volatile Payload's reach and strength by level.
