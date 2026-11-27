@@ -1074,7 +1074,7 @@ const LATCH = { fuse: 1.5, off: 15, flick: 50, flicks: 3, slamRun: 60, slamSpeed
 // until it is in the part of the field where the lines are flown (SIM.split). show: how far inside the top edge a
 // hologram must be before a shot can hit it. The owner shot a whole line before seeing any of it.
 const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, hello: 2, lead: 1.2, rush: 2.5, show: 30,
-  line: 2, lineHold: 1, per: 0.25, perfect: 10,   // what it pays (30 at the most, about what the first six waves pay; the owner's first numbers, 5, 1 and 20, came to 85, and they judged that too much): for every hologram of one line (a ring that shows for lineHold seconds where the last one went, then flies to the ship), for each hologram at the end, and for all of them
+  line: 2, lineHold: 1, per: 0.25, perfect: 10,   // what it pays (30 at the most, about what the first six waves pay: the owner's choice, after their first numbers, 5, 1 and 20, came to 85): for every hologram of one line (a ring that shows for lineHold seconds where the last one went, then flies to the ship), for each hologram at the end, and for all of them
   span: 620, clear: 40, split: 0.2, over: 60,   // how a path's heights are placed on the field: see simYAt(). With the lines further from the ship (740 and 70) the fifth stage was only just possible: the bot cleared it 2 times in 6
   end: { card: 0.7, count: 1.3, beat: 0.55, wait: 0.35, out: 0.3, lift: 0.3 },   // the result card: seconds before it shows, the count-up for a full score, the beat between its lines, the least time before a touch carries on, its fade, and the wait after the finger lifts
   paths: {
