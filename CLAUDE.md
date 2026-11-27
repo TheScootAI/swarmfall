@@ -92,7 +92,7 @@ A hidden screen the owner uses to try things on their phone. Open it from the ti
   - The Beam Warden's beams are `e.bm` and `e.beams`, not `e.laser`: that field marks a lancer everywhere.
 - **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during a boss's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
-- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `DART`, `CLOUD`, `SENTRY`, `LASER`, `sats`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
+- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `DART`, `CLOUD`, `SENTRY`, `LASER`, `SH`, `sats`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines, and every new enemy gets a `hint()` the first time it appears.
 
 ## Graphics

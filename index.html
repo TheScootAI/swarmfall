@@ -648,15 +648,40 @@ stRing.add(part(geo.band, stM.hull, 62, 62, 62)); for (let i = 0; i < 4; i++) st
 stRing.rotation.x = 1.15; station.add(stRing);
 const stLights = [[0, 59, 5], [0, -59, 5], [-118, 0, 2], [118, 0, 2]].map(([x, y, z]) => { const m = part(geo.sph, stM.light, 2.4, 2.4, 2.4, x, y, z); station.add(m); return m; });
 station.visible = false; scene.add(station);
-// the booster shuttle that arrives after every third wave
-const shuttle = new THREE.Group();
-shuttle.add(part(geo.box, stM.hull, 12, 20, 9), part(geo.cone, stM.hull, 6.5, 9, 5, 0, 14.5), part(geo.box, stM.dark, 24, 5, 3, 0, -6));
-const shPod = part(geo.box, stM.port, 8, 8, 8, 0, 0, 8); shuttle.add(shPod);
-const shFlame = part(geo.cone, M.flame, 3, 9, 3, 0, -15, 0, Math.PI); shuttle.add(shFlame);
-shuttle.scale.setScalar(1.45); shuttle.visible = false; scene.add(shuttle);
+// The booster shuttle that arrives after every third wave: a small ship of the station's own make. The group
+// carries its position and heading; shBody inside it banks into the turn.
+const shuttle = new THREE.Group(), shBody = new THREE.Group();
+shBody.add(
+  part(geo.cyl, stM.hull, 5.5, 22, 4.6),                       // fuselage
+  part(geo.cone, stM.hull, 5.5, 11, 4.6, 0, 16.5),             // nose
+  part(geo.oct, M.canopy, 2.6, 5, 2.2, 0, 9, 3.8),             // cockpit, lit like the ship's own
+  part(geo.box, stM.panel, 11.6, 3, 9.4, 0, 2.5),              // a blue band round the hull
+  part(geo.box, stM.panel, 11.6, 1.2, 9.4, 0, -2),
+  part(geo.box, stM.dark, 2, 10, 7, 0, -8.5, 3.6),             // tail fin
+  part(geo.cyl, stM.dark, 3.6, 5, 3.6, 0, -12.5));             // main engine bell
+const shFlames = [part(geo.cone, M.flame, 3.3, 11, 3.3, 0, -19.5, 0, Math.PI)], shLights = [];
+for (const sd of [-1, 1]) {
+  shBody.add(
+    part(geo.box, stM.dark, 18, 6.5, 1.6, sd * 12, -4.5, 0, sd * -0.5),       // swept wing
+    part(geo.box, stM.panel, 10, 2, 1.9, sd * 13.5, -2.6, 0.3, sd * -0.5),    // its stripe
+    part(geo.cyl, stM.hull, 2.5, 11, 2.5, sd * 20, -8.5),                     // wingtip engine
+    part(geo.cone, stM.hull, 2.5, 4.5, 2.5, sd * 20, -0.8),
+    part(geo.cyl, stM.dark, 1.9, 2.5, 1.9, sd * 20, -14.5));
+  shFlames.push(part(geo.cone, M.flame, 1.9, 7, 1.9, sd * 20, -19, 0, Math.PI));
+  shLights.push(part(geo.sph, stM.light, 1.2, 1.2, 1.2, sd * 22.8, -5, 1.4));   // running lights: blue, like everything on your side
+}
+shLights.push(part(geo.sph, stM.light, 1, 1, 1, 0, -13.5, 7.2));
+shBody.add(...shFlames, ...shLights);
+// what it has come to deliver: a gold crate turning inside a blue halo, the mark of something good
+const boosterPod = () => { const g = new THREE.Group(), crate = new THREE.Group(); crate.add(part(geo.box, stM.port, 6.5, 6.5, 6.5), part(geo.box, stM.dark, 7.2, 1.4, 7.2)); const halo = part(geo.ring, M.halo, 9.5, 9.5, 1); g.add(crate, halo); g.userData.crate = crate; g.userData.halo = halo; return g; };
+const shPod = boosterPod(); shPod.position.set(0, 3, 9.5); shBody.add(shPod);
+shuttle.add(shBody); shuttle.scale.setScalar(1.5); shuttle.visible = false; scene.add(shuttle);
+// the same crate on its way across to the ship once a booster is chosen, and the beam that links the two while they fly side by side
+const shGift = boosterPod(); shGift.scale.setScalar(1.5); shGift.visible = false; scene.add(shGift);
+const shLink = part(geo.plane, glowMat(0x5fe8ff, 0.5), 1, 1, 1); shLink.visible = false; scene.add(shLink);
 const DOCK_TOP = 71, DOCK_BOTTOM = 75;   // how far the ship's centre sits from the station's when docked above / below it
 // the station always sits in the middle of the field; only its height moves
-const ST = { on: false, y: 0 }, SH = { on: false, x: 0, y: 0, rot: 0, pod: true, leave: false, side: 1 };
+const ST = { on: false, y: 0 }, SH = { on: false, x: 0, y: 0, rot: 0, pod: true, leave: false, side: 1, bank: 0, gift: -1, gx: 0, gy: 0 };   // gift: 0 to 1 while the chosen booster flies across to the ship (-1 when none is)
 const droneMeshes = [0, 1, 2].map(() => { const m = part(geo.oct, M.drone, 5, 7, 5); m.visible = false; scene.add(m); return m; });
 // The Laser Drone: a small drone off the ship's wing, with its beam (violet with a white core, never red: it is yours).
 const laserDrone = new THREE.Group(); laserDrone.add(part(geo.oct, M.drone, 5, 8, 5), part(geo.box, M.wing, 12, 2.5, 2.5, 0, -3));
@@ -1933,7 +1958,7 @@ function startCut(kind, done) {
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
   else if (kind === 'dock') { ST.on = true; toast('DOCKING'); }
   else {   // the shuttle appears at the side of the screen, a third of the way down
-    SH.side = P.x > W - 100 ? -1 : 1; SH.x = SH.side > 0 ? W + 50 : -50; SH.y = H / 3; SH.rot = SH.side * 2; SH.on = true; SH.pod = true; SH.leave = false; SFX.shuttle();
+    SH.side = P.x > W - 100 ? -1 : 1; SH.x = SH.side > 0 ? W + 50 : -50; SH.y = H / 3; SH.rot = SH.side * 2; SH.bank = 0; SH.on = true; SH.pod = true; SH.leave = false; SH.gift = -1; SFX.shuttle();
   }
 }
 function updateCut(dt) {
@@ -2010,7 +2035,26 @@ function syncScene(dt) {
   if (ST.on) { station.position.set(0, TY(ST.y), -20); stRing.rotation.z += 0.45 * dt; const blink = Math.floor(G.time * 2) % 2 === 0; stLights[0].visible = stLights[1].visible = blink; stLights[2].visible = stLights[3].visible = !blink; }
   if (SH.leave) { SH.rot = 0; SH.y += 280 * dt; SH.x += SH.side * 70 * dt; if (SH.y > H + 80) { SH.on = false; SH.leave = false; } }   // drops back once the booster is aboard
   shuttle.visible = SH.on;
-  if (SH.on) { shuttle.position.set(TX(SH.x), TY(SH.y) + Math.sin(G.time * 2.6) * 1.5, 0); shuttle.rotation.y = SH.side * -0.35 * (SH.rot ? 0 : 1); shuttle.rotation.z = SH.rot; shPod.visible = SH.pod; shPod.rotation.z += 2.5 * dt; shFlame.scale.y = 9 + Math.sin(G.time * 36) * 2.5; }
+  const near = SH.on && !SH.leave && SH.pod && (G.state === 'draft' || (G.state === 'cut' && G.cut.kind === 'shuttle' && G.cut.t > G.cut.dur * 0.78));   // close alongside: the last of its approach, and while a booster is chosen
+  if (SH.on) {
+    shuttle.position.set(TX(SH.x), TY(SH.y) + Math.sin(G.time * 2.6) * 1.5, 0); shuttle.rotation.z = SH.rot;
+    SH.bank += ((SH.rot ? clamp(SH.rot * 0.55, -0.75, 0.75) : SH.side * -0.3) - SH.bank) * Math.min(1, 6 * dt); shBody.rotation.y = SH.bank;   // it banks into its turn, then lies a little toward the ship
+    shPod.visible = SH.pod; shPod.userData.crate.rotation.z += 2.2 * dt; shPod.userData.crate.rotation.x = 0.5; const hs = 9.5 * (1 + Math.sin(G.time * 7) * 0.14); shPod.userData.halo.scale.set(hs, hs, 1);
+    const burn = SH.leave || G.state === 'cut' ? 1 : 0.45;   // engines idle while it holds beside the ship
+    for (let i = 0; i < 3; i++) shFlames[i].scale.y = (i ? 7 : 11) * burn + Math.sin(G.time * 36 + i) * 2.2 * burn;
+    const blink = Math.floor(G.time * 2.5) % 2 === 0; shLights[0].visible = blink; shLights[1].visible = !blink; shLights[2].visible = true;
+    if (burn === 1 && dt > 0 && Math.random() < 0.8) burst(SH.x + Math.sin(SH.rot) * 30 + rand(-3, 3), SH.y + Math.cos(SH.rot) * 30, THRUST_RGB, 1, 34, 0.32);   // exhaust left along its path
+  }
+  // a beam links shuttle and ship while they fly side by side
+  shLink.visible = near;
+  if (near) { const dx = P.x - SH.x, dy = P.y - SH.y, len = Math.hypot(dx, dy); shLink.scale.set(len, 1.6 + Math.sin(G.time * 9) * 0.6, 1); shLink.position.set(TX((P.x + SH.x) / 2), TY((P.y + SH.y) / 2), -1); shLink.rotation.z = Math.atan2(-dy, dx); shLink.material.opacity = 0.35 + Math.sin(G.time * 9) * 0.15; }
+  // the chosen booster crosses to the ship, and is fitted with a gold flash when it arrives
+  if (SH.gift >= 0) {
+    SH.gift += dt / 0.45; const k = Math.min(1, SH.gift), e = k * k * (3 - 2 * k), gx = lerp(SH.gx, P.x, e), gy = lerp(SH.gy, P.y, e) - Math.sin(k * Math.PI) * 16;
+    shGift.visible = true; shGift.position.set(TX(gx), TY(gy), 10); shGift.userData.crate.rotation.z += 9 * dt; shGift.scale.setScalar(1.5 * (1 - 0.45 * e));
+    if (dt > 0 && Math.random() < 0.7) burst(gx, gy, CRIT_RGB, 1, 30, 0.3);
+    if (k >= 1) { SH.gift = -1; shGift.visible = false; ringFx(P.x, P.y, 8, 46, 0xffc857, 0.4); burst(P.x, P.y, CRIT_RGB, 14, 120, 0.4); SH.leave = true; }
+  } else shGift.visible = false;
   // shots
   let n = 0;
   for (const b of G.pb) {
@@ -2112,7 +2156,7 @@ function resetField() {
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; clearBoss();
-  G.cut = null; ST.on = false; SH.on = false; SH.leave = false;
+  G.cut = null; ST.on = false; SH.on = false; SH.leave = false; SH.gift = -1;
 }
 function titleScene() {
   resetField(); G.wave = 0; G.up = {}; recalc(); G.form = { cols: 6, top: 62 };
@@ -2172,7 +2216,11 @@ function openDraft(kind) {
 }
 // After a booster is fitted (or skipped): the shuttle drops back and the next wave begins, or the ship leaves the station.
 function afterDraft(fitted) {
-  if (G.draftKind === 'wave') { SH.pod = !fitted; SH.leave = true; if (fitted) ringFx(P.x, P.y, 8, 46, 0xffc857, 0.4); nextWave(); }
+  if (G.draftKind === 'wave') {
+    if (fitted) { SH.pod = false; SH.gift = 0; SH.gx = SH.x; SH.gy = SH.y; }   // the crate leaves the shuttle and crosses to the ship; the shuttle drops back when it lands
+    else SH.leave = true;                                                      // passed over: it takes the crate away again
+    nextWave();
+  }
   else startCut('launch', nextWave);
 }
 function applyUpgrade(u) {
@@ -2493,7 +2541,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, SIEGE, DART, CLOUD, SENTRY, LASER, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

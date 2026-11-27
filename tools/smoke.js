@@ -55,7 +55,11 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
   s = await waitFor(x => x.state === 'draft'); check(s.state === 'draft', 'booster choice opens after the shuttle');
   check((await page.textContent('#draftEyebrow')).startsWith('Booster shuttle'), 'booster screen heading');
   await shot('04-booster');
+  const side = await page.evaluate(() => { const s = window.__swarmfall; return { beside: Math.abs(s.SH.x - s.P.x) < 70 && Math.abs(s.SH.y - s.P.y) < 12, pod: s.SH.pod, on: s.SH.on }; });
   await page.tap('.card'); s = await waitFor(x => x.state === 'play'); check(s.wave === 4, 'wave 4 starts after picking a booster');
+  const handOver = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, out = { crossed: false, gone: false }, t0 = performance.now();
+    (function f() { if (s.SH.gift >= 0) { out.crossed = true; out.podLeftShuttle = !s.SH.pod; } if (out.crossed && s.SH.gift < 0 && !s.SH.on) { out.gone = true; return res(out); } if (performance.now() - t0 > 8000) return res(out); requestAnimationFrame(f); })(); }));
+  check(side.beside && side.pod && side.on && handOver.crossed && handOver.podLeftShuttle && handOver.gone, 'the shuttle holds beside the ship, the chosen booster crosses over, and the shuttle drops back', JSON.stringify({ ...side, ...handOver }));
 
   await page.evaluate(() => { window.__swarmfall.G.run.scrap += 60; });
   // watch the Hive Core's death scene from inside the page: slowest game speed, closest camera, and hull lost during it
