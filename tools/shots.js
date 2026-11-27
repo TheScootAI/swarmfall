@@ -67,7 +67,7 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
       if (!b && !G.queue.length && G.waveT > 6) { b = G.enemies.find(e => e.type === 'beetle' && e.state === 'form'); if (b) s.launchDive(b); } }; });   // it only takes enemies in flight: a beetle is sent down for it
   await hold(page, 9500, 150); await snap(page, '4e-laser-drone');
 
-  // the simulation after a boss: the ship docked, its projection above it, and lines of pale holograms in flight
+  // the simulation after a boss: a neon grid, no station, the ship made of light and lines of holograms in flight
   page = await open(); await start(page);
   await page.evaluate(() => { const s = window.__swarmfall, G = s.G; for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.wave = 6; s.startSim(); window.__tick = s => { s.P.fireT = 9; }; });
   await hold(page, 9800, 180); await snap(page, '4f-simulation');

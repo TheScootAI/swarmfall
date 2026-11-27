@@ -82,8 +82,8 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 #simGo.on{animation:introGo 1.2s ease-in-out infinite}
 /* The simulation's frame: fine lines down the screen, a mark in each corner and the count of hits. It does not move
    and uses plain see-through colour only, so it costs the phone nothing each frame. */
-#simFx{position:absolute;inset:0;z-index:1;pointer-events:none;
-  background:repeating-linear-gradient(0deg,rgba(120,210,255,.05) 0 1px,transparent 1px 4px),radial-gradient(ellipse 80% 70% at 50% 55%,transparent 60%,rgba(60,150,255,.13) 100%)}
+#simFx{position:absolute;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(120,210,255,.04) 0 1px,transparent 1px 4px)}
+#simWipe{position:absolute;inset:0;z-index:3;pointer-events:none;background:repeating-linear-gradient(0deg,#2a7fd6 0 3px,#3f9be8 3px 6px)}
 #simFx i{position:absolute;width:22px;height:22px;border:solid rgba(140,225,255,.6);border-width:0}
 #simFx i:nth-of-type(1){left:10px;top:calc(env(safe-area-inset-top) + 58px);border-left-width:2px;border-top-width:2px}
 #simFx i:nth-of-type(2){right:10px;top:calc(env(safe-area-inset-top) + 58px);border-right-width:2px;border-top-width:2px}
@@ -220,6 +220,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       <p id="introGo">Tap to continue</p>
     </div>
   </div>
+  <div id="simWipe" hidden></div>
   <div id="simFx" hidden><i></i><i></i><i></i><i></i><p id="simTally"></p></div>
   <div id="simEnd" hidden>
     <div id="simCard" role="dialog" aria-labelledby="simKind">
@@ -483,6 +484,7 @@ const SFX = {
   missile() { if (limited('m', 150)) { noise(0.35, 0.22, 1800, 0.02); tone('sawtooth', 240, 520, 0.3, 0.12); } },
   alarm() { tone('square', 1320, 1240, 0.05, 0.06); },
   holo() { if (limited('ho', 45)) tone('sine', 1040, 1560, 0.06, 0.12); },
+  warp(into) { const a = into ? 260 : 820, b = into ? 820 : 260; tone('sine', a, b, 0.8, 0.14); tone('triangle', a * 0.5, b * 0.5, 0.8, 0.08); tone('sine', a * 1.5, b * 1.5, 0.8, 0.05, 0.06); },   // the screen going wavy: a soft sweep, up into the simulation and down out of it
   tally(k) { if (limited('ty', 55)) tone('sine', 620 + 520 * k, 660 + 520 * k, 0.04, 0.1); },   // the result counting up: soft pips that climb (k from 0 to 1)
   perfect() { tone('triangle', 660, 660, 0.12, 0.26); tone('triangle', 880, 880, 0.12, 0.26, 0.1); tone('triangle', 1100, 1100, 0.12, 0.26, 0.2); tone('triangle', 1320, 1320, 0.3, 0.26, 0.3); },   // every hologram hit: four rising notes   // a hologram hit in the simulation: a small bright blip
   leap() { if (limited('lp', 120)) tone('sawtooth', 320, 980, 0.16, 0.1); },   // a latcher leaving the formation: a quick rising chirp, the warning that one is on its way
@@ -561,7 +563,7 @@ const geo = {
 const M = {
   hull: pbr(0xe9ecff, 0x1a1f44, 0.6, 0.3), wing: pbr(0x5fe8ff, 0x0b3d4a, 0.5, 0.35), canopy: glowing(basic(0x9ff3ff)), flame: glowMat(0xffb36b, 0.9),
   mite: pbr(0xff4f8b, 0x4a0f25), miteFin: pbr(0xffa3c2, 0x3a1020),
-  holo: holoMat(0x6fc8ff), holoShip: holoMat(0x8ff0ff, 1.7),   // the simulation: targets and the ship's projection, made of light. They glow: no more than sixteen targets are out at once, and each is small
+  holo: holoMat(0x8fdcff), holoShip: holoMat(0x8ff0ff, 1.7),   // the simulation: targets and the ship's projection, made of light. They glow: no more than sixteen targets are out at once, and each is small
   latch: pbr(0x7f89b5, 0x161a30, 0.7, 0.35), latchClaw: pbr(0x353b5c, 0x07080f, 0.8, 0.3), fuse: glowing(basic(ENEMY_RED)),
   wasp: pbr(0xffb02e, 0x4a2a00), waspWing: pbr(0xfff1c0, 0x40381a),
   weaver: pbr(0xa56bff, 0x24104a), splitA: pbr(0xff7a3c, 0x4a1c08), splitB: pbr(0xffd23c, 0x4a3a08),
@@ -647,8 +649,26 @@ const nebula = (() => {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   const m = new THREE.Mesh(geo.plane, new THREE.MeshBasicMaterial({ map: tex, fog: false, depthWrite: false, depthTest: false }));
   m.position.z = -1700; m.renderOrder = -10; m.frustumCulled = false; scene.add(m);
-  return { m, tex };
+  return { m, tex, mat: m.material };
 })();
+// The simulation's backdrop: a neon grid, drawn on the nebula's own sheet (so it fills the view at any shape of
+// screen). Fine violet squares with a brighter blue line every fourth, sliding slowly toward the ship, and a band of
+// light that sweeps down it now and then. No halo: it covers the whole screen. `cell` is one square's width, set in resize().
+const gridMat = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, cell: { value: 200 } }, fog: false, depthWrite: false, depthTest: false,
+  vertexShader: 'varying vec2 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xy; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: `uniform float time, cell; varying vec2 vW;
+    float lines(vec2 p, float w) { vec2 g = abs(fract(p - 0.5) - 0.5) / fwidth(p); return 1.0 - min(min(g.x, g.y) / w, 1.0); }
+    void main() {
+      vec2 p = vW / cell; p.y += time * 0.22;
+      vec2 q = abs(fract(p - 0.5) - 0.5); float near = exp(-min(q.x, q.y) * 16.0);
+      float sweep = smoothstep(0.93, 1.0, sin(p.y * 0.42 + time * 1.3));
+      vec3 c = vec3(0.006, 0.005, 0.03) + vec3(0.2, 0.07, 0.62) * (lines(p, 1.3) * 0.4 + near * 0.12) * (1.0 + sweep * 1.4) + vec3(0.1, 0.3, 0.9) * lines(p * 0.25, 1.6) * 0.4;
+      gl_FragColor = vec4(c, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
 // far rocks drifting behind the field, for depth
 const hulks = [];
 for (let i = 0; i < 3; i++) {
@@ -799,13 +819,19 @@ const sats = [0, 1].map(heavy => {
 // pulses with screen shake, and darkened corners, and tone-maps the result into screen colours.
 // Three quality levels: 2 = everything, 1 = the same at a lower resolution, 0 = no post-processing at all.
 const MIX_SHADER = {
-  uniforms: { tDiffuse: { value: null }, tGlow: { value: null }, glow: { value: 1.0 }, fringe: { value: 0 }, corners: { value: 0.42 } },
+  uniforms: { tDiffuse: { value: null }, tGlow: { value: null }, glow: { value: 1.0 }, fringe: { value: 0 }, corners: { value: 0.42 }, wave: { value: 0 }, time: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tGlow; uniform float glow; uniform float fringe; uniform float corners; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tGlow; uniform float glow; uniform float fringe; uniform float corners; uniform float wave; uniform float time; varying vec2 vUv;
     void main() {
-      vec2 d = vUv - 0.5; float r2 = dot(d, d); vec2 off = d * fringe * (0.3 + r2 * 3.0);
-      vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
-      c += texture2D(tGlow, vUv).rgb * glow;
+      // the wave (into and out of the simulation): the picture ripples from side to side, more and more, and washes out
+      // to bands of pale blue at its height, which is when the scene behind is swapped. The halos ripple with it.
+      vec2 uv = vUv;
+      uv.x += (sin(uv.y * 24.0 + time * 9.0) * 0.045 + sin(uv.y * 57.0 - time * 14.0) * 0.014) * wave;
+      uv.y += sin(uv.x * 17.0 + time * 7.0) * 0.016 * wave;
+      vec2 d = vUv - 0.5; float r2 = dot(d, d); vec2 off = d * (fringe + wave * 0.004) * (0.3 + r2 * 3.0);
+      vec3 c = vec3(texture2D(tDiffuse, uv + off).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - off).b);
+      c += texture2D(tGlow, uv).rgb * glow;
+      c = mix(c, vec3(0.16, 0.5, 0.95) * (0.55 + 0.45 * sin(uv.y * 150.0 + time * 26.0)), wave * wave * wave);
       c *= 1.0 - corners * smoothstep(0.12, 0.7, r2);
       gl_FragColor = vec4(c, 1.0);
       #include <tonemapping_fragment>
@@ -842,8 +868,11 @@ function draw(dt) {
     camera.layers.set(0); renderer.setClearColor(0x080b1f);
     bloom.render(renderer, null, glowRT, dt, false);
     mixPass.uniforms.fringe.value = 0.0012 + shakeAmt * 0.0011;
+    mixPass.uniforms.wave.value = reduceMotion ? 0 : smooth(WARP.k); mixPass.uniforms.time.value = G.time;
     renderer.setRenderTarget(null); composer.render(dt);
   } else { renderer.setRenderTarget(null); renderer.render(scene, camera); }
+  // With the effects off, or for a player who has asked for less motion, the wave is a plain fade through pale blue.
+  if (WARP.k !== WARP.was) { WARP.was = WARP.k; const el = $('simWipe'), plain = GFX.q === 0 || reduceMotion; el.hidden = !plain || WARP.k <= 0; if (plain) el.style.opacity = smooth(WARP.k); }
 }
 
 function resize() {
@@ -862,6 +891,7 @@ function resize() {
   camBase = camDist; camera.aspect = asp; camera.updateProjectionMatrix();   // syncScene() places the camera every frame
   scene.fog.near = camDist + 80; scene.fog.far = camDist + 900;
   const nd = camDist + 1700, nh = 2 * nd * Math.tan(FOV * Math.PI / 360) * 1.08; nebula.m.scale.set(nh * Math.max(asp, 0.5), nh, 1); nebula.tex.repeat.set(Math.max(1, asp * 2), 1);   // fill the view at its distance
+  gridMat.uniforms.cell.value = 40 * nd / camDist;   // a square of the simulation's grid looks 40 units wide where the ships are
   document.documentElement.style.setProperty('--colw', Math.min(vw, W / unitsPerPx) + 'px');
   const showWalls = visW > W + 10; wallL.visible = wallR.visible = showWalls;
   wallL.position.set(-W / 2 - 3, 0, 0); wallR.position.set(W / 2 + 3, 0, 0); wallL.scale.y = wallR.scale.y = visH;
@@ -1020,7 +1050,8 @@ const LATCH = { fuse: 1.5, off: 15, flick: 50, flicks: 3, slamRun: 60, slamSpeed
 //   lift: how far above the docked ship its projection flies. per: scrap for each hologram hit; perfect: extra for all.
 //   hold: seconds the result stays up. paths: each line's points, across and down the field from 0 to 1; a path with a
 //   long straight run up or down one lane is one every hologram can be hit on. stages: five lines each, [path, mirrored].
-const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, lift: 46, per: 0.25, perfect: 10,
+const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, per: 0.25, perfect: 10,
+  span: 740, clear: 70, split: 0.2, over: 60,   // how a path's heights are placed on the field: see simYAt()
   end: { card: 0.7, count: 1.3, beat: 0.55, wait: 0.35, out: 0.3, lift: 0.3 },   // the result card: seconds before it shows, the count-up for a full score, the beat between its lines, the least time before a touch carries on, its fade, and the wait after the finger lifts
   paths: {
     drop: [[0.5, -0.1], [0.5, 0.15], [0.5, 0.4], [0.5, 0.56], [0.36, 0.64], [0.2, 0.56], [0.14, 0.35], [0.14, 0.1], [0.14, -0.12]],
@@ -1885,11 +1916,11 @@ function shot(x, y, ang, kind, dmgMul) {
   G.pb.push({ x, y, vx: Math.sin(ang) * sp, vy: -Math.cos(ang) * sp, dmg: S.dmg * dmgMul * (crit ? 2.5 : 1), pierce: kind === 0 ? S.pierce : 0, rico: kind === 0 ? S.rico : 0, crit, kind, hit: null, dead: false });
 }
 function updatePlayer(dt) {
-  P.y = G.state === 'sim' ? simY() : shipY();
+  P.y = shipY();
   if (!P.alive) return;
   const dir = (keys.arrowright || keys.d ? 1 : 0) - (keys.arrowleft || keys.a ? 1 : 0);
   const x0 = P.x;
-  if (SIMS.ended) P.x += clamp(SIMS.x0 - P.x, -S.move * dt, S.move * dt);   // the simulation is over: the projection goes back to the docked ship by itself
+  if (SIMS.ended) P.x += clamp(W / 2 - P.x, -S.move * dt, S.move * dt);   // the simulation is over: the ship goes back to the middle by itself
   else if (dir) { P.x += dir * S.move * dt; P.target = null; }
   else if (P.target != null) P.x += clamp(P.target - P.x, -S.move * 2.2 * dt, S.move * 2.2 * dt);
   P.x = clamp(P.x, 14, W - 14); P.vx = lerp(P.vx, (P.x - x0) / Math.max(dt, 0.001), 0.3);
@@ -2286,7 +2317,7 @@ function updateGame(dt) {
       if (!G.bossDown && !shuttleAfter(G.wave)) nextWave();
       // the booster and the station wait until the last enemy shots have left the field, so nothing vanishes mid-flight;
       // the station also waits for the last of the boss's scrap to reach the ship
-      else if (!G.eb.length && !G.em.length && !(G.bossDown && G.picks.length)) { if (G.bossDown) startCut('dock', simOff ? arriveStation : startSim); else startCut('shuttle', () => openDraft('wave')); }
+      else if (!G.eb.length && !G.em.length && !(G.bossDown && G.picks.length)) { if (G.bossDown) startCut('dock', simOff ? arriveStation : () => startCut('simIn', startSim)); else startCut('shuttle', () => openDraft('wave')); }
     }
   }
   else if (G.state === 'dying') { G.dieT -= dt / 0.45; if (G.dieT <= 0) endRun(); }
@@ -2300,14 +2331,18 @@ function updateGame(dt) {
 const easeIO = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 // dur: seconds the scene lasts. hold: seconds at its end when the flying is over and things just sit. The shuttle
 // holds beside the ship for 0.75 seconds before the booster menu opens: the owner found the menu came up too soon.
-const CUTS = { launch: { dur: 2.4 }, shuttle: { dur: 3.05, hold: 0.75 }, dock: { dur: 2.8 } };
+const CUTS = { launch: { dur: 2.4 }, shuttle: { dur: 3.05, hold: 0.75 }, dock: { dur: 2.8 },
+  simIn: { dur: 0.9 }, simOut: { dur: 0.8 }, simBack: { dur: 0.9 } };   // the screen going wavy into the simulation, wavy again out of it, and settling back at the station
+const WARP = { k: 0, was: -1 };   // how wavy the screen is, from 0 to 1. The scene behind is swapped at 1, where nothing of it can be made out
+function dockedBelow() { ST.on = true; ST.y = H * 0.4; P.x = W / 2; P.y = ST.y + DOCK_BOTTOM; P.vx = 0; }   // where the docking scene leaves the ship: at the station's lower port
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function startCut(kind, done) {
   FIN.on = FIN.toast = false; clearClouds(); clearSats(); P.las = null;   // a cloud, satellite or beam would hang frozen through the scene
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
   else if (kind === 'dock') { ST.on = true; toast('DOCKING'); }
-  else {   // the shuttle appears at the side of the screen, a third of the way down
+  else if (kind === 'simIn' || kind === 'simOut') SFX.warp(kind === 'simIn');
+  else if (kind === 'shuttle') {   // the shuttle appears at the side of the screen, a third of the way down
     SH.side = P.x > W - 100 ? -1 : 1; SH.x = SH.side > 0 ? W + 50 : -50; SH.y = H / 3; SH.rot = SH.side * 2; SH.bank = 0; SH.on = true; SH.pod = true; SH.leave = false; SH.gift = -1; SFX.shuttle();
   }
 }
@@ -2325,7 +2360,9 @@ function updateCut(dt) {
     const e = smooth(u), sy = H * 0.4;
     ST.y = lerp(-240, sy, e); P.x = lerp(c.x0, W / 2, e); P.y = lerp(c.y0, sy + DOCK_BOTTOM, e); P.vx = 0;
     if (!c.fx && u > 0.97) { c.fx = true; ringFx(P.x, P.y - 18, 6, 44, 0xffc857, 0.4); SFX.dock(); }
-  } else {
+  } else if (c.kind === 'simIn' || c.kind === 'simOut') WARP.k = u;   // nothing moves: the screen goes wavy until nothing can be made out
+  else if (c.kind === 'simBack') WARP.k = 1 - u;
+  else {
     // the shuttle comes in from the side, a third of the way down, and curves down to pull up beside the ship
     P.y = shipY();
     const e = easeIO(u), m = 1 - e, x0 = SH.side > 0 ? W + 50 : -50, y0 = H / 3, x1 = clamp(P.x + SH.side * 52, 26, W - 26), y1 = P.y + 2;
@@ -2344,8 +2381,8 @@ const unbanked = () => Math.floor(G.run.scrap) - G.run.banked;   // scrap collec
 // Docked after a boss: the next module is fitted, the run's scrap is banked, and the station shop opens.
 // ---- the simulation (numbers in SIM) ----
 const simOff = new URLSearchParams(location.search).get('sim') === 'off';   // the tests switch it off with ?sim=off, as they do introductions
-const SIMS = { on: false, hits: 0, total: 0, rise: 0, ended: false, shield: false, reward: 0, perfect: false, x0: 0,
-  t: 0, step: 0, at: [0, 0, 0, 0], shown: -1, owed: 0, readyT: 0, leaving: false, outT: 0, lifted: false, liftT: 0 }, simDock = { ship: null, beam: null };   // from t on: the result card
+const SIMS = { on: false, hits: 0, total: 0, ended: false, shield: false, reward: 0, perfect: false,
+  t: 0, step: 0, at: [0, 0, 0, 0], shown: -1, owed: 0, readyT: 0, leaving: false, outT: 0, lifted: false, liftT: 0 };   // from t on: the result card
 // Each path is worked out once into SIM_STEPS points (a smooth curve through the table's points), for both its hands.
 const SIM_STEPS = 160, simPaths = {};
 function simPath(name, mirror) {
@@ -2360,57 +2397,50 @@ function simPath(name, mirror) {
   }
   return simPaths[key] = out;
 }
-function simBeam() {
-  const g = new THREE.BufferGeometry(), hw = W * 0.85, h = H * 1.15;
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, hw, h, 0, -hw, h, 0]), 3)); g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0.5, 0, 1, 1, 0, 1]), 2));
-  const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
-    uniforms: { time: { value: 0 }, power: { value: 0 }, tint: { value: new THREE.Color(0x3fa8ff) } }, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
-    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float time, power; uniform vec3 tint; varying vec2 vUv;
-      void main() {
-        float x = abs(vUv.x - 0.5) / max(0.001, vUv.y * 0.5), edge = 1.0 - smoothstep(0.55, 1.0, x);
-        float fall = mix(0.38, 0.04, smoothstep(0.0, 0.55, vUv.y)), line = 0.8 + 0.2 * step(0.5, fract(vUv.y * 90.0 - time * 0.8));
-        gl_FragColor = vec4(tint * edge * fall * line * power, 1.0);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  }));
-  m.renderOrder = -1; m.frustumCulled = false; return m;
+// Where a path's height (a share of the field, as in SIM.paths) is on this phone's field. Phones differ in how tall the
+// field is, and a perfect score must be as possible on one as on another, so the part of every line near the ship is
+// the same on all of them: the lowest point of any path is SIM.clear above the ship, and heights from there up to
+// SIM.split are SIM.span units to the whole. Only the run in from the top (above SIM.split) is longer on a taller phone.
+const SIM_LOW = Math.max(...Object.values(SIM.paths).flat().map(p => p[1])), SIM_TOP = Math.min(...Object.values(SIM.paths).flat().map(p => p[1]));
+function simYAt(f) {
+  const base = shipY() - SIM.clear;
+  return f >= SIM.split ? base - (SIM_LOW - f) * SIM.span : lerp(-SIM.over, base - (SIM_LOW - SIM.split) * SIM.span, (f - SIM_TOP) / (SIM.split - SIM_TOP));
 }
-const simY = () => lerp(dockY() - DOCK_TOP, dockY() - DOCK_TOP - SIM.lift, smooth(SIMS.rise));   // the projection rises out of the docked ship
 const simStageOf = wave => Math.max(0, Math.ceil(wave / BOSS_EVERY) - 1) % SIM.stages.length;
+// The swap into the simulation, made while the screen is at its waviest: the station, the nebula, the stars and the
+// far rocks go, and a neon grid takes their place; the ship turns to light and stands at its usual flying height.
+function simScene(on) {
+  nebula.m.material = on ? gridMat : nebula.mat; stars.p.visible = !on; for (const h of hulks) h.visible = !on;
+  $('simFx').hidden = !on;
+}
 function startSim() {
   const stage = SIM.stages[simStageOf(G.wave)];
   G.state = 'sim'; G.sim = true; recalc();   // the bare ship
-  Object.assign(SIMS, { on: true, hits: 0, total: stage.length * SIM.n, rise: 0, ended: false, shield: P.shieldUp, reward: 0, perfect: false, x0: P.x, owed: 0, leaving: false });
-  P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearSats(); ST.on = true; ST.y = dockY();
-  // the real ship stays docked; what the player flies is its projection
-  if (!simDock.ship) { simDock.ship = ship.clone(); scene.add(simDock.ship); simDock.beam = simBeam(); scene.add(simDock.beam); }
-  simDock.beam.visible = true; simDock.beam.position.set(TX(P.x), TY(dockY() - DOCK_TOP) + 10, -6);
-  simDock.ship.visible = true; simDock.ship.position.set(TX(P.x), TY(dockY() - DOCK_TOP), 0); simDock.ship.rotation.set(0, 0, 0);
-  simDock.ship.traverse(m => { if (m.isMesh && m.material === M.shield) m.visible = false; });
+  Object.assign(SIMS, { on: true, hits: 0, total: stage.length * SIM.n, ended: false, shield: P.shieldUp, reward: 0, perfect: false, owed: 0, leaving: false });
+  P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearSats(); G.pb.length = 0;
+  ST.on = false; P.x = W / 2; P.y = shipY(); P.vx = 0; P.target = null; WARP.k = 1; simScene(true);
   ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.userData.wasGlow = m.layers.isEnabled(GLOW); m.material = M.holoShip; m.layers.enable(GLOW); } });
   G.queue = []; G.waveT = 0;
   stage.forEach(([name, mirror], g) => { const path = simPath(name, mirror), kind = SIM_KINDS[g % SIM_KINDS.length];
-    for (let k = 0; k < SIM.n; k++) G.queue.push({ t: 1.5 + g * SIM.every + k * SIM.gap, fn: () => spawnHolo(kind, path) }); });
+    for (let k = 0; k < SIM.n; k++) G.queue.push({ t: 1.8 + g * SIM.every + k * SIM.gap, fn: () => spawnHolo(kind, path) }); });
   G.queue.sort((a, b) => a.t - b.t);
-  show(null); $('hud').hidden = false; drawHud(); SFX.card(); $('simFx').hidden = false; simTally();
+  show(null); $('hud').hidden = false; drawHud(); simTally();
   toast('SIMULATION', 'Holograms. Your own guns only: hit them all');
 }
 function simTally() { $('simTally').textContent = 'HIT ' + SIMS.hits + ' / ' + SIMS.total; }
 function spawnHolo(kind, path) {
-  const e = spawnEnemy(kind, null, null, { x: path[0] * W, y: path[1] * H });
+  const e = spawnEnemy(kind, null, null, { x: path[0] * W, y: simYAt(path[1]) });
   e.holo = true; e.path = path; e.state = 'sim'; e.u = 0; e.hp = e.maxHp = 1; e.z = 0;
   for (const m of e.meshes) { m.material = m.userData.base = M.holo; m.layers.enable(GLOW); }   // its model was built for it alone, so the layer goes no further
 }
 function updateHolo(e, dt) {
   e.u += dt / SIM.dur; if (e.u >= 1) { despawn(e); return; }   // it has flown its line and gone
   const f = e.u * SIM_STEPS, i = Math.min(SIM_STEPS - 1, Math.floor(f)), t = f - i, p = e.path, nx = lerp(p[i * 2], p[i * 2 + 2], t) * W;
-  e.vx = (nx - e.x) / Math.max(dt, 0.001); e.x = nx; e.y = lerp(p[i * 2 + 1], p[i * 2 + 3], t) * H; e.z = 0;
+  e.vx = (nx - e.x) / Math.max(dt, 0.001); e.x = nx; e.y = simYAt(lerp(p[i * 2 + 1], p[i * 2 + 3], t)); e.z = 0;
 }
 function simStep(dt) {
+  if (WARP.k > 0) WARP.k = Math.max(0, WARP.k - dt / CUTS.simBack.dur);   // the wave that brought the simulation in dies away
   if (!SIMS.ended) {
-    if (SIMS.rise < 1) SIMS.rise = Math.min(1, SIMS.rise + dt / 0.7);
     if (G.queue.length || G.enemies.length) return;
     const E = SIM.end, a = SIMS.at, count = reduceMotion ? 0 : Math.max(0.3, E.count * SIMS.hits / SIMS.total);
     SIMS.ended = true; SIMS.perfect = SIMS.hits === SIMS.total;
@@ -2421,12 +2451,12 @@ function simStep(dt) {
     if (reduceMotion) a[1] = a[2] = a[3] = a[0];
     P.target = null; return;
   }
-  // The round is over: the projection sinks back into the docked ship while the card counts up what was hit.
-  SIMS.rise = Math.max(0, SIMS.rise - dt / 0.9); SIMS.t += dt;
+  // The round is over: the ship goes back to the middle while the card counts up what was hit.
+  SIMS.t += dt;
   const E = SIM.end, a = SIMS.at;
-  if (SIMS.leaving) {   // carried on: the card fades, and the station opens a moment after the finger has lifted, so the same tap cannot press a button there
+  if (SIMS.leaving) {   // carried on: the card fades, and a moment after the finger has lifted the screen goes wavy and comes back at the station. The wait and the two scenes keep that tap from pressing a button there
     SIMS.outT += dt; if (SIMS.lifted) SIMS.liftT += dt;
-    if (SIMS.outT >= E.out && (SIMS.liftT >= E.lift || SIMS.outT >= 2)) { simOver(); arriveStation(); }
+    if (SIMS.outT >= E.out && (SIMS.liftT >= E.lift || SIMS.outT >= 2)) startCut('simOut', () => { simOver(); dockedBelow(); startCut('simBack', arriveStation); });
     return;
   }
   if (SIMS.step === 0 && SIMS.t >= a[0]) {
@@ -2459,10 +2489,9 @@ function simOver() {
   SIMS.on = SIMS.ended = SIMS.leaving = false; SIMS.owed = 0; G.sim = false; recalc(); P.shieldUp = SIMS.shield; hudWas.wave = -1;
   $('simEnd').hidden = true; $('simEnd').classList.remove('on');
   ship.traverse(m => { if (m.isMesh && m.userData.real) { m.material = m.userData.real; m.userData.real = null; if (!m.userData.wasGlow) m.layers.disable(GLOW); } });
-  if (simDock.ship) simDock.ship.visible = simDock.beam.visible = false;
-  $('simFx').hidden = true;
+  simScene(false);
   for (const e of G.enemies) if (e.holo && !e.dead) despawn(e);
-  G.pb.length = 0; P.y = dockY() - DOCK_TOP; P.x = W / 2; P.vx = 0; P.target = null;
+  G.pb.length = 0; P.x = W / 2; P.vx = 0; P.target = null; drawHud();
 }
 function arriveStation() {
   if (G.test) G.newMod = null;   // a test run fits no module and banks no scrap
@@ -2487,11 +2516,7 @@ function syncScene(dt) {
   if (P.alive) ship.visible = P.inv <= 0 || G.state === 'cut' || Math.floor(G.time * 14) % 2 === 0;   // no hit-blink during cutscenes
   flame.scale.y = 12 + Math.sin(G.time * 40) * 3;
   shieldMesh.visible = P.shieldUp; M.shield.uniforms.time.value = G.time;
-  if (SIMS.on) {   // the projection flickers a little, and fades as it rises out of the docked ship or sinks back into it; the projector's beam comes and goes with it
-    const k = Math.min(1, SIMS.rise * 1.6), u = M.holoShip.uniforms;
-    u.time.value = M.holo.uniforms.time.value = simDock.beam.material.uniforms.time.value = G.time;
-    u.power.value = (0.9 + Math.sin(G.time * 31) * 0.1) * k; simDock.beam.material.uniforms.power.value = k * (0.92 + Math.sin(G.time * 23) * 0.08);
-  }
+  if (SIMS.on) { const t = G.time; M.holo.uniforms.time.value = M.holoShip.uniforms.time.value = gridMat.uniforms.time.value = t; M.holoShip.uniforms.power.value = 0.9 + Math.sin(t * 31) * 0.1; M.holo.uniforms.power.value = GFX.q ? 1 : 1.6; }   // the ship of light flickers a little; with the effects off the targets have no halo, so they are brighter
   // lights: a cool glow that travels with the ship, and the fading flash of the last explosion
   shipLight.position.set(TX(P.x), TY(P.y) + 6, 34); shipLight.intensity = P.alive && G.state !== 'title' && G.state !== 'browse' ? 9000 : 0;
   flashPower *= Math.max(0, 1 - 9 * realDt); flashLight.intensity = flashPower;   // real time, so a flash does not linger while game time runs slow
@@ -2634,7 +2659,7 @@ function toggleMute() {
 }
 
 function resetField() {
-  FIN.on = FIN.toast = false; clearClouds(); clearSats(); introEnd(); simOver();
+  FIN.on = FIN.toast = false; clearClouds(); clearSats(); introEnd(); simOver(); WARP.k = 0;
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; G.flights = 0; clearBoss();
@@ -2664,7 +2689,7 @@ function startRun(test, drill) {   // drill: a test run that goes straight into 
   ship.visible = true; $('hud').hidden = false; drawHud();
   Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
-  if (test && drill === true) { G.wave = DBG.wave; startSim(); return; }
+  if (test && drill === true) { G.wave = DBG.wave; dockedBelow(); drawHud(); startCut('simIn', startSim); return; }
   if (mlv('head') && !test) openDraft('head');
   else { startCut('launch', nextWave); if (test) G.cut.t = G.cut.dur * 0.7; }   // a test run cuts most of the launch: it is run again and again
 }
@@ -3142,7 +3167,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, simPath, startSim, ST, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, startSim, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
