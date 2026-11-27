@@ -554,18 +554,22 @@ const GROUPS = {
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     // Volatile Payload: one enemy destroyed in the middle of a full formation hurts its neighbours and no more. The owner found
     // levels 2 and 3 cleared the top half of the screen: each blast destroyed the neighbours, and each of those set off another.
-    const vp = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, { G, P } = s, out = {}, t0 = performance.now(); let lv = 0, step = 0, at = 0, n0 = 0;
+    // Whether a destroyed enemy explodes is a 1 in 4 chance (BLAST.chance), so the roll is fixed here: a blast at each level, then at level 3 a roll that gives none.
+    const vp = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, { G, P } = s, real = Math.random, out = { chance: s.BLAST.chance }, t0 = performance.now(); let lv = 0, step = 0, at = 0, n0 = 0, pass = 0;
       const start = () => { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.wave = 3; s.nextWave(); G.flights = 0; G.up = { blast: lv }; s.recalc(); step = 0; };
       const alive = () => G.enemies.filter(e => !e.dead).length;
       lv = 1; start();
       (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99;
-        if (performance.now() - t0 > 60000) { out.timeout = lv; return res(out); }
+        if (performance.now() - t0 > 80000) { Math.random = real; out.timeout = lv; return res(out); }
         const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
         if (step === 0 && !G.queue.length && formed.length === G.form.size) { n0 = formed.length; const e = formed.find(e => e.r === 1 && e.c === 2);
+          Math.random = () => pass === 3 ? 0.5 : 0.1;   // under 0.25: it explodes; over: it does not
           G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); step = 1; at = G.time; }
-        else if (step === 1 && G.time - at > 1) { out['lv' + lv] = n0 - alive(); out['hurt' + lv] = G.enemies.filter(e => !e.dead && e.hp < e.maxHp).length; out.size = n0; if (lv === 3) return res(out); lv++; start(); }
+        else if (step === 1 && G.time - at > 1) { Math.random = real; const k = pass === 3 ? 'none' : 'lv' + lv, h = pass === 3 ? 'hurtNone' : 'hurt' + lv; out[k] = n0 - alive(); out[h] = G.enemies.filter(e => !e.dead && e.hp < e.maxHp).length; out.size = n0;
+          if (pass === 3) return res(out); pass++; if (pass < 3) lv++; start(); }
         requestAnimationFrame(f); })(); }));
     check(vp.lv1 >= 1 && vp.lv1 <= 2 && vp.lv2 <= 5 && vp.lv3 <= 9 && vp.hurt1 + vp.lv1 > 1 && vp.hurt2 + vp.lv2 >= vp.hurt1 + vp.lv1 && vp.hurt3 + vp.lv3 >= vp.hurt2 + vp.lv2, 'Volatile Payload: one kill in a full formation destroys only a few neighbours at any level', JSON.stringify(vp));
+    check(vp.chance === 0.25 && vp.none === 1 && vp.hurtNone === 0, 'Volatile Payload: a destroyed enemy explodes one time in four; on the other three nothing near it is touched', JSON.stringify({ chance: vp.chance, destroyed: vp.none, hurt: vp.hurtNone }));
     // Hull: two upgrades at the most, counting the station's Reinforced Hull and Hull Plate boosters together
     const hull = await page.evaluate(() => { const s = window.__swarmfall, was = s.meta.up.hull, plate = s.UP.find(u => u.id === 'plate'), out = {};
       for (const [m, b] of [[0, 2], [1, 1], [2, 2], [2, 0], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }

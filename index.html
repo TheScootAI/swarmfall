@@ -919,7 +919,8 @@ const eliteShare = n => n < UNLOCK.elite ? 0 : Math.min(1, ELITE.share + ELITE.m
 const SCRAP_RATE = 0.5;
 // Volatile Payload, by level: a destroyed enemy hurts whatever is within r of it for dmg of one shot. An enemy
 // that a blast destroys sets off no blast of its own: at levels 2 and 3 that chain cleared the whole formation.
-const BLAST = { r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
+// chance: how often a destroyed enemy explodes at all (every time at first; the owner asked for 25%).
+const BLAST = { chance: 0.25, r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
 // Escorts: when a stronger enemy leaves the formation, more often than not a few mites leave with it and fly just
 // ahead of it as pawns (the owner wanted it for wasps and the others as much as for beetles, and from wave 2). chance and n: how often, and how many, by the kind they escort (a beetle most of all: its three form a
 // wall in front of it while it stops to launch its missiles). ahead: how far in front of it they fly; gap: how far
@@ -1004,7 +1005,7 @@ const UP = [
   { id: 'shield', c: 'h', n: 'Aegis Shell', r: 1, max: 3, d: 'A shield absorbs one hit, then recharges. More levels recharge faster.' },
   { id: 'drone', c: 's', n: 'Wing Drone', r: 1, max: 3, d: 'A drone orbits your ship and fires with you.' },
   { id: 'crit', c: 'w', n: 'Weak-Point Scanner', r: 1, max: 4, d: '+15% chance for a shot to deal 2.5× damage.' },
-  { id: 'blast', c: 'w', n: 'Volatile Payload', r: 1, max: 3, d: 'Destroyed enemies explode and damage their neighbours.' },
+  { id: 'blast', c: 'w', n: 'Volatile Payload', r: 1, max: 3, d: 'A destroyed enemy has a 1 in 4 chance to explode and damage its neighbours.' },
   { id: 'rico', c: 'w', n: 'Ricochet', r: 1, max: 2, d: 'After a hit, shots bounce to another enemy.' },
   { id: 'flame', c: 'w', n: 'Flame Cloud', r: 1, max: 3, d: 'Lob a cloud of flame ahead of your ship. Enemies that fly through it burn slowly.' },
   { id: 'scav', c: 's', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
@@ -1709,7 +1710,7 @@ function killEnemy(e) {
     if (!e.elite) { if (Math.random() < 0.03) spawnPick('heart', e.x, e.y); }
     else if (G.repairs < ELITE.repairs && Math.random() < ELITE.repair) { G.repairs++; spawnPick('heart', e.x, e.y); }
   }
-  if (S.blast > 0) G.blastQ.push({ x: e.x, y: e.y });
+  if (S.blast > 0 && Math.random() < BLAST.chance) G.blastQ.push({ x: e.x, y: e.y });
   if (e.type === 'splitter') for (const s of [-1, 1]) { const m = spawnEnemy('mite', null, null, { x: e.x + s * 8, y: e.y, elite: e.elite }); startDive(m); m.vx = s * 120; m.vy = -60; }   // an elite splitter's mites keep its ring
 }
 function nearest(x, y, skip, maxD) {
