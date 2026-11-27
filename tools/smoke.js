@@ -25,7 +25,7 @@ const check = (ok, label, detail = '') => { console.log((ok ? 'PASS ' : 'FAIL ')
 
 // A fresh phone-sized browser with a new save, on the game with the effects and the enemy introductions off
 // (software rendering is slow, and an introduction would stop the game mid-test), and the helpers that drive it.
-async function open(query = '?gfx=low&intro=off', device = 'iPhone 13') {
+async function open(query = '?gfx=low&intro=off&sim=off', device = 'iPhone 13') {
   const page = await (await browser.newContext({ ...devices[device] })).newPage();
   page.on('pageerror', e => errors.push(e.message + ' ' + ((e.stack || '').split('\n')[1] || '')));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
@@ -50,7 +50,7 @@ const GROUPS = {
     const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
     // The main run has the effects off (?gfx=low): software rendering is slow, and these checks are about the game's rules.
     // The graphics checks at the end turn them on.
-    await page.goto('file://' + GAME + '?gfx=low&intro=off'); await page.waitForTimeout(600);
+    await page.goto('file://' + GAME + '?gfx=low&intro=off&sim=off'); await page.waitForTimeout(600);
     check(await page.evaluate(() => !!window.__swarmfall), 'game boots');
     s = await st();
     check(s.state === 'title' && s.mods === 'dmg,hull', 'new save: title screen, two station modules', JSON.stringify(s));
@@ -532,6 +532,45 @@ const GROUPS = {
     check(sg.bossWatched === true && !sg.tookBoss, 'Laser Drone: it never locks onto a boss', JSON.stringify({ watched: sg.bossWatched, tookBoss: !!sg.tookBoss, tookHelper: !!sg.tookHelper, timeout: sg.bossTimeout }));
     await page.context().close();
   },
+  // The simulation: the holographic drill the station runs once the ship has docked after a boss.
+  sim: async () => {
+    const { page, st, waitFor, clearWave, playTo, shot } = await open('?gfx=low&intro=off&debug'); let s;   // the simulation is on here; every other group switches it off with ?sim=off
+    // An aiming bot: it goes for the lowest hologram, leading it by the time a shot takes to get there. It also watches the rules.
+    const drill = () => page.evaluate(() => new Promise(res => { const w = window.__swarmfall, { G, P, S, SIMS } = w, out = { fire: 0, hurt: false, paused: null, kills0: G.run.kills, scrap0: G.run.scrap }, t0 = performance.now(); let touched = 0, pausedAt = 0;
+      (function f() {
+        if (performance.now() - t0 > 120000) { out.timeout = G.state; return res(out); }
+        if (G.state === 'station') { out.afterShots = S.shots; out.simOff = !G.sim && !SIMS.on; return res(out); }
+        if (G.state === 'sim') {
+          if (out.shots === undefined) { out.shots = S.shots; out.drones = S.drones; out.beam = S.beam; out.docked = w.ST.on; out.hud = document.getElementById('wave').textContent; out.total = SIMS.total; out.hp0 = P.hp; }
+          out.fire = Math.max(out.fire, G.eb.length + G.em.length);
+          let t = null; for (const e of G.enemies) if (!e.dead && e.holo && (!t || e.y > t.y)) t = e;
+          if (t && touched < 3 && G.waveT > 3) { t.u = t.u; touched++; out.touchAt = Math.hypot(t.x - P.x, t.y - P.y) < 400; const x = t.x, y = t.y; t.x = P.x; t.y = P.y; requestAnimationFrame(() => { if (P.hp < out.hp0 || !P.alive) out.hurt = true; }); }   // a hologram put right on top of the ship: nothing must come of it
+          if (t) P.target = Math.max(14, Math.min(346, t.x + t.vx * Math.max(0, P.y - t.y) / S.shotSpeed));
+          if (SIMS.ended && out.hits === undefined) { out.hits = SIMS.hits; out.reward = SIMS.reward; out.perfect = SIMS.perfect; out.took = +G.waveT.toFixed(1); out.paid = +(G.run.scrap - out.scrap0).toFixed(2); out.kills = G.run.kills - out.kills0; out.toast = document.getElementById('toast').textContent; }
+          if (out.paused === null && G.waveT > 6) { document.getElementById('btnPause').click(); out.paused = G.state === 'pause' ? document.getElementById('pauseWave').textContent : 'not paused'; pausedAt = performance.now(); }
+        } else if (G.state === 'pause' && performance.now() - pausedAt > 400) { document.getElementById('btnResume').click(); out.resumedTo = G.state; }
+        requestAnimationFrame(f); })(); }));
+    // straight in from the test bench, with boosters chosen: they must not fire in the drill
+    await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="6"]'); await page.tap('#dbgUps [data-id="twin"]'); await page.tap('#dbgUps [data-id="drone"]'); await page.tap('#dbgUps [data-id="beam"]');
+    await page.tap('#dbgSim'); s = await waitFor(x => x.state === 'sim'); check(s.state === 'sim', 'test bench: Simulation goes straight into the drill');
+    const d1 = await drill(); await shot('18-simulation-result');
+    check(d1.docked === true && d1.hud === 'SIMULATION' && d1.total === 40, 'the simulation runs with the ship docked: forty holograms in five lines of eight', JSON.stringify({ docked: d1.docked, hud: d1.hud, total: d1.total }));
+    check(d1.shots === 1 && d1.drones === 0 && d1.beam === 0 && d1.afterShots === 2 && d1.simOff === true, 'only the bare ship\'s own gun fires in it, whatever boosters are fitted; they are back afterwards', JSON.stringify({ shots: d1.shots, drones: d1.drones, beam: d1.beam, after: d1.afterShots }));
+    check(d1.fire === 0 && d1.hurt === false && d1.touchAt !== undefined, 'nothing in it can hurt the ship: no fire, and a hologram on top of the ship does nothing', JSON.stringify({ fire: d1.fire, hurt: d1.hurt }));
+    check(d1.hits === 40 && d1.perfect === true && d1.reward === 20 && d1.paid === 20 && d1.kills === 0 && d1.toast.includes('PERFECT'), 'a perfect score can be had with the bare ship: 40 of 40, paid into the run\'s scrap, and none of it counted as kills', JSON.stringify({ hits: d1.hits, reward: d1.reward, paid: d1.paid, kills: d1.kills, seconds: d1.took, toast: d1.toast }));
+    check(d1.paused === 'Simulation' && d1.resumedTo === 'sim', 'pausing in the simulation and resuming goes back into it', JSON.stringify({ paused: d1.paused, resumedTo: d1.resumedTo }));
+    check((await st()).state === 'station', 'after the simulation the station opens');
+    // the second stage flies the same lines the other way round: a perfect score can be had there too
+    await page.reload(); await page.waitForTimeout(600); await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="12"]'); await page.tap('#dbgSim'); await waitFor(x => x.state === 'sim');
+    const d2 = await drill();
+    check(d2.hits === 40 && d2.perfect === true, 'the second stage (the lines mirrored) can be cleared perfectly too', JSON.stringify({ hits: d2.hits, seconds: d2.took }));
+    // in a real run: the Hive Core destroyed, the ship docks, the simulation runs, then the station
+    await page.reload(); await page.waitForTimeout(600); await page.tap('#dbgClear'); await page.tap('#dbgBoss [data-w="6"]'); if ((await page.textContent('#dbgGod')).endsWith('off')) await page.tap('#dbgGod');
+    await page.tap('#dbgGo'); await waitFor(x => x.state === 'play');
+    s = await playTo(x => x.state === 'sim' || x.state === 'station'); check(s.state === 'sim' && s.wave === 6, 'in a run: the boss destroyed, the ship docks and the simulation starts', s.state + ' on wave ' + s.wave);
+    s = await waitFor(x => x.state === 'station', 60000); check(s.state === 'station', 'and when it is over the station opens');
+    await page.context().close();
+  },
   // The latcher: clamps onto the ship, goes off after 1.5 seconds, and is thrown off by flicks or by a slam into the edge.
   latcher: async () => {
     const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
@@ -650,7 +689,7 @@ const GROUPS = {
     fx.on('pageerror', e => errors.push('[gfx] ' + e.message)); fx.on('console', m => { if (m.type() === 'error') errors.push('[gfx] ' + m.text()); });
     await fx.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
     const startRun = async () => { await fx.tap('#btnPlay'); await fx.waitForTimeout(400); await fx.touchscreen.tap(195, 400); await fx.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 60000 }); };
-    await fx.goto('file://' + GAME + '?gfx=high&intro=off'); await fx.waitForTimeout(600); await startRun();
+    await fx.goto('file://' + GAME + '?gfx=high&intro=off&sim=off'); await fx.waitForTimeout(600); await startRun();
     const pic = await fx.evaluate(() => new Promise(res => { const s = window.__swarmfall; let n = 0;
       (function f() { s.P.inv = 9; if (++n < 12 || (s.G.pb.length < 3 && n < 400)) return requestAnimationFrame(f);   // wait until the ship has shots in the air: they are the bright things looked for
         const gl = document.querySelector('canvas'), c = document.createElement('canvas'); c.width = 97; c.height = 211; const g = c.getContext('2d'); g.drawImage(gl, 0, 0, c.width, c.height);
@@ -660,7 +699,7 @@ const GROUPS = {
     if (OUT) await fx.screenshot({ path: path.join(OUT, '10-effects-on.png') });
 
     // auto: a device that cannot keep up (software rendering here) must step the effects down by itself
-    await fx.goto('file://' + GAME + '?intro=off'); await fx.waitForTimeout(600);
+    await fx.goto('file://' + GAME + '?intro=off&sim=off'); await fx.waitForTimeout(600);
     await fx.evaluate(() => { const s = window.__swarmfall; s.meta.gfx = 'auto'; s.meta.autoQ = 2; s.GFX.mode = 'auto'; window.dispatchEvent(new Event('resize')); });
     await startRun();
     const auto = await fx.evaluate(() => new Promise(res => { const s = window.__swarmfall, t0 = performance.now();
@@ -706,13 +745,13 @@ const GROUPS = {
     const over = await page.evaluate(() => ({ eyebrow: document.getElementById('deadEyebrow').textContent, again: document.getElementById('btnAgain').textContent }));
     check(await saved() === before && /nothing saved/.test(over.eyebrow) && over.again === 'Test again', 'test run: ending it leaves scrap, records and modules as they were', JSON.stringify(over));
     await page.tap('#btnAgain'); s = await waitFor(x => x.state === 'play', 15000); check(s.wave === 12, '"Test again" repeats the same test', 'wave ' + s.wave);
-    await page.goto('file://' + GAME + '?gfx=low&intro=off&debug'); await page.waitForTimeout(600);
+    await page.goto('file://' + GAME + '?gfx=low&intro=off&sim=off&debug'); await page.waitForTimeout(600);
     check(await page.isVisible('#scrDebug') && (await page.textContent('#dbgWave')).startsWith('Wave 12'), 'test bench: ?debug in the address opens it, with the last set-up remembered');
     await page.context().close();
   },
   // Enemy introductions.
   intro: async () => {
-    // ---- enemy introductions (every other page here switches them off with ?intro=off) ----
+    // ---- enemy introductions (every other page here switches them off with ?intro=off&sim=off) ----
     const ip = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
     ip.on('pageerror', e => errors.push('[intro] ' + e.message)); ip.on('console', m => { if (m.type() === 'error') errors.push('[intro] ' + m.text()); });
     await ip.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
@@ -777,7 +816,7 @@ const GROUPS = {
     const sm = await (await browser.newContext({ ...devices['iPhone SE'] })).newPage();
     sm.on('pageerror', e => errors.push('[small] ' + e.message));
     await sm.route('**/fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
-    await sm.goto('file://' + GAME + '?gfx=low&intro=off'); await sm.waitForTimeout(600);
+    await sm.goto('file://' + GAME + '?gfx=low&intro=off&sim=off'); await sm.waitForTimeout(600);
     const barOf = id => sm.evaluate(id => { const el = document.getElementById(id), inView = [...el.querySelectorAll('.dockbar .btn')].filter(b => !b.hidden).every(b => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
       return { scrolls: el.scrollHeight > el.clientHeight + 2, more: !el.querySelector('.more').hidden, inView }; }, id);
     const okBar = b => b.inView && b.more === b.scrolls;   // buttons on screen; the tab shows exactly when there is something to scroll to
@@ -801,6 +840,7 @@ const ABOUT = {
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
+  sim: 'the simulation after a boss: docked, bare ship only, harmless, a perfect score, the reward, pause, then the station',
   latcher: 'the latcher: leaping by itself, clamping on, going off, shaken off, slammed off; the shield; no harm by touch',
   stress: 'Volatile Payload in a full formation; the hull cap; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',

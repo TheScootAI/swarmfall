@@ -291,6 +291,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
           <button class="btn" data-d="1" aria-label="1 wave later">+1</button><button class="btn" data-d="6" aria-label="6 waves later">+6</button>
         </div>
         <div class="chips" id="dbgBoss"></div>
+        <div class="row quietrow"><button id="dbgSim" class="btn quiet">Run the simulation that follows this wave's boss</button></div>
         <h3 class="grp">Boosters <span>Tap to raise a level</span></h3>
         <div class="chips" id="dbgUps"></div>
         <div class="row quietrow"><button id="dbgClear" class="btn quiet">Clear boosters</button><button id="dbgAll" class="btn quiet">One of each</button></div>
@@ -355,7 +356,7 @@ try {
 } catch (e) { /* storage unavailable: play without saving */ }
 const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch (e) {} };
 let testMods = null;   // on a test run: the station module levels chosen on the test bench, used in place of the save's
-const mlv = id => testMods ? testMods[id] | 0 : meta.up[id] || 0;
+const mlv = id => testMods ? testMods[id] | 0 : meta.up[id] || 0, modLevel = mlv;
 
 // ---------- audio ----------
 let AC = null, master = null, noiseBuf = null, hush = null, audioStale = false;
@@ -442,6 +443,7 @@ const SFX = {
   eshoot() { if (limited('e', 90)) tone('square', 300, 200, 0.06, 0.08); },
   missile() { if (limited('m', 150)) { noise(0.35, 0.22, 1800, 0.02); tone('sawtooth', 240, 520, 0.3, 0.12); } },
   alarm() { tone('square', 1320, 1240, 0.05, 0.06); },
+  holo() { if (limited('ho', 45)) tone('sine', 1040, 1560, 0.06, 0.12); },   // a hologram hit in the simulation: a small bright blip
   leap() { if (limited('lp', 120)) tone('sawtooth', 320, 980, 0.16, 0.1); },   // a latcher leaving the formation: a quick rising chirp, the warning that one is on its way
   latch() { noise(0.07, 0.35, 2400); tone('square', 300, 140, 0.16, 0.26); tone('sawtooth', 880, 620, 0.12, 0.16, 0.1); },   // clamping on: a clack, a thud and a falling warning note
   fuse(k) { const f = 520 + 520 * k; tone('square', f, f, 0.045, 0.12); tone('square', f * 1.5, f * 1.5, 0.045, 0.12, 0.07); },   // its fuse: two quick pips, higher as the time runs out (k from 0 to 1). The missile alarm is one pip, so the two are not confused
@@ -501,6 +503,7 @@ const geo = {
 const M = {
   hull: pbr(0xe9ecff, 0x1a1f44, 0.6, 0.3), wing: pbr(0x5fe8ff, 0x0b3d4a, 0.5, 0.35), canopy: glowing(basic(0x9ff3ff)), flame: glowMat(0xffb36b, 0.9),
   mite: pbr(0xff4f8b, 0x4a0f25), miteFin: pbr(0xffa3c2, 0x3a1020),
+  holo: addMat(0x9fd8ff, 0.62), holoShip: addMat(0x8fe9ff, 0.8),   // the simulation: pale, see-through light. Not glowing: forty of them would flood the screen
   latch: pbr(0x7f89b5, 0x161a30, 0.7, 0.35), latchClaw: pbr(0x353b5c, 0x07080f, 0.8, 0.3), fuse: glowing(basic(ENEMY_RED)),
   wasp: pbr(0xffb02e, 0x4a2a00), waspWing: pbr(0xfff1c0, 0x40381a),
   weaver: pbr(0xa56bff, 0x24104a), splitA: pbr(0xff7a3c, 0x4a1c08), splitB: pbr(0xffd23c, 0x4a3a08),
@@ -945,6 +948,33 @@ const ESCORT = { beetle: { chance: 0.8, n: 3 }, wasp: { chance: 0.6, n: 2 }, wea
 // rows that are latchers on the wave they arrive, how much that grows each wave, and its limit. lots: the share on
 // a test run with the bench's "Latchers: lots" on, from wave 1.
 const LATCH = { fuse: 1.5, off: 15, flick: 50, flicks: 3, slamRun: 60, slamSpeed: 200, wait: [1.5, 5], accel: 900, turn: 4, side: 320, wide: 100, jink: 20, hookAt: 30, hook: 420, chase: 1.2, chance: 0.04, more: 0.004, most: 0.1, lots: 0.3 };
+// The simulation: the bonus stage, after Galaga's. Once the ship has docked after a boss, the station runs a holographic
+// drill before the shop opens: lines of holograms fly set paths, nose to tail, and the player shoots as many as they
+// can. Nothing in it can hurt the ship, and only the bare ship's own guns fire (no boosters, no station modules), so
+// a perfect score is a matter of aim. The owner: "Bonus should just be your own base ship? Maybe it happens while you
+// are docked? It is like a holographic simulation to improve your aim?"
+//   n holograms to a line, `gap` seconds apart (longer than the bare ship's time between shots, or a perfect score
+//   could not be had); each takes `dur` seconds over its path; a new line sets off every `every` seconds.
+//   lift: how far above the docked ship its projection flies. per: scrap for each hologram hit; perfect: extra for all.
+//   hold: seconds the result stays up. paths: each line's points, across and down the field from 0 to 1; a path with a
+//   long straight run up or down one lane is one every hologram can be hit on. stages: five lines each, [path, mirrored].
+const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, lift: 46, per: 0.25, perfect: 10, hold: 2.8,
+  paths: {
+    drop: [[0.5, -0.1], [0.5, 0.15], [0.5, 0.4], [0.5, 0.56], [0.36, 0.64], [0.2, 0.56], [0.14, 0.35], [0.14, 0.1], [0.14, -0.12]],
+    climb: [[-0.12, 0.42], [0.1, 0.6], [0.3, 0.62], [0.32, 0.4], [0.32, 0.2], [0.32, 0], [0.32, -0.14]],
+    sweep: [[0.86, -0.1], [0.86, 0.2], [0.86, 0.48], [0.76, 0.63], [0.64, 0.56], [0.62, 0.32], [0.62, 0.08], [0.62, -0.14]],
+    loop: [[0.25, -0.1], [0.25, 0.2], [0.27, 0.44], [0.46, 0.6], [0.66, 0.48], [0.6, 0.28], [0.44, 0.32], [0.44, 0.5], [0.6, 0.62], [0.9, 0.5], [1.14, 0.36]],
+    zig: [[0.5, -0.1], [0.5, 0.08], [0.5, 0.28], [0.3, 0.4], [0.68, 0.5], [0.36, 0.62], [0.1, 0.5], [-0.14, 0.36]],
+  },
+  stages: [
+    [['drop', 0], ['sweep', 0], ['climb', 0], ['zig', 0], ['loop', 0]],
+    [['sweep', 1], ['drop', 1], ['loop', 1], ['climb', 1], ['zig', 1]],
+    [['zig', 0], ['climb', 1], ['drop', 0], ['loop', 1], ['sweep', 0]],
+    [['loop', 0], ['zig', 1], ['sweep', 1], ['drop', 1], ['climb', 0]],
+    [['climb', 1], ['loop', 0], ['zig', 0], ['sweep', 1], ['drop', 0]],
+  ] };
+const SIM_KINDS = ['mite', 'wasp', 'weaver', 'splitter', 'beetle'];   // the shapes the holograms take, one kind to a line
+const HOLO_RGB = [0.62, 0.86, 1];
 const CLEAR = { wave: 3, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
@@ -1062,8 +1092,11 @@ const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [],
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
-const ulv = id => G.up[id] || 0;
+const ulv = id => G.up[id] || 0, boostLevel = ulv;
 function recalc() {
+  // In the simulation only the bare ship fires: its stats are worked out as if no booster and no module were fitted.
+  // (mlv and ulv themselves must go on telling the truth: the shop and the booster draw read them.) Hull stays as it is.
+  const none = () => 0, mlv = G.sim ? none : modLevel, ulv = G.sim ? none : boostLevel, hull = S.maxHp;
   const od = ulv('over');
   S.dmg = 10 * (1 + 0.1 * mlv('dmg')) * (1 + 0.25 * ulv('heavy')) * (1 + 0.1 * ulv('velocity')) * (1 + 0.2 * od);
   S.shotSpeed = 366 * (1 + 0.08 * mlv('speed')) * (1 + 0.25 * ulv('velocity'));
@@ -1076,6 +1109,7 @@ function recalc() {
   S.ebMul = 1 - 0.2 * ulv('slow');
   S.scrapMul = (1 + 0.2 * mlv('scrap')) * (1 + 0.5 * ulv('scav'));
   S.magnet = 42 + 22 * mlv('magnet') + 60 * ulv('magnet');
+  if (G.sim && hull) S.maxHp = hull;
 }
 
 // ---------- enemies ----------
@@ -1131,7 +1165,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, lit: 0, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, lit: 0, holo: false, path: null, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) {
@@ -1689,6 +1723,7 @@ function spawnPick(kind, x, y, worth = 1) {
   return p;
 }
 function killEnemy(e) {
+  if (e.holo) { despawn(e); SIMS.hits++; SFX.holo(); burst(e.x, e.y, HOLO_RGB, 12, 170, 0.4); ringFx(e.x, e.y, 4, 26, 0x9fd8ff, 0.22); return; }   // a hologram: it counts toward the drill and nothing else
   despawn(e); G.run.kills++;
   const boss = !!e.def.boss;
   flash(e.x, e.y, boss ? 600000 : e.elite ? 160000 : 70000);
@@ -1785,7 +1820,7 @@ function shot(x, y, ang, kind, dmgMul) {
   G.pb.push({ x, y, vx: Math.sin(ang) * sp, vy: -Math.cos(ang) * sp, dmg: S.dmg * dmgMul * (crit ? 2.5 : 1), pierce: kind === 0 ? S.pierce : 0, rico: kind === 0 ? S.rico : 0, crit, kind, hit: null, dead: false });
 }
 function updatePlayer(dt) {
-  P.y = shipY();
+  P.y = G.state === 'sim' ? simY() : shipY();
   if (!P.alive) return;
   const dir = (keys.arrowright || keys.d ? 1 : 0) - (keys.arrowleft || keys.a ? 1 : 0);
   const x0 = P.x;
@@ -1794,7 +1829,7 @@ function updatePlayer(dt) {
   P.x = clamp(P.x, 14, W - 14); P.vx = lerp(P.vx, (P.x - x0) / Math.max(dt, 0.001), 0.3);
   P.inv -= dt;
   if (S.shield > 0 && !P.shieldUp) { P.shieldT -= dt; if (P.shieldT <= 0) { P.shieldUp = true; SFX.shield(); drawHud(); } }
-  if (G.state !== 'play') return;
+  if (G.state !== 'play' && G.state !== 'sim') return;
   P.fireT -= dt;
   if (P.fireT <= 0) {
     P.fireT += 1 / S.rate; if (P.fireT < 0) P.fireT = 0;
@@ -2084,8 +2119,9 @@ function updateEnemies(dt) {
     else if (e.state === 'dive') { updateDive(e, dt); diving++; }
     else if (e.state === 'ram') { updateRam(e, dt); if (e.dead) continue; }
     else if (e.state === 'latch') { updateLatch(e, dt); if (e.dead) continue; latched++; }
+    else if (e.state === 'sim') { updateHolo(e, dt); if (e.dead) continue; }
     else updateBoss(e, dt);
-    if (P.alive && e.state !== 'latch' && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) {
+    if (P.alive && e.state !== 'latch' && !e.holo && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) {
       if (e.def.latch) latchOn(e);   // a latcher never hurts by touching: it clamps on, or (no room, or the ship is blinking) flies on by
       else { hitPlayer(); if (!e.def.boss) damageEnemy(e, 40); }
     }
@@ -2173,6 +2209,7 @@ function updateGame(dt) {
   sweepDead(G.enemies);
   if (G.boss) { const f = Math.round(clamp(bossLeft() / G.bossMax, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
   if (G.state === 'play') reinforce();
+  else if (G.state === 'sim') simStep(dt);
   if (G.state === 'play' && !G.queue.length && !G.enemies.length && !G.flights) { G.state = 'clear'; G.clearT = G.bossDown ? CLEAR.boss : CLEAR.wave; clearedToast(); }
   else if (G.state === 'clear') {
     G.clearT -= dt;
@@ -2180,7 +2217,7 @@ function updateGame(dt) {
       if (!G.bossDown && !shuttleAfter(G.wave)) nextWave();
       // the booster and the station wait until the last enemy shots have left the field, so nothing vanishes mid-flight;
       // the station also waits for the last of the boss's scrap to reach the ship
-      else if (!G.eb.length && !G.em.length && !(G.bossDown && G.picks.length)) { if (G.bossDown) startCut('dock', arriveStation); else startCut('shuttle', () => openDraft('wave')); }
+      else if (!G.eb.length && !G.em.length && !(G.bossDown && G.picks.length)) { if (G.bossDown) startCut('dock', simOff ? arriveStation : startSim); else startCut('shuttle', () => openDraft('wave')); }
     }
   }
   else if (G.state === 'dying') { G.dieT -= dt / 0.45; if (G.dieT <= 0) endRun(); }
@@ -2236,6 +2273,71 @@ function updateCut(dt) {
 }
 const unbanked = () => Math.floor(G.run.scrap) - G.run.banked;   // scrap collected this run and not yet added to the station's total
 // Docked after a boss: the next module is fitted, the run's scrap is banked, and the station shop opens.
+// ---- the simulation (numbers in SIM) ----
+const simOff = new URLSearchParams(location.search).get('sim') === 'off';   // the tests switch it off with ?sim=off, as they do introductions
+const SIMS = { on: false, hits: 0, total: 0, rise: 0, ended: false, doneT: 0, shield: false, reward: 0, perfect: false }, simDock = { ship: null };
+// Each path is worked out once into SIM_STEPS points (a smooth curve through the table's points), for both its hands.
+const SIM_STEPS = 160, simPaths = {};
+function simPath(name, mirror) {
+  const key = name + (mirror ? '-m' : ''); if (simPaths[key]) return simPaths[key];
+  const pts = SIM.paths[name], n = pts.length, out = new Float32Array((SIM_STEPS + 1) * 2), at = i => pts[clamp(i, 0, n - 1)];
+  for (let k = 0; k <= SIM_STEPS; k++) {
+    const f = k / SIM_STEPS * (n - 1), i = Math.min(n - 2, Math.floor(f)), t = f - i, p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    for (let c = 0; c < 2; c++) {   // Catmull-Rom: it passes through every point
+      const v = 0.5 * (2 * p1[c] + (p2[c] - p0[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t * t + (3 * p1[c] - p0[c] - 3 * p2[c] + p3[c]) * t * t * t);
+      out[k * 2 + c] = c ? v : mirror ? 1 - v : v;
+    }
+  }
+  return simPaths[key] = out;
+}
+const simY = () => lerp(dockY() - DOCK_TOP, dockY() - DOCK_TOP - SIM.lift, smooth(SIMS.rise));   // the projection rises out of the docked ship
+const simStageOf = wave => Math.max(0, Math.ceil(wave / BOSS_EVERY) - 1) % SIM.stages.length;
+function startSim() {
+  const stage = SIM.stages[simStageOf(G.wave)];
+  G.state = 'sim'; G.sim = true; recalc();   // the bare ship
+  Object.assign(SIMS, { on: true, hits: 0, total: stage.length * SIM.n, rise: 0, ended: false, doneT: 0, shield: P.shieldUp, reward: 0, perfect: false });
+  P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearSats(); ST.on = true; ST.y = dockY();
+  // the real ship stays docked; what the player flies is its projection
+  if (!simDock.ship) { simDock.ship = ship.clone(); scene.add(simDock.ship); }
+  simDock.ship.visible = true; simDock.ship.position.set(TX(P.x), TY(dockY() - DOCK_TOP), 0); simDock.ship.rotation.set(0, 0, 0);
+  simDock.ship.traverse(m => { if (m.isMesh && m.material === M.shield) m.visible = false; });
+  ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.material = M.holoShip; } });
+  G.queue = []; G.waveT = 0;
+  stage.forEach(([name, mirror], g) => { const path = simPath(name, mirror), kind = SIM_KINDS[g % SIM_KINDS.length];
+    for (let k = 0; k < SIM.n; k++) G.queue.push({ t: 1.5 + g * SIM.every + k * SIM.gap, fn: () => spawnHolo(kind, path) }); });
+  G.queue.sort((a, b) => a.t - b.t);
+  show(null); $('hud').hidden = false; drawHud(); SFX.card();
+  toast('SIMULATION', 'Holograms. Your own guns only: hit them all');
+}
+function spawnHolo(kind, path) {
+  const e = spawnEnemy(kind, null, null, { x: path[0] * W, y: path[1] * H });
+  e.holo = true; e.path = path; e.state = 'sim'; e.u = 0; e.hp = e.maxHp = 1; e.z = 0;
+  for (const m of e.meshes) m.material = m.userData.base = M.holo;
+}
+function updateHolo(e, dt) {
+  e.u += dt / SIM.dur; if (e.u >= 1) { despawn(e); return; }   // it has flown its line and gone
+  const f = e.u * SIM_STEPS, i = Math.min(SIM_STEPS - 1, Math.floor(f)), t = f - i, p = e.path, nx = lerp(p[i * 2], p[i * 2 + 2], t) * W;
+  e.vx = (nx - e.x) / Math.max(dt, 0.001); e.x = nx; e.y = lerp(p[i * 2 + 1], p[i * 2 + 3], t) * H; e.z = 0;
+}
+function simStep(dt) {
+  if (SIMS.rise < 1) SIMS.rise = Math.min(1, SIMS.rise + dt / 0.7);
+  if (!SIMS.ended) {
+    if (G.queue.length || G.enemies.length) return;
+    SIMS.ended = true; SIMS.doneT = SIM.hold; SIMS.perfect = SIMS.hits === SIMS.total;
+    SIMS.reward = Math.round(SIMS.hits * SIM.per) + (SIMS.perfect ? SIM.perfect : 0);
+    G.run.scrap += SIMS.reward; drawHud(); if (SIMS.reward) popScrap(); SFX.card();   // paid into the run's scrap, which docking banks (and a test run does not)
+    toast(SIMS.perfect ? 'PERFECT' : 'SIMULATION OVER', SIMS.hits + ' of ' + SIMS.total + ' hit · ◆ +' + SIMS.reward);
+  } else if ((SIMS.doneT -= dt) <= 0) { simOver(); arriveStation(); }
+}
+// Puts everything back as it was before the simulation: the ship's own look and its real stats. Safe to call at any time.
+function simOver() {
+  if (!SIMS.on) return;
+  SIMS.on = false; G.sim = false; recalc(); P.shieldUp = SIMS.shield; hudWas.wave = -1;
+  ship.traverse(m => { if (m.isMesh && m.userData.real) { m.material = m.userData.real; m.userData.real = null; } });
+  if (simDock.ship) simDock.ship.visible = false;
+  for (const e of G.enemies) if (e.holo && !e.dead) despawn(e);
+  G.pb.length = 0; P.y = dockY() - DOCK_TOP; P.x = W / 2; P.vx = 0; P.target = null;
+}
 function arriveStation() {
   if (G.test) G.newMod = null;   // a test run fits no module and banks no scrap
   else {
@@ -2259,6 +2361,7 @@ function syncScene(dt) {
   if (P.alive) ship.visible = P.inv <= 0 || G.state === 'cut' || Math.floor(G.time * 14) % 2 === 0;   // no hit-blink during cutscenes
   flame.scale.y = 12 + Math.sin(G.time * 40) * 3;
   shieldMesh.visible = P.shieldUp; M.shield.uniforms.time.value = G.time;
+  if (SIMS.on) M.holoShip.opacity = 0.72 + Math.sin(G.time * 31) * 0.1;   // the projection flickers a little
   // lights: a cool glow that travels with the ship, and the fading flash of the last explosion
   shipLight.position.set(TX(P.x), TY(P.y) + 6, 34); shipLight.intensity = P.alive && G.state !== 'title' && G.state !== 'browse' ? 9000 : 0;
   flashPower *= Math.max(0, 1 - 9 * realDt); flashLight.intensity = flashPower;   // real time, so a flash does not linger while game time runs slow
@@ -2384,7 +2487,8 @@ function drawHud() {
     hudEl.hull.innerHTML = h; hudEl.hull.setAttribute('aria-label', 'Hull ' + P.hp + ' of ' + S.maxHp);
   }
   if (sc !== hudWas.scrap) { hudWas.scrap = sc; hudEl.scrap.textContent = '◆ ' + sc; }
-  if (G.wave !== hudWas.wave) { hudWas.wave = G.wave; const b = isBossWave(G.wave) && bossFor(G.wave), label = b ? (window.innerWidth < 360 ? b.short : b.name).toUpperCase() : 'WAVE ' + Math.max(1, G.wave); hudEl.wave.textContent = label; hudEl.wave.classList.toggle('long', label.length > 10); }
+  const waveKey = G.sim ? 'sim' : G.wave;
+  if (waveKey !== hudWas.wave) { hudWas.wave = waveKey; const b = isBossWave(G.wave) && bossFor(G.wave), label = G.sim ? (window.innerWidth < 360 ? 'DRILL' : 'SIMULATION') : b ? (window.innerWidth < 360 ? b.short : b.name).toUpperCase() : 'WAVE ' + Math.max(1, G.wave); hudEl.wave.textContent = label; hudEl.wave.classList.toggle('long', label.length > 10); }
 }
 function popScrap() { const el = hudEl.scrap; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
 function loadoutHtml() {
@@ -2400,7 +2504,7 @@ function toggleMute() {
 }
 
 function resetField() {
-  FIN.on = FIN.toast = false; clearClouds(); clearSats(); introEnd();
+  FIN.on = FIN.toast = false; clearClouds(); clearSats(); introEnd(); simOver();
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; G.flights = 0; clearBoss();
@@ -2419,7 +2523,7 @@ function showTitle() {
 }
 // test: a run set up on the test bench. It starts on the wave and with the boosters chosen there, and nothing it
 // earns is saved. Only the test bench passes true (a button's click would pass its event, which is not true).
-function startRun(test) {
+function startRun(test, drill) {   // drill: a test run that goes straight into the simulation (the test bench's button)
   test = test === true;
   audioInit(); resetField();
   G.test = test; G.god = test && DBG.god; testMods = test ? DBG.mod : null; G.seen = {}; IN.cool = 0.4;
@@ -2430,6 +2534,7 @@ function startRun(test) {
   ship.visible = true; $('hud').hidden = false; drawHud();
   Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
+  if (test && drill === true) { G.wave = DBG.wave; startSim(); return; }
   if (mlv('head') && !test) openDraft('head');
   else { startCut('launch', nextWave); if (test) G.cut.t = G.cut.dur * 0.7; }   // a test run cuts most of the launch: it is run again and again
 }
@@ -2486,8 +2591,8 @@ function choose(i) {
 }
 function togglePause() {
   if (IN.on) return;   // the game is already stopped for an introduction
-  if (G.state === 'play' || G.state === 'clear') {
-    G.prev = G.state; G.state = 'pause'; $('pauseWave').textContent = 'Wave ' + G.wave; $('pauseLoadout').innerHTML = loadoutHtml(); show('scrPause', 'btnResume');
+  if (inPlay()) {
+    G.prev = G.state; G.state = 'pause'; $('pauseWave').textContent = G.prev === 'sim' ? 'Simulation' : 'Wave ' + G.wave; $('pauseLoadout').innerHTML = loadoutHtml(); show('scrPause', 'btnResume');
   } else if (G.state === 'pause') { G.state = G.prev; show(null); }
 }
 function endRun() {
@@ -2712,6 +2817,7 @@ $('dbgSeen').onclick = () => { meta.seen = {}; save(); SFX.buy(); drawDebug(); }
 $('dbgScrap').onclick = () => { meta.scrap += 1000; save(); SFX.buy(); drawDebug(); };
 $('dbgMods').onclick = () => { for (const m of SHOP) if (!meta.mods.includes(m.id)) meta.mods.push(m.id); save(); SFX.buy(); drawDebug(); };
 $('dbgGo').onclick = () => startRun(true);
+$('dbgSim').onclick = () => startRun(true, true);   // straight into the simulation that follows the boss on the wave chosen above (6, 12 and so on: each has its own lines)
 $('dbgBack').onclick = showTitle;
 { let taps = 0, first = 0; $('logo').addEventListener('click', () => { const now = performance.now(); if (!taps || now - first > 3000) { taps = 0; first = now; } if (++taps >= 5) { taps = 0; openDebug(); } }); }   // five taps within three seconds
 
@@ -2829,7 +2935,7 @@ $('fbSend').addEventListener('click', e => {
 
 // ---------- input ----------
 const keys = {};
-const inPlay = () => G.state === 'play' || G.state === 'clear';
+const inPlay = () => G.state === 'play' || G.state === 'clear' || G.state === 'sim';
 const typing = e => !!(e.target && /^(TEXTAREA|INPUT)$/.test(e.target.tagName));
 addEventListener('keydown', e => {
   if (typing(e)) return;               // letters typed into the feedback box are not game keys
@@ -2904,7 +3010,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, simPath, startSim, ST, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
