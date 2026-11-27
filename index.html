@@ -1053,7 +1053,7 @@ const LATCH = { fuse: 1.5, off: 15, flick: 50, flicks: 3, slamRun: 60, slamSpeed
 //   long straight run up or down one lane is one every hologram can be hit on. stages: five lines each, [path, mirrored].
 // lead: seconds before the first hologram, while the opening words are read.
 const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, lead: 3, per: 0.25, perfect: 10,
-  span: 740, clear: 70, split: 0.2, over: 60,   // how a path's heights are placed on the field: see simYAt()
+  span: 620, clear: 40, split: 0.2, over: 60,   // how a path's heights are placed on the field: see simYAt(). With the lines further from the ship (740 and 70) the fifth stage was only just possible: the bot cleared it 2 times in 6
   end: { card: 0.7, count: 1.3, beat: 0.55, wait: 0.35, out: 0.3, lift: 0.3 },   // the result card: seconds before it shows, the count-up for a full score, the beat between its lines, the least time before a touch carries on, its fade, and the wait after the finger lifts
   paths: {
     drop: [[0.5, -0.1], [0.5, 0.15], [0.5, 0.4], [0.5, 0.56], [0.36, 0.64], [0.2, 0.56], [0.14, 0.35], [0.14, 0.1], [0.14, -0.12]],
