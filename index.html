@@ -806,7 +806,7 @@ const ET = {
   weaver: { hp: 16, r: 11, speed: 135, scrap: 0.4, col: [0.65, 0.42, 1] },
   splitter: { hp: 28, r: 12, speed: 230, scrap: 0.5, col: [1, 0.48, 0.24] },
   triplet: { hp: 36, r: 13, speed: 205, scrap: 0.35, col: [0.24, 0.48, 1] },
-  beetle: { hp: 70, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71] },
+  beetle: { hp: 85, r: 15, speed: 75, scrap: 1, col: [0.18, 0.84, 0.71], missiles: 2, missileGap: 0.8 },   // stops partway down and launches its missiles, missileGap seconds apart
   lancer: { hp: 34, r: 12, scrap: 0.7, col: [1, 0.25, 0.35] },
   boss: { hp: 950, r: 34, col: [1, 0.31, 0.55], boss: true },      // the Hive Core
   cube: { hp: 1000, r: 36, col: [1, 0.6, 0.2], boss: true },        // the Fracture Cube: hp is all of its pieces together
@@ -879,6 +879,7 @@ const SKIP_SCRAP = 10;   // scrap for passing up a booster
 // How fast enemies fly into their places in the formation, and back to them after a dive. faster: the share
 // quicker each wave (the owner asked for 5%). max: it never gets quicker than this many times the wave-1 pace,
 // which it reaches on wave 31; past that the flight would be too quick to follow.
+const CLEAR = { wave: 2, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
 // second (a missile turns some thirty times as fast). total: all the turning one dart may ever do, about 6 degrees,
@@ -1105,7 +1106,7 @@ function launchDive(e) {
 function startDive(e) {
   e.state = 'dive'; e.t = 0; e.z = 0;
   e.vx = (e.x < W / 2 ? -1 : 1) * rand(40, 110) * (Math.random() < 0.7 ? 1 : -1); e.vy = -rand(60, 110);
-  e.shots = e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.type === 'beetle' ? 2 : 0; e.shootT = rand(0.3, 0.6);
+  e.shots = e.type === 'wasp' ? 2 + (G.wave > 8 ? 1 : 0) : e.def.missiles || 0; e.shootT = rand(0.3, 0.6);
 }
 // Dive while holding a lane: used where several enemies leave together and must arrive spread out.
 // Sends a released enemy out to its own lane, so a group spreads across the field. The lane is only for its first
@@ -1165,7 +1166,7 @@ function updateDive(e, dt) {
   if (e.type === 'beetle') {
     if (e.shots > 0 && e.y >= H * 0.38) {
       e.vy += (6 - e.vy) * Math.min(1, 4 * dt); e.vx += -e.vx * Math.min(1, 3 * dt); e.shootT -= dt;
-      if (e.shootT <= 0) { fireMissile(e.x, e.y + 12); e.shots--; e.shootT = 1.5; }
+      if (e.shootT <= 0) { fireMissile(e.x, e.y + 12); e.shots--; e.shootT = e.def.missileGap; }
     } else {
       e.vy = Math.min(e.shots > 0 ? sp : sp * 2.4, e.vy + 260 * dt);
       if (steer) e.vx += (clamp((P.x - e.x) * 0.8, -70, 70) - e.vx) * Math.min(1, 2 * dt);
@@ -1955,7 +1956,7 @@ function updateGame(dt) {
   updatePlayer(dt); updateClouds(dt); updateSats(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt); introScan(dt);
   sweepDead(G.enemies);
   if (G.boss) { const f = Math.round(clamp(bossLeft() / G.bossMax, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
-  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? 2 : 1.1; clearedToast(); }
+  if (G.state === 'play' && !G.queue.length && !G.enemies.length) { G.state = 'clear'; G.clearT = G.bossDown ? CLEAR.boss : CLEAR.wave; clearedToast(); }
   else if (G.state === 'clear') {
     G.clearT -= dt;
     if (G.clearT <= 0 && P.alive) {
@@ -2655,7 +2656,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, UNLOCK, BOSSES, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UNLOCK, BOSSES, CLEAR, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

@@ -50,6 +50,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `DRAFT_EVERY` and `BOSS_EVERY`: how often boosters and bosses come.
 - `BOSSES`: the bosses in the order they take turns. `CUBE`, `WARDEN`, `SIEGE` and `TRIAD`: each later boss's numbers.
 - `SKIP_SCRAP`: scrap for passing up a booster.
+- `CLEAR`: the seconds of quiet after a wave (2) and after a boss.
 - `ENTER`: how much faster enemies fly into the formation each wave, and the limit.
 - `FINALE`: a boss's death scene (length, how slow, how often the follow-up blasts come).
 

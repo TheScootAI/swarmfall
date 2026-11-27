@@ -61,6 +61,9 @@ const GROUPS = {
     await page.waitForTimeout(400); await shot('02-wave1');
     s = await playTo(x => x.state === 'clear' && x.wave === 1);
     check((await page.textContent('#toast')).includes('Booster shuttle arrives in 2 waves'), 'countdown text after wave 1');
+    // the quiet after a wave lasts 2 seconds (CLEAR.wave) before the next wave starts
+    const gap = await page.evaluate(() => { const s = window.__swarmfall; return { set: s.CLEAR.wave, left: s.G.clearT }; });
+    check(gap.set === 2 && gap.left > 1.3 && gap.left <= 2, 'the gap between waves is 2 seconds', 'CLEAR.wave ' + gap.set + ', ' + gap.left.toFixed(2) + ' s left when first seen');
 
     s = await playTo(x => x.state === 'cut' && x.cut === 'shuttle'); check(s.wave === 3, 'booster shuttle arrives after wave 3', 'wave ' + s.wave);
     await page.waitForTimeout(500); await page.touchscreen.tap(100, 500); await page.waitForTimeout(100);
@@ -134,6 +137,19 @@ const GROUPS = {
     const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
     // When each enemy first appears: build every wave 1-20 many times and record the first wave each type shows up.
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
+    // The beetle: 13 hits on the wave it arrives, and its two missiles leave 0.8 seconds apart (ET.beetle).
+    // This comes first: the wave-building below leaves thousands of models in the scene, and game time crawls after it.
+    const bt = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P } = s;
+      for (const e of G.enemies) e.dead = true; G.queue.length = 0; G.eb.length = 0; G.em.length = 0; G.wave = s.UNLOCK.beetle; G.state = 'play'; P.inv = 99;
+      const e = s.spawnEnemy('beetle', 0, 0, { x: 70, y: 140 }), out = { hits: Math.ceil(e.hp / 10), gap: null, fired: 0, set: s.ET.beetle.missileGap }, t0 = performance.now();
+      s.launchDive(e); e.x = 70; e.y = 250; e.vy = 60; let was = e.shots;   // it stops a little further down the screen
+      const tick = () => { P.inv = 99; e.hp = e.maxHp; G.queue.length = 0;
+        if (e.shots < was) { out.fired += was - e.shots; if (e.shots === 1) out.gap = e.shootT; was = e.shots; }
+        if (e.shots === 0 || e.dead || performance.now() - t0 > 15000) { out.started = was; return done(out); }
+        requestAnimationFrame(tick); };
+      requestAnimationFrame(tick); }));
+    check(bt.hits === 13, 'a beetle takes 13 hits on the wave it arrives', bt.hits + ' hits');
+    check(bt.fired === 2 && bt.set === 0.8 && bt.gap > 0.7 && bt.gap <= 0.8, 'a beetle launches two missiles 0.8 seconds apart', JSON.stringify(bt));
     const first = await page.evaluate(() => { const s = window.__swarmfall, first = {};
       for (let w = 1; w <= 31; w++) for (let k = 0; k < 30; k++) {
         for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0;
@@ -543,7 +559,7 @@ const GROUPS = {
 };
 const ABOUT = {
   core: 'a whole run: launch, shuttle, booster, Hive Core and its death scene, docking, station, death, reload',
-  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses',
+  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses, the beetle\'s numbers',
   bosses: 'the four later bosses: attacks, special rules, docking; the station\'s bottom bar',
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',

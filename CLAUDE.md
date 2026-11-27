@@ -32,6 +32,8 @@ These came from playtesting feedback; keep them unless the owner says otherwise.
 - **Released ships must not fly in straight lines.** Ships a boss releases spread to lanes on their first pass, then each comes back from a new place, at its own pace, weaving, and aiming a little off the ship (`looseFlight`). The owner: "they need a little randomness to their flights".
 - **Sound must survive a pause.** The owner lost sound after pausing. Two guards: the sound switch is no longer beside Resume on the pause screen, and `audioInit()` restarts audio that a phone stopped or left silently stuck while the page was away (`audioStale`). This cannot be tested without a real phone.
 - **Waves gather faster as they go.** Enemies fly into the formation 5% faster each wave (`ENTER`), levelling off at 2.5 times the first wave's pace.
+- **Two seconds between waves.** After a wave's last enemy goes, the next wave waits 2 seconds (`CLEAR.wave`; the owner asked for 2, up from 1.1). `CLEAR.boss` is the same wait after a boss, before docking.
+- **The beetle is a threat.** The owner asked for the ordinary beetle to be "a bit tougher" and to "shoot its missiles quicker": 85 health (13 hits on wave 10) and its two missiles 0.8 seconds apart (`missiles`, `missileGap` in `ET.beetle`).
 - **Pacing.** A booster shuttle comes after every 3rd wave (`DRAFT_EVERY`) and a boss on every 6th (`BOSS_EVERY`). After each boss the ship docks and gets the next station module (`UNLOCK_ORDER`).
 - **Five bosses take turns** (`BOSSES`): the Hive Core on wave 6, the Fracture Cube on 12, the Beam Warden on 18, the Siege Beetle on 24, the Triad on 30, then round again, tougher. Each is built on an enemy the player has already met (splitter, lancer, beetle, triplet). The laser boss comes third because the owner set lancers to arrive at wave 15, so players have met lasers first.
 - **Cutscenes always play out.** A touch or a key never skips the launch, the shuttle or the docking scene, because a player steering by touch has a finger on the screen as each one starts. (The launch could be skipped at first; the owner asked for that to stop.)
@@ -48,7 +50,7 @@ The script is split into sections, each marked with a `// ---------- name ------
 | save | `meta`: scrap, records, mute, the graphics setting (`meta.gfx`, `meta.autoQ`), bought modules (`meta.up`) and fitted modules (`meta.mods`), all in localStorage. |
 | audio | Web Audio synth: `tone()`, `noise()` and the `SFX` table. Phone unlock tricks are in `audioInit()`. |
 | three.js stage | Renderer, lights and the reflection environment, `geo` and `M` (shared geometries and materials), the nebula backdrop, stars, particles (`burst`), effect pools (`ringFx`, `zapFx`), instanced shots, the player ship, station and shuttle models, post-processing (`draw()`, `GFX`), `resize()`. |
-| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`, `ENTER` (how fast enemies fly into formation), `DART`, `CLOUD` (the gas and flame cloud boosters), `SENTRY` (the satellites), `LASER` (the Laser Drone), `BOSSES` and each boss's table, `FINALE`. |
+| game data | Every tuning table: `ET` (enemies), `UNLOCK` (when each enemy arrives), `UP` (boosters), `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER` (station modules), `SKIP_SCRAP`, `CLEAR` (the wait after a wave), `ENTER` (how fast enemies fly into formation), `DART`, `CLOUD` (the gas and flame cloud boosters), `SENTRY` (the satellites), `LASER` (the Laser Drone), `BOSSES` and each boss's table, `FINALE`. |
 | game state | `G` (the run), `P` (the ship), `S` (stats derived by `recalc()`). |
 | enemies | Models, spawning, formation slots, entry paths, dives, missiles, lancers, the five bosses (`spawnBoss`, `updateBoss`, then `updateCore`, `updateCube`, `updateWarden`, `updateSiege`, `updateTriad`), and `buildWave()`. |
 | player | Ship hit shape (`shipHit`), shields, shots, seekers, sentry satellites (`sats`, `updateSats`), the Laser Drone (`updateLaser`), the cloud boosters (`launchCloud`, `updateClouds`, `afflicted` for a burning enemy, `confuse` and `updateRam` for a confused one), picking up scrap. |
@@ -94,7 +96,7 @@ A hidden screen the owner uses to try things on their phone. Open it from the ti
   - The Beam Warden's beams are `e.bm` and `e.beams`, not `e.laser`: that field marks a lancer everywhere.
 - **Two clocks.** `frame()` passes game time (`dt`) to everything. It runs slow during a boss's death scene (`G.speed` is below 1). Anything that must keep real pace, such as shake fading or a scene's own timer, uses `realDt`. The camera is placed afresh every frame in `syncScene()` from `camBase`; never set its position anywhere else.
 - **Graphics.** See the next section before touching anything that is drawn.
-- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `UNLOCK`, `BOSSES`, `SIEGE`, `DART`, `CLOUD`, `SENTRY`, `LASER`, `SH`, `sats`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
+- **Debug handle.** `window.__swarmfall` exposes `G`, `P`, `S`, `meta`, `ET`, `UNLOCK`, `BOSSES`, `CLEAR`, `SIEGE`, `DART`, `CLOUD`, `SENTRY`, `LASER`, `SH`, `sats`, `clouds`, `launchCloud`, `GFX`, `FIN`, `camera`, `scene`, `recalc`, `nextWave`, `spawnEnemy`, `launchDive`, `fireMissile` and `spawnPick` for tests and the browser console. The game itself never uses it.
 - **Writing for players.** Plain words, phone-sized lines. Every new enemy and boss gets an introduction: two short lines in `INTRO_TEXT` (what it does, then what to do about it), and for an ordinary enemy its name in `INTRO_NAME`. `hint()` is still used for things that are not enemies (scrap, repair, missiles).
 
 ## Graphics
@@ -134,8 +136,8 @@ node shots.js <dir> "gfx=high"       # fixed pictures for judging the look by ey
 
 | Group | Seconds | What it covers |
 |---|---|---|
-| `core` | 40 | A whole run: launch, the booster shuttle and its hold, a booster and the hand-over, the Hive Core and its death scene, the scrap shower, docking, the station, death, reload. |
-| `waves` | 10 | Each enemy first appears on the wave `UNLOCK` says; how fast they fly in; the order of the bosses. |
+| `core` | 45 | A whole run: launch, the 2-second wait between waves, the booster shuttle and its hold, a booster and the hand-over, the Hive Core and its death scene, the scrap shower, docking, the station, death, reload. |
+| `waves` | 10 | Each enemy first appears on the wave `UNLOCK` says; how fast they fly in; the order of the bosses; the beetle's health and the time between its missiles. |
 | `bosses` | 180 | The Fracture Cube, Beam Warden, Siege Beetle and Triad: each arrives on its wave, every attack happens, its special rules hold, and destroying it leads to docking and a new module. Also the station's bottom bar and "More below". |
 | `clouds` | 40 | Flame Cloud weakens and never destroys; a confused enemy chases and rams, with no new weapon; clouds go into the lanes; a dart leans a little and a sidestep clears it. |
 | `released` | 30 | Ships a boss releases: lanes on the first pass, then new places, paces and lines. |
