@@ -1156,8 +1156,7 @@ const fireDart = (x, y, ang) => fireE(x, y, ang, ebSpeed() * 1.4, 3.4, 1);
 // a missile: starts slow, speeds up and turns toward the ship until it has gone past. Player shots destroy it.
 function fireMissile(x, y) {
   if (G.em.length >= EM_MAX) return;
-  G.em.push({ x, y, vx: rand(-25, 25), vy: 55, t: 0, dead: false }); SFX.missile();
-  hint('missile', 6, 'MISSILE', 'It follows you. Shoot it down or slip past it');
+  G.em.push({ x, y, vx: rand(-25, 25), vy: 55, t: 0, dead: false }); SFX.missile();   // the first one a player meets is introduced like a new enemy (INTRO_TEXT)
 }
 function popMissile(m, big) { m.dead = true; burst(m.x, m.y, ENEMY_RED_RGB, big ? 12 : 8, big ? 150 : 90, big ? 0.4 : 0.35); }
 function updateMissiles(dt) {
@@ -1553,7 +1552,7 @@ function spawnPick(kind, x, y, worth = 1) {
   const p = { kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU), sp: 1, worth, big };   // sp: how fast it flies to the ship when the field is swept, as a share of full speed
   G.picks.push(p);
   if (G.bossDown) return p;   // the post-boss shower of scrap is no time for a lesson
-  if (kind === 'heart') hint(kind, 3, 'REPAIR', 'Fly into the green cross to restore 1 hull'); else hint(kind, 3, 'SCRAP', 'Fly into the gold rings to collect them');
+  if (kind === 'heart') hint(kind, 3, 'REPAIR', 'Fly into the green cross to restore 1 hull');   // scrap is introduced like a new enemy (INTRO_TEXT)
   return p;
 }
 function killEnemy(e) {
@@ -2424,8 +2423,15 @@ const INTRO_TEXT = {
   warden: ['Stops, then fires a fan of laser beams down the screen.', 'Stand between the thin red lines.'],
   siege: ['Its shell stops most shots. It marks a lane, then charges down it.', 'Step aside, then hit it while its shell is open.'],
   triad: ['Three cores circling one centre.', 'Each one you destroy makes the others faster.'],
+  // not enemies, but introduced the same way, at the owner's request: the first scrap ring and the first missile
+  scrap: ['A gold ring in a blue glow is scrap.', 'Fly into it. Scrap buys upgrades at the station.'],
+  missile: ['A homing missile. It turns to follow you.', 'Shoot it down, or slip past it.'],
 };
-const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer' };   // bosses take theirs from BOSSES
+const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer', scrap: 'Scrap', missile: 'Missile' };   // bosses take theirs from BOSSES
+const INTRO_KIND = { scrap: 'Salvage', missile: 'New threat' };   // the small heading, where 'New enemy' would be wrong
+// The thing a card is about: an enemy of that kind, or the first scrap ring or missile on the field.
+const introFind = key => key === 'scrap' ? G.picks.find(p => p.kind === 'scrap') : key === 'missile' ? G.em.find(m => !m.dead) : G.enemies.find(e => !e.dead && (key === 'elite' ? e.elite : e.type === key));
+const introGone = (key, e) => !e || (key === 'scrap' ? !G.picks.includes(e) : e.dead);
 const introOff = new URLSearchParams(location.search).get('intro') === 'off';   // the tests switch them off with ?intro=off
 const IN = { on: false, phase: '', t: 0, key: '', e: null, cool: 0 }, introV = new THREE.Vector3();
 const introSeen = () => G.test ? G.seen : meta.seen;   // a test run keeps its own list and leaves the save alone
@@ -2441,6 +2447,9 @@ function introScan(dt) {
     const key = !seen[e.type] ? e.type : e.elite && !seen.elite ? 'elite' : '';
     if (key && INTRO_TEXT[key]) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = key; IN.e = e; return; }
   }
+  // then the first missile, once it is clear of whatever launched it, and the first scrap ring, once it has stopped rising
+  if (!seen.missile) for (const m of G.em) if (!m.dead && m.t > 0.3 && m.y < P.y - 120) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = 'missile'; IN.e = m; return; }
+  if (!seen.scrap) for (const p of G.picks) if (p.kind === 'scrap' && p.vy >= 0 && p.y < P.y - 120) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = 'scrap'; IN.e = p; return; }
 }
 // Puts the spotlight, ring and card where the enemy is on screen.
 function introPlace() {
@@ -2448,7 +2457,7 @@ function introPlace() {
   const cx = e.hub ? e.hub.x : e.x, cy = e.hub ? e.hub.y : e.y;
   introV.set(TX(cx), TY(cy), 0).project(camera);
   const vw = window.innerWidth, vh = window.innerHeight, px = (introV.x * 0.5 + 0.5) * vw, py = (0.5 - introV.y * 0.5) * vh;
-  const r = Math.round(((e.hub ? TRIAD.orbit : 0) + e.rad + 14) / unitsPerPx), ring = $('introRing'), card = $('introCard');
+  const r = Math.round(((e.hub ? TRIAD.orbit : 0) + (e.rad || 12) + 14) / unitsPerPx), ring = $('introRing'), card = $('introCard');
   ring.style.left = px + 'px'; ring.style.top = py + 'px'; ring.style.width = ring.style.height = r * 2 + 'px';
   $('intro').style.background = 'radial-gradient(circle at ' + px + 'px ' + py + 'px, rgba(8,11,31,0) ' + r + 'px, rgba(8,11,31,.66) ' + (r + 46) + 'px)';
   const h = card.offsetHeight, below = py + r + 22;
@@ -2456,14 +2465,14 @@ function introPlace() {
 }
 function introShow() {
   const key = IN.key, seen = introSeen();
-  if (!IN.e || IN.e.dead) IN.e = G.enemies.find(e => !e.dead && (key === 'elite' ? e.elite : e.type === key)) || null;   // the one first seen has gone: show another of its kind
+  if (introGone(key, IN.e)) IN.e = introFind(key) || null;   // the one first seen has gone: show another of its kind
   seen[key] = true; if (!G.test) save();
   if (!IN.e) { introEnd(); return; }
   const boss = BOSSES.find(b => b.type === key), text = INTRO_TEXT[key];
-  $('introKind').textContent = boss ? 'New boss' : 'New enemy'; $('introName').textContent = boss ? boss.name : INTRO_NAME[key]; $('introA').textContent = text[0]; $('introB').textContent = text[1];
+  $('introKind').textContent = boss ? 'New boss' : INTRO_KIND[key] || 'New enemy'; $('introName').textContent = boss ? boss.name : INTRO_NAME[key]; $('introA').textContent = text[0]; $('introB').textContent = text[1];
   $('introGo').textContent = finePointer ? 'Click to continue' : 'Tap to continue';
   $('intro').hidden = false; introPlace(); $('intro').offsetWidth; $('intro').classList.add('on');   // reading its width makes the fade-in start from clear
-  restoreMats(IN.e); IN.e.flash = 0;   // not caught white in the middle of a hit-blink
+  if (IN.e.def) { restoreMats(IN.e); IN.e.flash = 0; }   // an enemy is not caught white in the middle of a hit-blink
   IN.phase = 'hold'; IN.t = 0; SFX.card();
 }
 // The player's fresh touch (or click, or key): carry on.
