@@ -979,7 +979,8 @@ const SENTRY = {
 // Laser Drone, by level: every is the seconds between beams, on how long a beam lasts, dps its damage a second
 // (× your shot damage) to everything in its lane. half: half the beam's width. side: how far out from the ship it flies.
 // relock: the drone's rest between one target and the next (0.35 at first; the owner asked for "a little longer cooldown between shots", then for another second)
-const LASER = { dps: [0.9, 1.3, 1.7], burn: 2, relock: 2, range: 900, width: 2.2, side: 24 };
+// missile: seconds of beam it takes to burn a missile out of the air, by level
+const LASER = { dps: [0.9, 1.3, 1.7], burn: 2, relock: 2, missile: [0.45, 0.35, 0.25], range: 900, width: 2.2, side: 24 };
 const enterPace = () => Math.min(ENTER.max, 1 + ENTER.faster * (Math.max(1, G.wave) - 1));
 // A boss's death scene (the Hive Core, the last piece of the Fracture Cube, the Beam Warden): time slows and
 // smaller blasts follow the first, then time eases back. The camera does not move: the owner tried a push-in
@@ -1012,7 +1013,7 @@ const UP = [
   { id: 'flame', c: 'w', n: 'Flame Cloud', r: 1, max: 3, d: 'Lob a cloud of flame ahead of your ship. Enemies that fly through it burn slowly.' },
   { id: 'scav', c: 's', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
   { id: 'sentry', c: 's', n: 'Sentry Satellite', r: 1, max: 3, d: 'Deploy a satellite that fires at the swarm. It can be shot down, and it runs out after a while.' },
-  { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing locks a thin laser onto an enemy in flight and sets it alight. It burns until it is destroyed.' },
+  { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing locks a thin laser onto an enemy or a missile in flight and burns it up.' },
   { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
   { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
   { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
@@ -1856,7 +1857,9 @@ function updateSats(dt) {
 // wants that one shaken off, not burned off. The beam sets it alight, and the fire is what hurts it:
 // LASER.dps of a shot every second, for as long as the beam is on it and for LASER.burn seconds after. Unlike a
 // Flame Cloud's, this fire does finish an enemy off.
-const inFlight = e => e.state === 'dive' || e.state === 'ram';
+// A missile is a target too (the owner: "should target missiles"): held in the beam for LASER.missile seconds, it
+// burns up. An enemy has a `def`; a missile has none, and is in flight for as long as it exists.
+const inFlight = e => !e.def || e.state === 'dive' || e.state === 'ram';
 function updateLaser(dt) {
   const lv = Math.min(3, S.beam);
   if (!lv || G.state !== 'play') { P.las = null; return; }
@@ -1871,11 +1874,16 @@ function updateLaser(dt) {
   if (!t) {
     P.lasT -= dt; if (P.lasT > 0) return;
     let bd = LASER.range * LASER.range; for (const e of G.enemies) { if (e.dead || e.z < -60 || !inFlight(e)) continue; const q = (e.x - P.x) ** 2 + (e.y - P.y) ** 2; if (q < bd) { bd = q; t = e; } }
+    for (const m of G.em) { if (m.dead) continue; const q = (m.x - P.x) ** 2 + (m.y - P.y) ** 2; if (q < bd) { bd = q; t = m; } }   // or a missile, if one is nearer
     if (!t) { P.lasT = 0.15; return; }   // nothing in flight: look again shortly
     P.las = t;
     SFX.lase();
   }
-  t.lit = LASER.burn;
+  if (t.def) t.lit = LASER.burn;
+  else {   // a missile: it cooks in the beam, then bursts
+    t.heat = (t.heat || 0) + dt; if (Math.random() < 0.8) burst(t.x + rand(-3, 3), t.y, FLAME_RGB, 2, 48, 0.4);
+    if (t.heat >= LASER.missile[lv - 1]) popMissile(t, true);
+  }
 }
 
 // ---- clouds (Confusion Gas and Flame Cloud) ----
