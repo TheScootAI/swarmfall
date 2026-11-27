@@ -303,6 +303,14 @@ const GROUPS = {
     // the bosses take turns, in the order of the BOSSES table: one every 6th wave
     const order = await page.evaluate(() => window.__swarmfall.BOSSES.map(b => b.type));
     check(order.every((type, i) => first[type] === 6 * (i + 1)) && order.length === 5, 'bosses arrive in turn on waves 6, 12, 18, 24 and 30', order.map(type => type + ' ' + first[type]).join(', '));
+    // A boss's sweep across the top: not the same line every time. Three sweeps are run a minute and a half each.
+    const sw = await page.evaluate(() => { const s = window.__swarmfall, run = () => { const o = {}, xs = []; let fast = 0, last = null, min = 1e9, max = -1e9, first = 0;
+        for (let i = 0; i < 5400; i++) { const x = s.bossSway(o, 1 / 60, 0.55, 116); if (last === null) first = x; else fast = Math.max(fast, Math.abs(x - last) * 60); last = x; min = Math.min(min, x); max = Math.max(max, x); if (i % 30 === 0) xs.push(x); }
+        return { xs, fast, min, max, first }; };
+      const a = run(), b = run(), c = run(), apart = (p, q) => Math.max(...p.xs.map((x, i) => Math.abs(x - q.xs[i])));
+      return { first: [a, b, c].map(r => Math.round(r.first)), min: Math.round(Math.min(a.min, b.min, c.min)), max: Math.round(Math.max(a.max, b.max, c.max)), fast: Math.round(Math.max(a.fast, b.fast, c.fast)), apart: [apart(a, b), apart(a, c), apart(b, c)].map(Math.round), bothSides: [a, b, c].every(r => r.min < 160 && r.max > 200) }; });
+    check(sw.first.every(x => Math.abs(x - 180) <= 2) && sw.min >= 64 && sw.max <= 296 && sw.fast < 120 && sw.bothSides, 'a boss\'s sweep starts from the middle, keeps to its own stretch of the top, visits both sides and never outruns the ship', JSON.stringify(sw));
+    check(sw.apart.every(d => d > 60), 'and it is a different sweep every time: three of them end up far apart', JSON.stringify(sw.apart));
     await page.context().close();
   },
   // The Fracture Cube, Beam Warden, Siege Beetle and Triad: every attack, their special rules, docking after each; the station's bottom bar.
@@ -627,6 +635,22 @@ const GROUPS = {
       for (const [m, b] of [[0, 2], [1, 1], [1, 2], [0, 1], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
       s.meta.up.hull = was; s.G.up = {}; s.recalc(); out.max = plate.max; const shopHull = s.SHOP.find(x => x.id === 'hull'); out.levels = shopHull.cost.length; out.price = shopHull.cost[0]; return out; });
     check(hull['0+2'] === '3 full' && hull['1+1'] === '3 full' && hull['1+2'] === '3 full' && hull['0+1'] === '2 more' && hull['1+0'] === '2 more' && hull.max === 2 && hull.levels === 1 && hull.price === 90, 'hull: at most 2 upgrades, of which the station sells one (for 90); Hull Plate is not offered past the two', JSON.stringify(hull));
+    // Split Barrel: extra shots on every third volley, then two extra on every other volley, then two extra on every volley.
+    // Each volley is counted by itself, on a ship with one barrel and on one with the Twin Mount's two.
+    const sb = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, { G, P, S } = s, was = s.meta.up.twin, out = { state: G.state, text: s.UP.find(u => u.id === 'twin').d };
+      for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0;
+      const guard = s.spawnEnemy('mite', 0, 0); guard.hp = guard.maxHp = 1e12; P.target = 300;   // keeps the wave from counting as cleared, well away from the shots
+      const runs = []; for (const mount of [0, 1]) for (let lv = 0; lv <= 3; lv++) runs.push([mount, lv]);
+      let i = -1, n0 = 0, seen = null, t0 = performance.now();
+      const next = () => { i++; if (i >= runs.length) { s.meta.up.twin = was; G.up = {}; s.recalc(); return res(out); } s.meta.up.twin = runs[i][0]; G.up = runs[i][1] ? { twin: runs[i][1] } : {}; s.recalc(); P.volley = 0; G.pb.length = 0; n0 = 0; seen = []; out[runs[i].join('+')] = seen; P.fireT = 0; };
+      next();
+      (function f() { G.diveT = 99; G.shootT = 99; G.eb.length = 0; P.inv = 9; guard.hp = 1e12;
+        if (performance.now() - t0 > 20000) { out.timeout = i; return res(out); }
+        if (G.pb.length > n0) { seen.push(G.pb.length - n0); n0 = G.pb.length; if (seen.length === 6) next(); else P.fireT = 0; }
+        requestAnimationFrame(f); })(); }));
+    const six = a => (a || []).join('');
+    check(sb.state === 'play' && six(sb['0+0']) === '111111' && six(sb['0+1']) === '112112' && six(sb['0+2']) === '131313' && six(sb['0+3']) === '333333', 'Split Barrel: one extra shot on every third volley, then three shots on every other volley, then three on every volley', JSON.stringify({ none: six(sb['0+0']), lv1: six(sb['0+1']), lv2: six(sb['0+2']), lv3: six(sb['0+3']) }));
+    check(six(sb['1+0']) === '222222' && six(sb['1+1']) === '223223' && six(sb['1+2']) === '242424' && six(sb['1+3']) === '444444' && Array.isArray(sb.text) && sb.text.length === 3, 'with the Twin Mount its extra shots are added to two barrels; its card has a line for each level', JSON.stringify({ none: six(sb['1+0']), lv1: six(sb['1+1']), lv2: six(sb['1+2']), lv3: six(sb['1+3']) }));
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
@@ -808,13 +832,13 @@ const GROUPS = {
 };
 const ABOUT = {
   core: 'a whole run: launch, shuttle, booster, Hive Core and its death scene, docking, station, death, reload',
-  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses, the beetle\'s numbers, escorts, reinforcements',
+  waves: 'which enemy arrives on which wave, how fast they fly in, the order of the bosses, the beetle\'s numbers, escorts, reinforcements, a boss\'s sweep',
   bosses: 'the four later bosses: attacks, special rules, docking; the station\'s bottom bar',
   clouds: 'Flame Cloud, Confusion Gas, darts',
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
   latcher: 'the latcher: leaping by itself, clamping on, going off, shaken off, slammed off; the shield; no harm by touch',
-  stress: 'Volatile Payload in a full formation; the hull cap; every booster at once on late waves; pause; the Graphics button',
+  stress: 'Volatile Payload in a full formation; the hull cap; Split Barrel\'s three levels; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',
   bench: 'the test bench and test runs',
   intro: 'enemy introductions, and the same for the first scrap ring, repair cross and missile',

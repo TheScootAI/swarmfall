@@ -928,6 +928,12 @@ const SCRAP_RATE = 0.5;
 // that a blast destroys sets off no blast of its own: at levels 2 and 3 that chain cleared the whole formation.
 // chance: how often a destroyed enemy explodes at all (every time at first; the owner asked for 25%).
 const BLAST = { chance: 0.25, r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
+// Split Barrel, by level: on every `every`th volley the ship fires `add` extra shots. The owner's levels: "an extra
+// bullet every third shot. Then every other shot with three bullets, then every shot with three bullets."
+const SPLIT = [null, { every: 3, add: 1 }, { every: 2, add: 2 }, { every: 1, add: 2 }];
+// A boss's sweep across the top (bossSway): its pace and its reach are each a share of the boss's own, drawn afresh
+// every `every` seconds; `turn` is the chance it also turns back; `ease` is how quickly it takes up the new ones.
+const SWAY = { pace: [0.6, 1.4], reach: [0.55, 1], every: [1.6, 3.6], turn: 0.3, ease: 1.2 };
 // Escorts: when a stronger enemy leaves the formation, more often than not a few mites leave with it and fly just
 // ahead of it as pawns (the owner wanted it for wasps and the others as much as for beetles, and from wave 2). chance and n: how often, and how many, by the kind they escort (a beetle most of all: its three form a
 // wall in front of it while it stops to launch its missiles). ahead: how far in front of it they fly; gap: how far
@@ -1010,7 +1016,7 @@ const UP = [
   { id: 'velocity', c: 'w', n: 'Rail Coils', r: 0, max: 4, d: '+25% shot speed and +10% damage.' },
   { id: 'magnet', c: 's', n: 'Tractor Field', r: 0, max: 3, d: 'Pull scrap in from much farther away.' },
   { id: 'patch', c: 'a', n: 'Patch Kit', r: 0, max: 99, d: 'Repair 2 hull now.', ok: () => P.hp < S.maxHp },
-  { id: 'twin', c: 'w', n: 'Split Barrel', r: 1, max: 3, d: '+1 shot in every volley.' },
+  { id: 'twin', c: 'w', n: 'Split Barrel', r: 1, max: 3, d: ['Every 3rd volley fires 1 extra shot.', 'Every other volley fires 2 extra shots.', 'Every volley fires 2 extra shots.'] },   // a booster whose levels differ says what the next level does (numbers in SPLIT)
   { id: 'pierce', c: 'w', n: 'Piercing Core', r: 1, max: 3, d: 'Shots pass through 1 more enemy.' },
   { id: 'shield', c: 'h', n: 'Aegis Shell', r: 1, max: 3, d: 'A shield absorbs one hit, then recharges. More levels recharge faster.' },
   { id: 'drone', c: 's', n: 'Wing Drone', r: 1, max: 3, d: 'A drone orbits your ship and fires with you.' },
@@ -1067,14 +1073,14 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
   form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, repairs: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
-const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
+const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, volley: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
 const ulv = id => G.up[id] || 0;
 function recalc() {
   const od = ulv('over');
   S.dmg = 10 * (1 + 0.1 * mlv('dmg')) * (1 + 0.25 * ulv('heavy')) * (1 + 0.1 * ulv('velocity')) * (1 + 0.2 * od);
   S.shotSpeed = 366 * (1 + 0.08 * mlv('speed')) * (1 + 0.25 * ulv('velocity'));
-  S.shots = 1 + mlv('twin') + ulv('twin'); S.pierce = ulv('pierce'); S.rico = ulv('rico');
+  S.shots = 1 + mlv('twin'); S.split = Math.min(SPLIT.length - 1, ulv('twin')); S.pierce = ulv('pierce'); S.rico = ulv('rico');
   S.move = 240 * (1 + 0.15 * ulv('thrust'));
   S.maxHp = Math.max(1, 1 + Math.min(HULL_UPGRADES, mlv('hull') + ulv('plate')) - od);   // a new ship has 1 hull: one hit ends the run until hull is added
   S.rate = 2.75 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
@@ -1362,6 +1368,19 @@ function updateLatch(e, dt) {
 }
 // How far round the list of bosses this one is: 0 the first time each is met, 1 the second, and so on.
 const bossLv = e => Math.min(4, Math.floor((e.tier - 1) / BOSSES.length));
+// How a boss crosses the top of the field. It used to be the same sweep every time, and the owner noticed: "the hive
+// core and maybe other bosses always follow the same path. Add a little randomness to it." So the sweep is still a
+// swing from side to side, but it sets off left or right by chance, and every couple of seconds it takes a new pace,
+// a new reach, and now and then turns back early (SWAY). `o` is the boss, or the Triad's hub; `rate` and `reach` are
+// its own sweep's pace and half-width. It starts from the middle, where every entrance ends.
+function bossSway(o, dt, rate, reach) {
+  if (o.sw === undefined) { o.sw = 0; o.swV = 0; o.swTo = (Math.random() < 0.5 ? -1 : 1) * rand(SWAY.pace[0], SWAY.pace[1]); o.swR = o.swRTo = rand(SWAY.reach[0], SWAY.reach[1]); o.swT = rand(SWAY.every[0], SWAY.every[1]); }
+  o.swT -= dt;
+  if (o.swT <= 0) { o.swT = rand(SWAY.every[0], SWAY.every[1]); o.swTo = (o.swTo < 0 ? -1 : 1) * (Math.random() < SWAY.turn ? -1 : 1) * rand(SWAY.pace[0], SWAY.pace[1]); o.swRTo = rand(SWAY.reach[0], SWAY.reach[1]); }
+  const k = Math.min(1, SWAY.ease * dt); o.swV += (o.swTo - o.swV) * k; o.swR += (o.swRTo - o.swR) * k;
+  o.sw += dt * rate * o.swV;
+  return W / 2 + Math.sin(o.sw) * reach * o.swR;
+}
 function spawnBoss(tier) {
   const B = bossFor(G.wave), mul = (1 + 0.55 * (tier - 1)) * Math.pow(1.2, tier - 1), cube = B.type === 'cube';
   G.bossMax = ET[B.type].hp * mul; $('bossbar').hidden = false; SFX.warn();
@@ -1409,7 +1428,7 @@ function updateSiege(e, dt) {
   const Q = SIEGE, lv = bossLv(e), rage = e.hp < e.maxHp * 0.35;
   e.open += ((e.mode === 'back' || e.mode === 'open' ? 1 : 0) - e.open) * Math.min(1, 8 * dt);
   if (e.mode === 'guard') {
-    e.t += dt; e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y += (130 + Math.sin(e.t * 1.1) * 12 - e.y) * Math.min(1, 6 * dt);
+    e.t += dt; e.x = bossSway(e, dt, 0.5, W / 2 - 70); e.y += (130 + Math.sin(e.t * 1.1) * 12 - e.y) * Math.min(1, 6 * dt);
     if (e.salvo > 0) { e.salvoT -= dt; if (e.salvoT <= 0) { fireMissile(e.x + (e.salvo % 2 ? -30 : 30), e.y + 8); e.salvo--; e.salvoT = Q.salvoGap; } return; }
     e.atkT -= dt * (rage ? 1.4 : 1);
     if (e.atkT > 0) return;
@@ -1434,7 +1453,7 @@ function updateSiege(e, dt) {
     }
   } else {
     e.pt -= dt; e.x += (clamp(e.x, 70, W - 70) - e.x) * Math.min(1, 3 * dt);   // drifts back inside its sway while it hangs open
-    if (e.pt <= 0) { e.mode = 'guard'; e.atkT = 0.7; e.t = Math.asin(clamp((e.x - W / 2) / (W / 2 - 70), -1, 1)) / 0.5; }   // the sway picks up from where it is
+    if (e.pt <= 0) { e.mode = 'guard'; e.atkT = 0.7; e.swR = e.swRTo = Math.max(e.swR, Math.abs(e.x - W / 2) / (W / 2 - 70)); e.sw = Math.asin(clamp((e.x - W / 2) / ((W / 2 - 70) * e.swR), -1, 1)); }   // the sway picks up from where it is
   }
 }
 
@@ -1473,7 +1492,7 @@ function updateTriad(e, dt) {
     h.stamp = G.time; let alive = 0; for (const o of G.enemies) if (!o.dead && o.hub === h) alive++; h.alive = alive;
     h.ang += (T.spin + T.spinMore * (3 - alive)) * dt;
     if (h.intro > 0) { h.intro -= dt; const k = smooth(clamp(1 - h.intro / 2.6, 0, 1)); h.x = W / 2; h.y = lerp(-90, 150, k); h.z = lerp(-420, 0, k); h.t = 0; }
-    else { h.t += dt; h.x = W / 2 + Math.sin(h.t * 0.45) * (W / 2 - 96); h.y = 150 + Math.sin(h.t) * 12; h.z = 0; triadAttack(h, dt); }
+    else { h.t += dt; h.x = bossSway(h, dt, 0.45, W / 2 - 96); h.y = 150 + Math.sin(h.t) * 12; h.z = 0; triadAttack(h, dt); }
   }
   e.oa = h.ang + e.slot * TAU / 3; e.x = h.x + Math.cos(e.oa) * T.orbit; e.y = h.y + Math.sin(e.oa) * T.orbit; e.z = h.z;
 }
@@ -1484,7 +1503,7 @@ function updateTriad(e, dt) {
 function updateCube(e, dt) {
   e.t += dt; if (e.born > 0) e.born -= dt;
   const lv = bossLv(e);
-  if (e.gen === 0) { e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y = 130 + Math.sin(e.t * 1.1) * 14; }
+  if (e.gen === 0) { e.x = bossSway(e, dt, 0.5, W / 2 - 70); e.y = 130 + Math.sin(e.t * 1.1) * 14; }
   else {
     e.x += e.vx * dt; e.y += e.vy * dt;
     const r = e.rad, low = H * CUBE.floor;
@@ -1531,7 +1550,7 @@ function wardenFan(e, n, charge) {
 function updateWarden(e, dt) {
   const B = e.bm, lv = bossLv(e), rage = e.hp < e.maxHp * 0.35;
   e.pv += ((B.phase === 'idle' ? 1 : 0) - e.pv) * Math.min(1, 5 * dt); e.t += dt * e.pv;
-  e.x = W / 2 + Math.sin(e.t * 0.5) * (W / 2 - 70); e.y = 130 + Math.sin(e.t * 1.2) * 10;   // 130 is where the entrance ends, so it does not jump
+  e.x = bossSway(e, dt * e.pv, 0.5, W / 2 - 70); e.y = 130 + Math.sin(e.t * 1.2) * 10;   // 130 is where the entrance ends, so it does not jump. It holds still while its beams are on (e.pv)
   if (e.sum > 0) {   // mites leave one at a time, each bound for its own lane
     e.sumT -= dt;
     if (e.sumT <= 0) { diveToLane(spawnEnemy('mite', null, null, { x: e.x, y: e.y + 20 }), W * (e.sumN - e.sum + 0.5) / e.sumN, -50); e.sum--; e.sumT = 0.25; }
@@ -1575,7 +1594,7 @@ function updateWarden(e, dt) {
 // ---- Hive Core ----
 function updateCore(e, dt) {
   e.t += dt;
-  e.x = W / 2 + Math.sin(e.t * 0.55) * (W / 2 - 64); e.y = 130 + Math.sin(e.t * 1.3) * 12;
+  e.x = bossSway(e, dt, 0.55, W / 2 - 64); e.y = 130 + Math.sin(e.t * 1.3) * 12;
   const rage = e.hp < e.maxHp * 0.35, t = Math.min(e.tier, 5);
   if (e.burst > 0) { e.burstT -= dt; if (e.burstT <= 0) { fireE(e.x, e.y + 24, aimAt(e.x, e.y + 24), ebSpeed() * 1.25, 5.5); e.burst--; e.burstT = 0.15; SFX.eshoot(); } }
   if (e.sum > 0) {
@@ -1805,7 +1824,8 @@ function updatePlayer(dt) {
   P.fireT -= dt;
   if (P.fireT <= 0) {
     P.fireT += 1 / S.rate; if (P.fireT < 0) P.fireT = 0;
-    for (let i = 0; i < S.shots; i++) { const o = i - (S.shots - 1) / 2; shot(P.x + o * 9, P.y - 16, o * 0.07, 0, 1); }
+    const sp = SPLIT[S.split], n = S.shots + (sp && ++P.volley % sp.every === 0 ? sp.add : 0);   // Split Barrel: extra shots on some volleys, or on all
+    for (let i = 0; i < n; i++) { const o = i - (n - 1) / 2; shot(P.x + o * 9, P.y - 16, o * 0.07, 0, 1); }
   }
   if (S.drones > 0) {
     P.droneT -= dt;
@@ -2436,7 +2456,7 @@ function startRun(test) {
   G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
   G.run = { scrap: 0, kills: 0, banked: 0 }; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
-  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 1, las: null, target: null, alive: true });
+  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, volley: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 1, las: null, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
   Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
@@ -2461,7 +2481,7 @@ function rollCards(kind) {
 function drawDraft() {
   $('cards').innerHTML = G.cards.map((u, i) => {
     const lv = ulv(u.id);
-    return '<button class="card r' + u.r + '" data-i="' + i + '"><span class="nm">' + u.n + '</span><span class="rar">' + CATEGORY[u.c] + ' · ' + RARITY[u.r] + '</span><span class="ds">' + u.d + '</span>' +
+    return '<button class="card r' + u.r + '" data-i="' + i + '"><span class="nm">' + u.n + '</span><span class="rar">' + CATEGORY[u.c] + ' · ' + RARITY[u.r] + '</span><span class="ds">' + (Array.isArray(u.d) ? u.d[Math.min(lv, u.d.length - 1)] : u.d) + '</span>' +
       (u.id === 'patch' ? '' : '<span class="lv">' + (lv ? 'LEVEL ' + lv + ' → ' + (lv + 1) : 'NEW') + '</span>') + '</button>';
   }).join('');
   $('btnReroll').textContent = 'Reroll · ' + G.rerolls + ' left'; $('btnReroll').disabled = G.rerolls <= 0; $('btnReroll').hidden = !mlv('reroll');
@@ -2914,7 +2934,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
