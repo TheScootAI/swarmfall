@@ -349,6 +349,7 @@ try {
     meta.mute = !!s.mute; meta.up = Object.assign({}, s.up); if (Array.isArray(s.mods)) meta.mods = s.mods.filter(m => typeof m === 'string');
     if (s.gfx === 'high' || s.gfx === 'low') meta.gfx = s.gfx; if (s.autoQ === 0 || s.autoQ === 1) meta.autoQ = s.autoQ;
     if (s.seen && typeof s.seen === 'object') for (const k in s.seen) if (s.seen[k]) meta.seen[k] = true;
+    if (meta.up.hull > 2) { meta.up.hull = 2; meta.scrap += 180; }   // Reinforced Hull had a third level: a save that bought it gets its scrap back
   }
 } catch (e) { /* storage unavailable: play without saving */ }
 const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch (e) {} };
@@ -951,8 +952,9 @@ const enterPace = () => Math.min(ENTER.max, 1 + ENTER.faster * (Math.max(1, G.wa
 const FINALE = { dur: 2.5, slow: 0.2, easeIn: 0.25, easeOut: 0.6, blastEvery: 0.2, grace: 0.6 };
 const FLASH_RGB = [1, 1, 0.8];
 // The most hull a ship can add, counting the station's Reinforced Hull levels and Hull Plate boosters together.
-// The owner: "should not be able to have more than 3 hull upgrades. 5 plus shield is nuts."
-const HULL_UPGRADES = 3;
+// The owner: "should not be able to have more than 3 hull upgrades. 5 plus shield is nuts", and then "only 2".
+// Reinforced Hull has that many levels, so a station at full strength leaves no room for a Hull Plate.
+const HULL_UPGRADES = 2;
 const UP = [
   { id: 'rapid', c: 'w', n: 'Rapid Feed', r: 0, max: 8, d: '+20% fire rate.' },
   { id: 'heavy', c: 'w', n: 'Heavy Rounds', r: 0, max: 8, d: '+25% damage.' },
@@ -995,7 +997,7 @@ const SHOP = [
   { g: 'weapons', id: 'rate', n: 'Feed Mechanism', d: '+6% fire rate.', cost: [15, 35, 70, 120, 200] },
   { g: 'weapons', id: 'speed', n: 'Mass Driver', d: '+8% bullet speed.', cost: [15, 35, 70, 120, 200] },
   { g: 'weapons', id: 'twin', n: 'Twin Mount', d: 'Start each run with a second barrel.', cost: [200] },
-  { g: 'armor', id: 'hull', n: 'Reinforced Hull', d: 'Start each run able to take 1 more hit.', cost: [30, 80, 180] },
+  { g: 'armor', id: 'hull', n: 'Reinforced Hull', d: 'Start each run able to take 1 more hit.', cost: [30, 80] },
   { g: 'armor', id: 'revive', n: 'Emergency Reboot', d: 'Once per run, survive a killing blow.', cost: [300] },
   { g: 'shields', id: 'shield', n: 'Aegis Generator', d: 'Start each run with a shield that absorbs one hit, then recharges in 15 seconds.', cost: [70] },
   { g: 'shields', id: 'charge', n: 'Fast Recharge', d: 'Shields recharge 2 seconds sooner.', cost: [40, 90, 160] },

@@ -474,11 +474,11 @@ const GROUPS = {
         else if (step === 1 && G.time - at > 1) { out['lv' + lv] = n0 - alive(); out['hurt' + lv] = G.enemies.filter(e => !e.dead && e.hp < e.maxHp).length; out.size = n0; if (lv === 3) return res(out); lv++; start(); }
         requestAnimationFrame(f); })(); }));
     check(vp.lv1 >= 1 && vp.lv1 <= 2 && vp.lv2 <= 5 && vp.lv3 <= 9 && vp.hurt1 + vp.lv1 > 1 && vp.hurt2 + vp.lv2 >= vp.hurt1 + vp.lv1 && vp.hurt3 + vp.lv3 >= vp.hurt2 + vp.lv2, 'Volatile Payload: one kill in a full formation destroys only a few neighbours at any level', JSON.stringify(vp));
-    // Hull: three upgrades at the most, counting the station's Reinforced Hull and Hull Plate boosters together
+    // Hull: two upgrades at the most, counting the station's Reinforced Hull and Hull Plate boosters together
     const hull = await page.evaluate(() => { const s = window.__swarmfall, was = s.meta.up.hull, plate = s.UP.find(u => u.id === 'plate'), out = {};
-      for (const [m, b] of [[0, 3], [1, 2], [3, 3], [3, 0], [1, 1]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
+      for (const [m, b] of [[0, 2], [1, 1], [2, 2], [2, 0], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
       s.meta.up.hull = was; s.G.up = {}; s.recalc(); out.max = plate.max; return out; });
-    check(hull['0+3'] === '4 full' && hull['1+2'] === '4 full' && hull['3+3'] === '4 full' && hull['3+0'] === '4 full' && hull['1+1'] === '3 more' && hull.max === 3, 'hull: at most 3 upgrades, station levels and Hull Plates together, and Hull Plate is not offered past that', JSON.stringify(hull));
+    check(hull['0+2'] === '3 full' && hull['1+1'] === '3 full' && hull['2+2'] === '3 full' && hull['2+0'] === '3 full' && hull['1+0'] === '2 more' && hull.max === 2, 'hull: at most 2 upgrades, station levels and Hull Plates together, and Hull Plate is not offered past that', JSON.stringify(hull));
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
