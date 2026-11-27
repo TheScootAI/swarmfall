@@ -87,6 +87,9 @@ body{height:100%;margin:0;overflow:hidden;background:var(--void);color:var(--ink
 /* The simulation's frame: fine lines down the screen, a mark in each corner and the count of hits. It does not move
    and uses plain see-through colour only, so it costs the phone nothing each frame. */
 #simFx{position:absolute;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(120,210,255,.04) 0 1px,transparent 1px 4px)}
+#simPlus{position:absolute;z-index:2;margin:0;transform:translate(-50%,-190%);pointer-events:none;opacity:0;white-space:nowrap;font:700 1.25rem/1 var(--display);letter-spacing:.06em;color:var(--gold);text-shadow:0 0 10px rgba(8,11,31,.9)}
+#simPlus.go{animation:simPlus 1.4s ease-out both}
+@keyframes simPlus{0%{opacity:0;transform:translate(-50%,-140%)}15%{opacity:1;transform:translate(-50%,-190%)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-230%)}}
 #simWipe{position:absolute;inset:0;z-index:3;pointer-events:none;background:repeating-linear-gradient(0deg,#2a7fd6 0 3px,#3f9be8 3px 6px)}
 #simFx i{position:absolute;width:22px;height:22px;border:solid rgba(140,225,255,.6);border-width:0}
 #simFx i:nth-of-type(1){left:10px;top:calc(env(safe-area-inset-top) + 58px);border-left-width:2px;border-top-width:2px}
@@ -208,7 +211,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 .fb-row .btn{min-height:44px;padding:0 14px;font-size:.85rem;display:inline-grid;place-items:center;text-decoration:none}
 #fbSend[aria-disabled="true"]{opacity:.45;cursor:default}
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;background:var(--void)}
-@media (prefers-reduced-motion:reduce){#introGo{animation:none}#simGo.on,#simHelloGo.on{animation:none}#simHello{transition:none}.simrow{transition:none}#simEnd{transition:none}#introRing{animation:none}#intro{transition:none}#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}.more::after{animation:none}}
+@media (prefers-reduced-motion:reduce){#introGo{animation:none}#simPlus.go{animation-duration:1.4s}#simGo.on,#simHelloGo.on{animation:none}#simHello{transition:none}.simrow{transition:none}#simEnd{transition:none}#introRing{animation:none}#intro{transition:none}#toast.go{animation-duration:.01s;opacity:1}#scrap.pop{animation:none}.more::after{animation:none}}
 </style>
 </head>
 <body>
@@ -225,13 +228,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
     </div>
   </div>
   <div id="simWipe" hidden></div>
+  <p id="simPlus"></p>
   <div id="simFx" hidden><i></i><i></i><i></i><i></i><p id="simTally"></p></div>
   <div id="simHello" hidden>
     <div id="simHelloCard" role="dialog" aria-labelledby="simHelloName">
       <p class="eyebrow">Catch your breath</p>
       <h2 id="simHelloName">Training simulation</h2>
       <p>Nothing here can hurt you.</p>
-      <p id="simHelloB">Only your ship's own gun fires. Hit every hologram for bonus scrap.</p>
+      <p id="simHelloB"></p>
       <p id="simHelloGo">Tap to continue</p>
     </div>
   </div>
@@ -240,9 +244,10 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       <p class="eyebrow" id="simKind">Training results</p>
       <p id="simCount"><span id="simHits">0</span><small> / <span id="simTotal">40</span></small></p>
       <p id="simWord">Holograms hit</p>
-      <p class="simrow" id="simPay"><span>Scrap bonus</span><b id="simScrap">◆ +0</b></p>
-      <p class="simrow" id="simPerf"><span>Perfect score</span><b id="simBonus">◆ +10</b></p>
-      <p class="simrow" id="simMiss">Hit every one for ◆ 10 more</p>
+      <p class="simrow" id="simLines"><span id="simLineN">0 whole lines</span><b id="simLineScrap">◆ +0</b></p>
+      <p class="simrow" id="simPay"><span>Holograms hit</span><b id="simScrap">◆ +0</b></p>
+      <p class="simrow" id="simPerf"><span>Perfect score</span><b id="simBonus">◆ +20</b></p>
+      <p class="simrow" id="simMiss">Hit every one for ◆ 20 more</p>
       <p id="simGo">Tap to continue</p>
     </div>
   </div>
@@ -498,6 +503,7 @@ const SFX = {
   alarm() { tone('square', 1320, 1240, 0.05, 0.06); },
   holo() { if (limited('ho', 45)) tone('sine', 1040, 1560, 0.06, 0.12); },
   warp(into) { const a = into ? 260 : 820, b = into ? 820 : 260; tone('sine', a, b, 0.8, 0.14); tone('triangle', a * 0.5, b * 0.5, 0.8, 0.08); tone('sine', a * 1.5, b * 1.5, 0.8, 0.05, 0.06); },   // the screen going wavy: a soft sweep, up into the simulation and down out of it
+  line() { tone('triangle', 780, 780, 0.09, 0.2); tone('triangle', 1040, 1040, 0.09, 0.2, 0.08); tone('triangle', 1560, 1560, 0.16, 0.2, 0.16); },   // every hologram of one line hit: three quick rising notes
   tally(k) { if (limited('ty', 55)) tone('sine', 620 + 520 * k, 660 + 520 * k, 0.04, 0.1); },   // the result counting up: soft pips that climb (k from 0 to 1)
   perfect() { tone('triangle', 660, 660, 0.12, 0.26); tone('triangle', 880, 880, 0.12, 0.26, 0.1); tone('triangle', 1100, 1100, 0.12, 0.26, 0.2); tone('triangle', 1320, 1320, 0.3, 0.26, 0.3); },   // every hologram hit: four rising notes   // a hologram hit in the simulation: a small bright blip
   leap() { if (limited('lp', 120)) tone('sawtooth', 320, 980, 0.16, 0.1); },   // a latcher leaving the formation: a quick rising chirp, the warning that one is on its way
@@ -1067,7 +1073,8 @@ const LATCH = { fuse: 1.5, off: 15, flick: 50, flicks: 3, slamRun: 60, slamSpeed
 // lead: seconds from that touch to the first hologram. rush: how many times faster a hologram comes down from the top
 // until it is in the part of the field where the lines are flown (SIM.split). show: how far inside the top edge a
 // hologram must be before a shot can hit it. The owner shot a whole line before seeing any of it.
-const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, hello: 2, lead: 1.2, rush: 2.5, show: 30, per: 0.25, perfect: 10,
+const SIM = { n: 8, gap: 0.42, dur: 4.8, every: 4.5, hello: 2, lead: 1.2, rush: 2.5, show: 30,
+  line: 2, lineHold: 1, per: 0.25, perfect: 10,   // what it pays (30 at the most, about what the first six waves pay; the owner's first numbers, 5, 1 and 20, came to 85, and they judged that too much): for every hologram of one line (a ring that shows for lineHold seconds where the last one went, then flies to the ship), for each hologram at the end, and for all of them
   span: 620, clear: 40, split: 0.2, over: 60,   // how a path's heights are placed on the field: see simYAt(). With the lines further from the ship (740 and 70) the fifth stage was only just possible: the bot cleared it 2 times in 6
   end: { card: 0.7, count: 1.3, beat: 0.55, wait: 0.35, out: 0.3, lift: 0.3 },   // the result card: seconds before it shows, the count-up for a full score, the beat between its lines, the least time before a touch carries on, its fade, and the wait after the finger lifts
   paths: {
@@ -1830,13 +1837,13 @@ function spawnPick(kind, x, y, worth = 1) {
   if (kind === 'heart') core.add(part(geo.box, M.heart, 13, 5, 5), part(geo.box, M.heart, 5, 13, 5));
   else { core.add(part(geo.torus, M.scrap, 6.5 * big, 6.5 * big, 6.5 * big)); if (worth > 1) core.add(part(geo.oct, M.scrap, 2.4 * big, 3.2 * big, 2.4 * big)); }
   mesh.add(core, halo); scene.add(mesh);
-  const p = { kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU), sp: 1, worth, big };   // sp: how fast it flies to the ship when the field is swept, as a share of full speed
+  const p = { kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU), sp: 1, worth, big, hold: 0, home: false };   // hold: seconds it stays where it is; home: it then flies to the ship from anywhere (a line's bonus in the simulation)   // sp: how fast it flies to the ship when the field is swept, as a share of full speed
   G.picks.push(p);
   if (G.bossDown) return p;   // the post-boss shower of scrap is no time for a lesson
   return p;
 }
 function killEnemy(e) {
-  if (e.holo) { despawn(e); SIMS.hits++; simTally(); SFX.holo(); burst(e.x, e.y, HOLO_RGB, 12, 170, 0.4); ringFx(e.x, e.y, 4, 26, 0x6fc8ff, 0.22); return; }   // a hologram: it counts toward the drill and nothing else
+  if (e.holo) { despawn(e); SIMS.hits++; simTally(); SFX.holo(); burst(e.x, e.y, HOLO_RGB, 12, 170, 0.4); ringFx(e.x, e.y, 4, 26, 0x6fc8ff, 0.22); if (++SIMS.lineHits[e.line] === SIM.n) simLine(e.x, e.y); return; }   // a hologram: it counts toward the drill and nothing else
   despawn(e); G.run.kills++;
   const boss = !!e.def.boss;
   flash(e.x, e.y, boss ? 600000 : e.elite ? 160000 : 70000);
@@ -2192,7 +2199,8 @@ function updatePicks(dt) {
   const sweep = G.state === 'clear'; let got = false, gotScrap = false;
   for (let i = G.picks.length - 1; i >= 0; i--) {
     const p = G.picks[i], dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy) || 1;
-    if (P.alive && (sweep || d < S.magnet)) { const pull = sweep ? 900 * p.sp : 520; p.vx = lerp(p.vx, dx / d * pull, Math.min(1, 8 * dt)); p.vy = lerp(p.vy, dy / d * pull, Math.min(1, 8 * dt)); }
+    if (p.hold > 0) { p.hold -= dt; p.vx = p.vy = 0; }
+    else if (P.alive && (sweep || p.home || d < S.magnet)) { const pull = sweep || p.home ? 900 * p.sp : 520; p.vx = lerp(p.vx, dx / d * pull, Math.min(1, 8 * dt)); p.vy = lerp(p.vy, dy / d * pull, Math.min(1, 8 * dt)); }
     else { p.vy = Math.min(80, p.vy + 160 * dt); p.vx *= 1 - Math.min(1, 1.5 * dt); }
     p.x = clamp(p.x + p.vx * dt, 8, W - 8); p.y += p.vy * dt;
     let gone = p.y > H + 20;
@@ -2398,8 +2406,8 @@ const unbanked = () => Math.floor(G.run.scrap) - G.run.banked;   // scrap collec
 // Docked after a boss: the next module is fitted, the run's scrap is banked, and the station shop opens.
 // ---- the simulation (numbers in SIM) ----
 const simOff = new URLSearchParams(location.search).get('sim') === 'off';   // the tests switch it off with ?sim=off, as they do introductions
-const SIMS = { on: false, wait: false, waitT: 0, hits: 0, total: 0, ended: false, shield: false, reward: 0, perfect: false,
-  t: 0, step: 0, at: [0, 0, 0, 0], shown: -1, owed: 0, readyT: 0, leaving: false, outT: 0, lifted: false, liftT: 0 };   // from t on: the result card
+const SIMS = { on: false, wait: false, waitT: 0, hits: 0, total: 0, lines: 0, lineHits: [0, 0, 0, 0, 0, 0, 0, 0], ended: false, shield: false, reward: 0, perfect: false,
+  t: 0, step: 0, at: [0, 0, 0, 0, 0], shown: -1, owed: 0, readyT: 0, leaving: false, outT: 0, lifted: false, liftT: 0 };   // from t on: the result card
 // Each path is worked out once into SIM_STEPS points (a smooth curve through the table's points), for both its hands.
 const SIM_STEPS = 160, simPaths = {};
 function simPath(name, mirror) {
@@ -2433,7 +2441,8 @@ function simScene(on) {
 function startSim() {
   const stage = SIM.stages[simStageOf(G.wave)];
   G.state = 'sim'; G.sim = true; recalc();   // the bare ship
-  Object.assign(SIMS, { on: true, wait: true, waitT: 0, hits: 0, total: stage.length * SIM.n, ended: false, shield: P.shieldUp, reward: 0, perfect: false, owed: 0, leaving: false });
+  SIMS.lineHits.fill(0);
+  Object.assign(SIMS, { on: true, wait: true, waitT: 0, lines: 0, hits: 0, total: stage.length * SIM.n, ended: false, shield: P.shieldUp, reward: 0, perfect: false, owed: 0, leaving: false });
   P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearSats(); G.pb.length = 0;
   ST.on = false; P.x = W / 2; P.y = shipY(); P.vx = 0; P.target = null; WARP.k = 1; simScene(true);
   ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.userData.wasGlow = m.layers.isEnabled(GLOW); m.material = M.holoShip; m.layers.enable(GLOW); } });
@@ -2441,6 +2450,7 @@ function startSim() {
   show(null); $('hud').hidden = false; drawHud(); simTally();
   // Nothing starts yet. The player has just come off a boss and may catch their breath: a card says what this is and
   // waits for a fresh touch, as an introduction's card does (the owner asked for "press fire to continue" here).
+  $('simHelloB').textContent = 'Only your ship\'s own gun fires. A whole line pays ◆ ' + SIM.line + '. All forty pay ◆ ' + SIM.perfect + ' more.';
   $('simHelloGo').textContent = finePointer ? 'Click to continue' : 'Tap to continue'; $('simHelloGo').classList.remove('on');
   $('simHello').hidden = false; $('simHello').offsetWidth; $('simHello').classList.add('on');
 }
@@ -2449,13 +2459,24 @@ function simBegin() {
   if (!SIMS.on || !SIMS.wait || SIMS.waitT < SIM.hello) return;
   SIMS.wait = false; $('simHello').classList.remove('on'); P.fireT = 0.5; G.queue = []; G.waveT = 0; SFX.card();
   SIM.stages[simStageOf(G.wave)].forEach(([name, mirror], g) => { const path = simPath(name, mirror), kind = SIM_KINDS[g % SIM_KINDS.length];
-    for (let k = 0; k < SIM.n; k++) G.queue.push({ t: SIM.lead + g * SIM.every + k * SIM.gap, fn: () => spawnHolo(kind, path) }); });
+    for (let k = 0; k < SIM.n; k++) G.queue.push({ t: SIM.lead + g * SIM.every + k * SIM.gap, fn: () => spawnHolo(kind, path, g) }); });
   G.queue.sort((a, b) => a.t - b.t);
 }
 function simTally() { $('simTally').textContent = 'HIT ' + SIMS.hits + ' / ' + SIMS.total; }
-function spawnHolo(kind, path) {
+// Every hologram of one line hit. Its bonus is shown where the last one went, for a second, with what it is worth
+// beside it; then the ring flies to the ship, which is when it is paid. (The owner: "If you get every target in a
+// grouping you should get 5 scrap. Show the scrap for a second and then have it suck into the ship.")
+function simLine(x, y) {
+  SIMS.lines++;
+  const p = spawnPick('scrap', x, y, SIM.line); p.vx = p.vy = 0; p.hold = SIM.lineHold; p.home = true;
+  ringFx(x, y, 8, 46, 0xffc857, 0.45); SFX.line();
+  introV.set(TX(x), TY(y), 0).project(camera);
+  const el = $('simPlus'); el.textContent = '◆ +' + SIM.line; el.style.left = clamp((introV.x * 0.5 + 0.5) * window.innerWidth, 44, window.innerWidth - 44) + 'px'; el.style.top = (0.5 - introV.y * 0.5) * window.innerHeight + 'px';
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+}
+function spawnHolo(kind, path, line) {
   const e = spawnEnemy(kind, null, null, { x: path[0] * W, y: simYAt(path[1]) });
-  e.holo = true; e.path = path; e.state = 'sim'; e.u = 0; e.hp = e.maxHp = 1; e.z = 0; e.rushIn = path[1] < SIM.split;   // one that comes in over the top edge comes in fast
+  e.holo = true; e.path = path; e.state = 'sim'; e.u = 0; e.hp = e.maxHp = 1; e.z = 0; e.line = line; e.rushIn = path[1] < SIM.split;   // one that comes in over the top edge comes in fast
   for (const m of e.meshes) { m.material = m.userData.base = M.holo; m.layers.enable(GLOW); }   // its model was built for it alone, so the layer goes no further
 }
 function updateHolo(e, dt) {
@@ -2468,14 +2489,14 @@ function simStep(dt) {
   if (WARP.k > 0) WARP.k = Math.max(0, WARP.k - dt / CUTS.simBack.dur);   // the wave that brought the simulation in dies away
   if (SIMS.wait) { SIMS.waitT += dt; if (SIMS.waitT >= SIM.hello) $('simHelloGo').classList.add('on'); return; }   // the opening card is up
   if (!SIMS.ended) {
-    if (G.queue.length || G.enemies.length) return;
+    if (G.queue.length || G.enemies.length || G.picks.length) return;   // a line's ring still on its way to the ship counts as the round going on
     const E = SIM.end, a = SIMS.at, count = reduceMotion ? 0 : Math.max(0.3, E.count * SIMS.hits / SIMS.total);
     SIMS.ended = true; SIMS.perfect = SIMS.hits === SIMS.total;
     SIMS.reward = Math.round(SIMS.hits * SIM.per) + (SIMS.perfect ? SIM.perfect : 0);
     G.run.scrap += SIMS.reward; SIMS.owed = SIMS.reward;   // paid now into the run's scrap, which docking banks (and a test run does not); the counter at the top shows it as the card gets to it
     Object.assign(SIMS, { t: 0, step: 0, shown: -1, readyT: 0, leaving: false, outT: 0, lifted: false, liftT: 0 });
-    a[0] = E.card; a[1] = a[0] + count + E.beat; a[2] = a[1] + E.beat; a[3] = a[2] + E.beat;   // when the card shows, then its scrap line, its perfect line and "Tap to continue"
-    if (reduceMotion) a[1] = a[2] = a[3] = a[0];
+    a[0] = E.card; a[1] = a[0] + count + E.beat; a[2] = a[1] + E.beat; a[3] = a[2] + E.beat; a[4] = a[3] + E.beat;   // when the card shows, then its lines row, its hits row, its perfect row and "Tap to continue"
+    if (reduceMotion) a[1] = a[2] = a[3] = a[4] = a[0];
     P.target = null; return;
   }
   // The round is over: the ship goes back to the middle while the card counts up what was hit.
@@ -2483,14 +2504,15 @@ function simStep(dt) {
   const E = SIM.end, a = SIMS.at;
   if (SIMS.leaving) {   // carried on: the card fades, and a moment after the finger has lifted the screen goes wavy and comes back at the station. The wait and the two scenes keep that tap from pressing a button there
     SIMS.outT += dt; if (SIMS.lifted) SIMS.liftT += dt;
-    if (SIMS.outT >= E.out && (SIMS.liftT >= E.lift || SIMS.outT >= 2)) startCut('simOut', () => { const said = SIMS.hits + ' of ' + SIMS.total + ' hit · ◆ +' + SIMS.reward; simOver(); dockedBelow(); startCut('simBack', arriveStation); toast('TRAINING COMPLETE', said, true); });
+    if (SIMS.outT >= E.out && (SIMS.liftT >= E.lift || SIMS.outT >= 2)) startCut('simOut', () => { const said = SIMS.hits + ' of ' + SIMS.total + ' hit · ◆ +' + (SIMS.reward + SIMS.lines * SIM.line); simOver(); dockedBelow(); startCut('simBack', arriveStation); toast('TRAINING COMPLETE', said, true); });
     return;
   }
   if (SIMS.step === 0 && SIMS.t >= a[0]) {
     SIMS.step = 1; $('simTally').textContent = ''; $('simTotal').textContent = SIMS.total; $('simHits').textContent = '0'; $('simKind').textContent = 'Training results';
     $('simScrap').textContent = '◆ +' + (SIMS.reward - (SIMS.perfect ? SIM.perfect : 0)); $('simBonus').textContent = '◆ +' + SIM.perfect;
     $('simPerf').hidden = !SIMS.perfect; $('simMiss').hidden = SIMS.perfect; $('simMiss').textContent = 'Hit every one for ◆ ' + SIM.perfect + ' more';
-    for (const id of ['simPay', 'simPerf', 'simMiss', 'simGo']) $(id).classList.remove('on');
+    $('simLineN').textContent = SIMS.lines === 1 ? '1 whole line' : SIMS.lines + ' whole lines'; $('simLineScrap').textContent = '◆ +' + SIMS.lines * SIM.line;
+    for (const id of ['simLines', 'simPay', 'simPerf', 'simMiss', 'simGo']) $(id).classList.remove('on');
     $('simGo').textContent = finePointer ? 'Click to continue' : 'Tap to continue';
     $('simEnd').hidden = false; $('simEnd').offsetWidth; $('simEnd').classList.add('on');   // reading its width makes the fade-in start from clear
   }
@@ -2498,15 +2520,16 @@ function simStep(dt) {
     const n = Math.round(SIMS.hits * clamp((SIMS.t - a[0]) / Math.max(0.001, a[1] - E.beat - a[0]), 0, 1));
     if (n !== SIMS.shown) { SIMS.shown = n; $('simHits').textContent = n; if (n > 0) SFX.tally(n / SIMS.total); }
   }
-  if (SIMS.step === 1 && SIMS.t >= a[1]) { SIMS.step = 2; $('simPay').classList.add('on'); SIMS.owed = SIMS.perfect ? SIM.perfect : 0; drawHud(); if (SIMS.reward > SIMS.owed) { popScrap(); SFX.pick(); } }
-  if (SIMS.step === 2 && SIMS.t >= a[2]) { SIMS.step = 3; $(SIMS.perfect ? 'simPerf' : 'simMiss').classList.add('on'); SIMS.owed = 0; drawHud(); if (SIMS.perfect) { $('simKind').textContent = 'Perfect'; popScrap(); SFX.perfect(); } }
-  if (SIMS.step === 3 && SIMS.t >= a[3]) { SIMS.step = 4; SIMS.readyT = SIMS.t; $('simGo').classList.add('on'); }
+  if (SIMS.step === 1 && SIMS.t >= a[1]) { SIMS.step = 2; $('simLines').classList.add('on'); }   // the lines were paid as their rings were collected: this row only says so
+  if (SIMS.step === 2 && SIMS.t >= a[2]) { SIMS.step = 3; $('simPay').classList.add('on'); SIMS.owed = SIMS.perfect ? SIM.perfect : 0; drawHud(); if (SIMS.reward > SIMS.owed) { popScrap(); SFX.pick(); } }
+  if (SIMS.step === 3 && SIMS.t >= a[3]) { SIMS.step = 4; $(SIMS.perfect ? 'simPerf' : 'simMiss').classList.add('on'); SIMS.owed = 0; drawHud(); if (SIMS.perfect) { $('simKind').textContent = 'Perfect'; popScrap(); SFX.perfect(); } }
+  if (SIMS.step === 4 && SIMS.t >= a[4]) { SIMS.step = 5; SIMS.readyT = SIMS.t; $('simGo').classList.add('on'); }
 }
 // A fresh touch, a click or a key while the result is up. Before the card has finished it finishes the count, and does
 // not skip the card; after that it carries on to the station.
 function simTap(key) {
   if (!SIMS.ended || SIMS.leaving) return;
-  if (SIMS.step < 4) { SIMS.t = Math.max(SIMS.t, SIMS.at[3]); return; }
+  if (SIMS.step < 5) { SIMS.t = Math.max(SIMS.t, SIMS.at[4]); return; }
   if (SIMS.t - SIMS.readyT < SIM.end.wait) return;
   SIMS.leaving = true; SIMS.outT = 0; SIMS.liftT = 0; SIMS.lifted = !!key; $('simEnd').classList.remove('on');
 }
@@ -2518,6 +2541,7 @@ function simOver() {
   ship.traverse(m => { if (m.isMesh && m.userData.real) { m.material = m.userData.real; m.userData.real = null; if (!m.userData.wasGlow) m.layers.disable(GLOW); } });
   simScene(false);
   for (const e of G.enemies) if (e.holo && !e.dead) despawn(e);
+  for (const p of G.picks) scene.remove(p.mesh); G.picks.length = 0; $('simPlus').classList.remove('go');
   G.pb.length = 0; P.x = W / 2; P.vx = 0; P.target = null; drawHud();
 }
 function arriveStation() {
