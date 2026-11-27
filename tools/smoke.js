@@ -548,7 +548,7 @@ const GROUPS = {
   sim: async () => {
     let { page, st, waitFor, playTo, shot } = await open('?gfx=low&intro=off&debug'), s;   // the simulation is on here; every other group switches it off with ?sim=off
     // An aiming bot: it goes for the lowest hologram, leading it by the time a shot takes to get there. It also watches the rules.
-    const drill = quick => page.evaluate(quick => new Promise(res => { const w = window.__swarmfall, { G, P, S, SIMS } = w, out = { fire: 0, hurt: false, paused: null, kills0: G.run.kills, scrap0: G.run.scrap }, t0 = performance.now(); let touched = 0, pausedAt = 0;
+    const drill = quick => page.evaluate(quick => new Promise(res => { const w = window.__swarmfall, { G, P, S, SIMS } = w, out = { fire: 0, hurt: false, paused: null, kills0: G.run.kills, scrap0: G.run.scrap, topHit: 1e9 }, t0 = performance.now(), seen = new Map(); let touched = 0, pausedAt = 0, moved = null;
       (function f() {
         if (performance.now() - t0 > 120000) { out.timeout = G.state; return res(out); }
         if (G.state === 'station') { out.early = true; return res(out); }   // it must not get here by itself: the result waits for a touch
@@ -561,8 +561,9 @@ const GROUPS = {
         if (G.state === 'sim') {
           if (out.shots === undefined) { out.shots = S.shots; out.drones = S.drones; out.beam = S.beam; out.station = w.ST.on; out.backdrop = w.backdrop.material.type; out.frame = !document.getElementById('simFx').hidden; out.pb0 = G.pb.length; out.warp0 = w.WARP.k; out.words = document.getElementById('toast').textContent; out.slow = document.getElementById('toast').classList.contains('slow'); out.hud = document.getElementById('wave').textContent; out.total = SIMS.total; out.hp0 = P.hp; }
           out.fire = Math.max(out.fire, G.eb.length + G.em.length);
-          let t = null; for (const e of G.enemies) if (!e.dead && e.holo && (!t || e.y > t.y)) t = e;
-          if (t && touched < 3 && G.waveT > 3) { t.u = t.u; touched++; out.touchAt = Math.hypot(t.x - P.x, t.y - P.y) < 400; const x = t.x, y = t.y; t.x = P.x; t.y = P.y; requestAnimationFrame(() => { if (P.hp < out.hp0 || !P.alive) out.hurt = true; }); }   // a hologram put right on top of the ship: nothing must come of it
+          for (const [e, y] of seen) if (e.dead) { seen.delete(e); if (e.u < 1 && e !== moved) out.topHit = Math.min(out.topHit, y); }   // where each one was when it was shot
+          let t = null; for (const e of G.enemies) if (!e.dead && e.holo) { seen.set(e, e.y); if (!t || e.y > t.y) t = e; }
+          if (t && touched < 3 && G.waveT > 3) { t.u = t.u; touched++; out.touchAt = Math.hypot(t.x - P.x, t.y - P.y) < 400; const x = t.x, y = t.y; moved = t; t.x = P.x; t.y = P.y; requestAnimationFrame(() => { if (P.hp < out.hp0 || !P.alive) out.hurt = true; }); }   // a hologram put right on top of the ship: nothing must come of it
           if (t) P.target = Math.max(14, Math.min(346, t.x + t.vx * Math.max(0, P.y - t.y) / S.shotSpeed));
           if (SIMS.ended && out.hits === undefined) { out.hits = SIMS.hits; out.reward = SIMS.reward; out.perfect = SIMS.perfect; out.took = +G.waveT.toFixed(1); out.paid = +(G.run.scrap - out.scrap0).toFixed(2); out.kills = G.run.kills - out.kills0; out.scrapShown0 = +document.getElementById('scrap').textContent.replace(/\D/g, ''); }
           if (out.paused === null && G.waveT > 6) { document.getElementById('btnPause').click(); out.paused = G.state === 'pause' ? document.getElementById('pauseWave').textContent : 'not paused'; pausedAt = performance.now(); }
@@ -579,9 +580,9 @@ const GROUPS = {
       return { up: !g('simHello').hidden && g('simHello').classList.contains('on'), name: g('simHelloName').textContent, go: g('simHelloGo').classList.contains('on'), fits: r.left >= 0 && r.top >= 44 && r.right <= innerWidth && r.bottom <= innerHeight,
         wait: w.SIMS.wait, state: w.G.state, queue: w.G.queue.length, holograms: w.G.enemies.length, shots: w.G.pb.length, station: w.ST.on, backdrop: w.backdrop.material.type, frame: !g('simFx').hidden, warp: +w.WARP.k.toFixed(2), hud: g('wave').textContent }; });
     const begin = async () => { for (let i = 0; i < 40 && await page.evaluate(() => window.__swarmfall.SIMS.wait); i++) { await page.touchscreen.tap(195, 420); await page.waitForTimeout(200); } };   // the card takes a touch a moment after it shows, in game time
-    const h0 = await hello(); await page.waitForTimeout(3000); const h1 = await hello(); await shot('18a-training-card');
+    const h0 = await hello(); await page.waitForTimeout(4500); const h1 = await hello(); await shot('18a-training-card');
     check(h0.station === false && h0.backdrop === 'ShaderMaterial' && h0.frame === true && h0.warp > 0.5 && h0.shots === 0 && h0.hud === 'TRAINING', 'in the simulation the station is gone and the backdrop is the grid, swapped while the screen was at its waviest', JSON.stringify(h0));
-    check(h1.up && h1.go && h1.fits && h1.name === 'Training simulation' && h1.wait && h1.state === 'sim' && h1.holograms === 0 && h1.queue === 0 && h1.shots === 0, 'it opens on a card that says what it is and waits for a touch: three seconds on, nothing has started, the ship holds its fire, and Pause does nothing', JSON.stringify(h1));
+    check(h1.up && h1.go && h1.fits && h1.name === 'Training simulation' && h1.wait && h1.state === 'sim' && h1.holograms === 0 && h1.queue === 0 && h1.shots === 0, 'it opens on a card that says what it is and waits for a touch: some seconds on, nothing has started, the ship holds its fire, and Pause does nothing', JSON.stringify(h1));
     await begin(); const h2 = await page.evaluate(() => { const w = window.__swarmfall; return { wait: w.SIMS.wait, card: document.getElementById('simHello').classList.contains('on'), queue: w.G.queue.length + w.G.enemies.length }; });
     check(h2.wait === false && h2.card === false && h2.queue === 40, 'a fresh touch starts the round: the card goes and forty holograms are on their way', JSON.stringify(h2));
     // What the result card says, whether it is all on screen, and what comes of touches: it stays until a fresh one, and
@@ -609,6 +610,7 @@ const GROUPS = {
     check(e1.out.state === 'cut' && e1.out.kind === 'simOut' && e1.out.card === false, 'a fresh touch carries on: the card goes and the screen goes wavy again; a touch, a key and Pause change nothing', JSON.stringify(e1.out));
     check(e1.back.kind === 'simBack' && e1.back.station === true && e1.back.backdrop === 'MeshBasicMaterial' && e1.back.frame === false && e1.back.shipLow === true && /^TRAINING COMPLETE40 of 40 hit · ◆ \+20$/.test(e1.back.words) && e1.back.slow, 'the wave settles back at the station: the grid gone, the ship at its port, and the words "Training complete" with the score', JSON.stringify(e1.back));
     check(e1.state === 'station' && e1.cardGone && e1.undock && e1.warp === 0 && e1.ms > 1500, 'then the station opens', JSON.stringify({ state: e1.state, warp: e1.warp, ms: e1.ms }));
+    check(d1.topHit >= 30 && d1.topHit < 1e9, 'no hologram is shot before it has been seen: each was well inside the top edge when it was hit', 'the highest was hit ' + Math.round(d1.topHit) + ' units down');
     check(d1.paused === 'Training simulation' && d1.resumedTo === 'sim', 'pausing in the simulation and resuming goes back into it', JSON.stringify({ paused: d1.paused, resumedTo: d1.resumedTo }));
     // A perfect score must be possible on every stage: the other four, then one of them again on a tall phone, where the
     // field is longer and the lines reach further down.
@@ -635,7 +637,7 @@ const GROUPS = {
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'play', 20000);
     await page.evaluate(() => { const w = window.__swarmfall, G = w.G; for (const e of G.enemies) { e.dead = true; w.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.wave = 5; w.nextWave(); });
     s = await playTo(x => x.state === 'sim' || x.state === 'station'); check(s.state === 'sim' && s.wave === 6, 'in a run: the boss destroyed, the ship docks and the simulation starts', s.state + ' on wave ' + s.wave);
-    await page.waitForTimeout(2500); const h3 = await hello(); await shot('18a-training-card-short'); check(h3.up && h3.go && h3.fits && h3.wait, 'its opening card fits a short phone and waits there too', JSON.stringify({ up: h3.up, go: h3.go, fits: h3.fits, wait: h3.wait })); await begin();
+    await page.waitForTimeout(4500); const h3 = await hello(); await shot('18a-training-card-short'); check(h3.up && h3.go && h3.fits && h3.wait, 'its opening card fits a short phone and waits there too', JSON.stringify({ up: h3.up, go: h3.go, fits: h3.fits, wait: h3.wait })); await begin();
     const before = await page.evaluate(() => { const w = window.__swarmfall; return { run: Math.floor(w.G.run.scrap), banked: w.G.run.banked, meta: w.meta.scrap }; });
     await page.waitForFunction(() => window.__swarmfall.SIMS.step >= 1, null, { timeout: 60000 });
     await page.waitForTimeout(150); const mid = await card(); await shot('18b-result-counting');
