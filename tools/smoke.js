@@ -38,7 +38,8 @@ async function open(query = '?gfx=low&intro=off', device = 'iPhone 13') {
   const clearWave = () => page.evaluate(() => { const s = window.__swarmfall; s.P.inv = 9; s.G.eb.length = 0; s.G.em.length = 0;
     if (s.G.wave % 6 === 0) { if (!s.G.boss || s.G.boss.intro > 0) return; } else s.G.queue.length = 0;
     for (const e of s.G.enemies) { e.z = 0; s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); } });
-  const playTo = async target => { for (let i = 0; i < 400; i++) { const s = await st(); if (target(s)) return s; if (s.state === 'play') await clearWave(); await page.waitForTimeout(120); } return st(); };
+  const playTo = async target => { for (let i = 0; i < 400; i++) { const s = await st(); if (target(s)) return s; if (s.state === 'play') await clearWave(); else if (s.state === 'draft') await page.evaluate(() => { const c = document.querySelector('#scrDraft .card'); if (c) c.click(); });   // a booster choice in the way: take the first
+    await page.waitForTimeout(120); } return st(); };
   await page.goto('file://' + GAME + query); await page.waitForTimeout(600);
   return { page, st, waitFor, clearWave, playTo, shot };
 }
@@ -60,12 +61,12 @@ const GROUPS = {
     s = await waitFor(x => x.state === 'play'); check(s.wave === 1, 'wave 1 starts after the launch');
     await page.waitForTimeout(400); await shot('02-wave1');
     s = await playTo(x => x.state === 'clear' && x.wave === 1);
-    check((await page.textContent('#toast')).includes('Booster shuttle arrives in 2 waves'), 'countdown text after wave 1');
-    // the quiet after a wave lasts 2 seconds (CLEAR.wave) before the next wave starts
+    check((await page.textContent('#toast')).includes('Booster shuttle inbound'), 'the shuttle is announced after wave 1');
+    // the quiet after a wave lasts 3 seconds (CLEAR.wave) before the next wave, or the shuttle
     const gap = await page.evaluate(() => { const s = window.__swarmfall; return { set: s.CLEAR.wave, left: s.G.clearT }; });
-    check(gap.set === 2 && gap.left > 1.3 && gap.left <= 2, 'the gap between waves is 2 seconds', 'CLEAR.wave ' + gap.set + ', ' + gap.left.toFixed(2) + ' s left when first seen');
+    check(gap.set === 3 && gap.left > 2.3 && gap.left <= 3, 'the gap between waves is 3 seconds', 'CLEAR.wave ' + gap.set + ', ' + gap.left.toFixed(2) + ' s left when first seen');
 
-    s = await playTo(x => x.state === 'cut' && x.cut === 'shuttle'); check(s.wave === 3, 'booster shuttle arrives after wave 3', 'wave ' + s.wave);
+    s = await playTo(x => x.state === 'cut' && x.cut === 'shuttle'); check(s.wave === 1, 'booster shuttle arrives after wave 1', 'wave ' + s.wave);
     await page.waitForTimeout(500); await page.touchscreen.tap(100, 500); await page.waitForTimeout(100);
     check((await st()).state === 'cut', 'a tap does not cut the shuttle scene short');
     const held = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall; let x = s.SH.x, y = s.SH.y, stillFrom = null, dur = 0, last = 0;
@@ -77,7 +78,7 @@ const GROUPS = {
     check((await page.textContent('#draftEyebrow')).startsWith('Booster shuttle'), 'booster screen heading');
     await shot('04-booster');
     const side = await page.evaluate(() => { const s = window.__swarmfall; return { beside: Math.abs(s.SH.x - s.P.x) < 70 && Math.abs(s.SH.y - s.P.y) < 12, pod: s.SH.pod, on: s.SH.on }; });
-    await page.tap('.card'); s = await waitFor(x => x.state === 'play'); check(s.wave === 4, 'wave 4 starts after picking a booster');
+    await page.tap('.card'); s = await waitFor(x => x.state === 'play'); check(s.wave === 2, 'wave 2 starts after picking a booster');
     const handOver = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, out = { crossed: false, gone: false }, t0 = performance.now();
       (function f() { if (s.SH.gift >= 0) { out.crossed = true; out.podLeftShuttle = !s.SH.pod; } if (out.crossed && s.SH.gift < 0 && !s.SH.on) { out.gone = true; return res(out); } if (performance.now() - t0 > 8000) return res(out); requestAnimationFrame(f); })(); }));
     check(side.beside && side.pod && side.on && handOver.crossed && handOver.podLeftShuttle && handOver.gone, 'the shuttle holds beside the ship, the chosen booster crosses over, and the shuttle drops back', JSON.stringify({ ...side, ...handOver }));
@@ -95,6 +96,11 @@ const GROUPS = {
           else { s.P.inv = 0; s.G.eb.push({ x: s.P.x, y: s.P.y, vx: 0, vy: 0, r: 5, kind: 0, dead: false }); }
         } else if (!s.FIN.on && w.done && w.grace === undefined) w.grace = s.P.inv;   // the first frame after the scene
         if (s.G.state !== 'station') requestAnimationFrame(f); })(); });
+    // the next shuttle comes after wave 4 (SHUTTLE), and the words after each wave count down to it
+    s = await playTo(x => x.state === 'clear' && x.wave === 2); const toast2 = await page.textContent('#toast');
+    s = await playTo(x => x.state === 'clear' && x.wave === 3); const toast3 = await page.textContent('#toast');
+    check(toast2.includes('arrives in 2 waves') && toast3.includes('after the next wave'), 'the countdown to the next shuttle after waves 2 and 3', toast2 + ' | ' + toast3);
+    s = await playTo(x => x.state === 'cut' && x.cut === 'shuttle'); check(s.wave === 4, 'the second shuttle arrives after wave 4', 'wave ' + s.wave);
     s = await playTo(x => x.state === 'cut' && x.cut === 'dock'); check(s.wave === 6 && s.state === 'cut', 'Hive Core on wave 6 leads to docking', 'wave ' + s.wave + ' ' + s.state);
     const fin = await page.evaluate(() => { const s = window.__swarmfall; return { ...window.__fin, on: s.FIN.on, speed: s.G.speed, z: s.camera.position.z, picksLeft: s.G.picks.length }; });
     check(fin.slowest < 0.3 && fin.closest > 0.999, 'the Hive Core dies in slow motion, and the camera stays where it is', JSON.stringify(fin));
@@ -150,6 +156,21 @@ const GROUPS = {
       requestAnimationFrame(tick); }));
     check(bt.hits === 13, 'a beetle takes 13 hits on the wave it arrives', bt.hits + ' hits');
     check(bt.fired === 2 && bt.set === 0.8 && bt.gap > 0.7 && bt.gap <= 0.8, 'a beetle launches two missiles 0.8 seconds apart', JSON.stringify(bt));
+    // Drops. Every enemy's scrap chance is halved (SCRAP_RATE): a mite pays 15% of the time. An elite's ring is worth 3. Elites give at most two repair crosses a wave.
+    const dr = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P, S } = s, real = Math.random, out = { rate: s.SCRAP_RATE, got: [] }, t0 = performance.now();
+      for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.repairs = 0; G.state = 'play';
+      const guard = s.spawnEnemy('mite', 0, 0); guard.hp = guard.maxHp = 1e12;   // keeps the wave from counting as cleared
+      const jobs = [{ roll: 0.2 }, { roll: 0.1 }, { roll: 0, elite: true }, { roll: 0, elite: true }, { roll: 0, elite: true }, { roll: 0, elite: true }], seen = new Set(G.picks);
+      let job = null, e = null, wait = 0, hearts = 0;
+      (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99; S.maxHp = 3; P.hp = 1; guard.hp = 1e12;
+        if (performance.now() - t0 > 20000) { Math.random = real; out.timeout = true; return done(out); }
+        if (!job) { job = jobs.shift(); if (!job) { Math.random = real; out.hearts = hearts; out.repairs = G.repairs; guard.dead = true; s.scene.remove(guard.g); return done(out); }
+          e = s.spawnEnemy('mite', 3, 1, { elite: !!job.elite }); wait = 3; }
+        else if (wait > 0) { if (--wait === 0) { Math.random = () => job.roll; G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); } }
+        else if (e.dead) { Math.random = real; let worth = 0; for (const p of G.picks) if (!seen.has(p)) { seen.add(p); if (p.kind === 'scrap') worth += p.worth; else hearts++; } out.got.push(worth); job = null; }
+        requestAnimationFrame(f); })(); }));
+    check(dr.rate === 0.5 && dr.got[0] === 0 && dr.got[1] === 1, 'scrap drops are halved: a mite pays 15% of the time, not 30%', JSON.stringify(dr));
+    check(dr.got[2] === 3 && dr.hearts === 2 && dr.repairs === 2, 'an elite\'s ring is worth 3, and elites give at most two repair crosses a wave', JSON.stringify(dr));
     // Reinforcements (SWARM): from wave 2 a fresh flight fills the formation's empty places once it has been thinned; from wave 10, two.
     const rf = await page.evaluate(() => new Promise(done => { const s = window.__swarmfall, { G, P, SWARM } = s, out = { flights: {}, expect: {} };
       const gone = e => { e.dead = true; s.scene.remove(e.g); }, wipe = () => { for (const e of G.enemies) gone(e); G.queue.length = 0; G.eb.length = 0; G.em.length = 0; };
@@ -182,7 +203,6 @@ const GROUPS = {
     check(rf.sent === rf.want && rf.left === 0 && rf.toast.includes('Reinforcements') && rf.state === 'play', 'thinned to 35%, a flight half the size of the formation sets off', JSON.stringify({ size: rf.size, sent: rf.sent, want: rf.want, left: rf.left, toast: rf.toast, timeout: rf.timeout }));
     check(rf.unique === true && rf.frontMites === true, 'reinforcements take empty places only, and mites still hold the front two rows');
     check(rf.flights13 === 2 && rf.total13 === rf.size13 + 2 * Math.round(rf.size13 * 0.5) && rf.clearedEarly === false, 'wave 13 sends its formation and two flights before it counts as cleared', JSON.stringify({ size: rf.size13, total: rf.total13, timeout: rf.timeout }));
-    check(rf.elites13 <= 3, 'at most three elites in a wave, reinforcements included', rf.elites13 + ' elites');
     const first = await page.evaluate(() => { const s = window.__swarmfall, first = {};
       for (let w = 1; w <= 31; w++) for (let k = 0; k < 30; k++) {
         for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0;
@@ -196,6 +216,18 @@ const GROUPS = {
     for (const [t, w] of Object.entries(expected)) check(first[t] === w, t + ' first appears on wave ' + w + ' (UNLOCK)', 'seen first on ' + first[t]);
     const lancersAt = await page.evaluate(L => L.map(w => { const s = window.__swarmfall; for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0; return s.G.enemies.filter(e => e.type === 'lancer').length; }), U.lancer);
     check(lancersAt.join() === '1,2,3', 'lancers: 1, 2 and 3 from waves ' + U.lancer.join(', '), 'got ' + lancersAt.join(','));
+    // Elites: none before wave 8, then a growing share of every wave, until every enemy is one on wave 40: triplets and lancers too.
+    const el = await page.evaluate(() => { const s = window.__swarmfall, out = {};
+      for (const w of [7, 8, 20, 40]) { let n = 0, k = 0, kinds = new Set();
+        for (let i = 0; i < 15; i++) { for (const e of s.G.enemies) e.dead = true; s.G.enemies = []; s.G.wave = w - 1; s.nextWave(); for (const q of s.G.queue) q.fn(); s.G.queue.length = 0; s.G.flights = 0;
+          for (const e of s.G.enemies) { n++; if (e.elite) { k++; kinds.add(e.type); } } }
+        out[w] = { share: +(k / n).toFixed(3), want: +s.eliteShare(w).toFixed(2), kinds: [...kinds].sort().join() }; }
+      for (const e of s.G.enemies) e.dead = true; s.G.enemies = [];
+      out.after = []; for (let w = 1; w <= 40; w++) if (s.shuttleAfter(w)) out.after.push(w);
+      return out; });
+    check(el[7].share === 0 && el[8].share > 0 && el[8].share < 0.12 && Math.abs(el[20].share - 0.4) < 0.08 && el[40].share === 1 && el[40].want === 1, 'elites: none before wave 8, about 4% then, 40% on wave 20, every enemy on wave 40', JSON.stringify({ 7: el[7].share, 8: el[8].share, 20: el[20].share, 40: el[40].share }));
+    check(el[40].kinds === 'beetle,lancer,mite,splitter,triplet,wasp,weaver', 'on wave 40 every kind of enemy is an elite, triplets and lancers too', el[40].kinds);
+    check(el.after.join() === '1,4,9,14,19,29,34,39', 'the booster shuttle comes after waves 1, 4 and 9, then every 5th wave, but never after a boss wave (24)', el.after.join());
     // enemies fly into the formation 5% faster each wave: wave 1 takes 2.3 seconds, wave 11 two thirds of that, and it levels off at 2.5 times the pace
     const fl = first.flight; check(fl[1] === 2.3 && Math.abs(fl[11] - 2.3 / 1.5) < 0.002 && Math.abs(fl[2] - 2.3 / 1.05) < 0.002 && Math.abs(fl[31] - 0.92) < 0.002 && fl[29] > fl[31], 'enemies fly into the formation 5% faster each wave, up to 2.5 times', 'wave 1: ' + fl[1] + ' s, 2: ' + fl[2] + ', 11: ' + fl[11] + ', 31: ' + fl[31]);
     // the bosses take turns, in the order of the BOSSES table: one every 6th wave
@@ -423,7 +455,22 @@ const GROUPS = {
     // Every system at once: all boosters on, late waves with lasers, missiles and triplets, while the ship
     // keeps firing. This exercises the effect pools (rings, lightning, particles), missiles being shot down,
     // shields and Reactive Nova clearing fire mid-loop, triplet splits and the lancer beam.
-    await page.reload(); await page.waitForTimeout(500);   // a fresh page: the wave check above leaves its test enemies in the scene
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
+    // Volatile Payload: one enemy destroyed in the middle of a full formation hurts its neighbours and no more. The owner found
+    // levels 2 and 3 cleared the top half of the screen: each blast destroyed the neighbours, and each of those set off another.
+    const vp = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, { G, P } = s, out = {}, t0 = performance.now(); let lv = 0, step = 0, at = 0, n0 = 0;
+      const start = () => { for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.wave = 3; s.nextWave(); G.flights = 0; G.up = { blast: lv }; s.recalc(); step = 0; };
+      const alive = () => G.enemies.filter(e => !e.dead).length;
+      lv = 1; start();
+      (function f() { P.inv = 99; P.fireT = 9; G.diveT = 99; G.shootT = 99;
+        if (performance.now() - t0 > 60000) { out.timeout = lv; return res(out); }
+        const formed = G.enemies.filter(e => !e.dead && e.state === 'form');
+        if (step === 0 && !G.queue.length && formed.length === G.form.size) { n0 = formed.length; const e = formed.find(e => e.r === 1 && e.c === 2);
+          G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); step = 1; at = G.time; }
+        else if (step === 1 && G.time - at > 1) { out['lv' + lv] = n0 - alive(); out['hurt' + lv] = G.enemies.filter(e => !e.dead && e.hp < e.maxHp).length; out.size = n0; if (lv === 3) return res(out); lv++; start(); }
+        requestAnimationFrame(f); })(); }));
+    check(vp.lv1 >= 1 && vp.lv1 <= 2 && vp.lv2 <= 5 && vp.lv3 <= 9 && vp.hurt1 + vp.lv1 > 1 && vp.hurt2 + vp.lv2 >= vp.hurt1 + vp.lv1 && vp.hurt3 + vp.lv3 >= vp.hurt2 + vp.lv2, 'Volatile Payload: one kill in a full formation destroys only a few neighbours at any level', JSON.stringify(vp));
+    await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
       for (const id of ['twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
@@ -583,7 +630,7 @@ const GROUPS = {
     await sm.tap('#btnStationLaunch'); await sm.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 60000 });
     await sm.evaluate(() => { const s = window.__swarmfall; for (const k of ['rapid', 'heavy', 'twin', 'pierce', 'shield', 'drone', 'crit', 'blast', 'missile', 'chain']) s.G.up[k] = 1; s.recalc(); s.P.inv = 99; });
     await sm.tap('#btnPause'); await sm.waitForTimeout(300); small.pause = await barOf('scrPause'); await sm.tap('#btnResume');
-    await sm.evaluate(() => { const s = window.__swarmfall; s.G.wave = 2; s.nextWave(); s.G.queue.length = 0; s.G.flights = 0; for (const e of s.G.enemies) e.hp = 0; });
+    await sm.evaluate(() => { const s = window.__swarmfall; s.G.wave = 3; s.nextWave(); s.G.queue.length = 0; s.G.flights = 0; for (const e of s.G.enemies) e.hp = 0; });   // wave 4: a shuttle follows it
     await sm.waitForFunction(() => window.__swarmfall.G.state === 'draft', null, { timeout: 60000 }); await sm.waitForTimeout(300); small.booster = await barOf('scrDraft');
     check(Object.values(small).every(okBar) && small.station.scrolls && stEnd.inView && !stEnd.more, 'short phone: every screen keeps its main buttons on screen, with "More below" whenever there is more', JSON.stringify(small));
     if (OUT) await sm.screenshot({ path: path.join(OUT, '15-short-phone-booster.png') });

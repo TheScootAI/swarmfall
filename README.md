@@ -2,7 +2,7 @@
 
 A roguelite swarm shooter for phones and desktops, built with three.js in a single `index.html`.
 
-Enemy formations fly in, hold, and dive at you. You launch from a space station. After every third wave a booster shuttle pulls alongside with a choice of three boosters. Every sixth wave is a boss; destroy it and you fly back to the station, dock, and have a new module fitted. Scrap you collect upgrades those modules, and it carries over when your ship is destroyed.
+Enemy formations fly in, hold, and dive at you. You launch from a space station. A booster shuttle pulls alongside with a choice of three boosters after waves 1, 4 and 9, then after every fifth wave (14, 19, 29 and so on). Every sixth wave is a boss; destroy it and you fly back to the station, dock, and have a new module fitted. Scrap you collect upgrades those modules, and it carries over when your ship is destroyed.
 
 ## Play
 
@@ -48,11 +48,14 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `ET`: enemy stats.
 - `UP`: boosters.
 - `SHOP`, `GROUPS`, `START_MODS` and `UNLOCK_ORDER`: station modules, their costs and the order they are earned.
-- `DRAFT_EVERY` and `BOSS_EVERY`: how often boosters and bosses come.
+- `SHUTTLE` and `BOSS_EVERY`: when the booster shuttle and the bosses come.
+- `ELITE`: how many enemies are elites as the waves go (all of them by wave 40), and what an elite pays.
+- `SCRAP_RATE`: one number that scales every enemy's scrap chance (bosses pay in full).
+- `BLAST`: Volatile Payload's reach and strength by level.
 - `BOSSES`: the bosses in the order they take turns. `CUBE`, `WARDEN`, `SIEGE` and `TRIAD`: each later boss's numbers.
 - `SKIP_SCRAP`: scrap for passing up a booster.
 - `SWARM`: how big the formation grows, and the reinforcements (from which waves, how thin the formation gets first, how much comes back).
-- `CLEAR`: the seconds of quiet after a wave (2) and after a boss.
+- `CLEAR`: the seconds of quiet after a wave (3) and after a boss (2).
 - `ENTER`: how much faster enemies fly into the formation each wave, and the limit.
 - `FINALE`: a boss's death scene (length, how slow, how often the follow-up blasts come).
 

@@ -10,7 +10,8 @@ const table = name => { const m = src.match(new RegExp('const ' + name + ' = (\\
 const UP = table('UP'), SHOP = table('SHOP'), GROUPS = table('GROUPS'), START_MODS = table('START_MODS'), UNLOCK_ORDER = table('UNLOCK_ORDER'), RARITY = table('RARITY');
 const CATEGORY = (0, eval)('(' + src.match(/const CATEGORY = (\{[^}]*\});/)[1] + ')');
 const num = name => +src.match(new RegExp('\\b' + name + ' = (\\d+)'))[1];
-const DRAFT_EVERY = num('DRAFT_EVERY'), BOSS_EVERY = num('BOSS_EVERY'), SKIP_SCRAP = num('SKIP_SCRAP');
+const BOSS_EVERY = num('BOSS_EVERY'), SKIP_SCRAP = num('SKIP_SCRAP');
+const SHUTTLE = (0, eval)('(' + src.match(/const SHUTTLE = (\{[^}]*\})/)[1] + ')');   // the waves the booster shuttle follows
 // the odds line in rollCards(): [common, rare, prototype] weights for the booster after a boss, Head Start, and the shuttle
 const W = src.match(/kind === 'boss' \? \[(\d+), (\d+), (\d+)\] : kind === 'head' \? \[(\d+), (\d+), (\d+)\] : \[(\d+), (\d+), (\d+) \+ Math\.min\((\d+), G\.wave\)\]/);
 if (!W) throw new Error('the odds line in rollCards() has changed: update the pattern in tools/upgrade-guide.js');
@@ -32,7 +33,7 @@ const NOTES = {
   shield: 'The first level gives a shield that absorbs one hit and comes back after 15 seconds. Each level after that takes 3.5 seconds off, as does owning the Aegis Generator module. Recharge never drops below 4 seconds.',
   drone: 'Each level adds 1 drone, up to 3 drones counting the Drone Bay module. A drone fires every 0.7 seconds for half your shot damage.',
   crit: 'Each level adds 15%: 60% of shots at level 4. A critical shot does 2.5× damage. Homing missiles never crit.',
-  blast: 'A destroyed enemy damages everything within 40, 50, then 60 units, for 60%, 120%, then 180% of your shot damage.',
+  blast: 'A destroyed enemy damages everything within 40, 45, then 50 units, for 60%, 75%, then 90% of your shot damage. An enemy destroyed by a blast does not explode itself, so one kill never sets off a chain.',
   rico: 'Each level is 1 bounce to another enemy, up to 2 bounces per shot.',
   flame: 'Every 7 seconds, then every 5.5, then every 4, the ship lobs a cloud of flame into the open lanes ahead of it, below the parked enemies. It hangs for 4.5 seconds. An enemy that flies through it burns while inside and for 3 seconds after, trailing flame and losing 6% of its full health a second (9% at level 2, 12% at level 3). Burning never takes an enemy below a tenth of its health: it weakens, your shots finish. Bosses burn at an eighth of that rate.',
   gas: 'Every 7 seconds, then every 5.5, then every 4, the ship lobs a gas cloud into the open lanes ahead of it, below the parked enemies. It hangs for 4.5 seconds. An enemy that flies through it is confused for 5 seconds: it gets no new weapon, but breaks off, chases the enemy furthest from it and rams it. The rammer is destroyed and its target loses half its health (3% for a boss). If the 5 seconds run out first it flies back to its place. Bosses and lancers cannot be confused.',
@@ -102,7 +103,7 @@ const moduleCard = ({ id, core }) => { const m = SHOP.find(x => x.id === id), to
         </div>
       </div>`; };
 const allCost = SHOP.reduce((a, m) => a + m.cost.reduce((x, y) => x + y, 0), 0);
-const shuttleWaves = [1, 2, 3, 4, 5].map(i => i * DRAFT_EVERY).filter(n => n % BOSS_EVERY !== 0).slice(0, 3);
+const lastSet = SHUTTLE.after[SHUTTLE.after.length - 1], shuttleWaves = [SHUTTLE.after[0], SHUTTLE.after[1], lastSet + SHUTTLE.every];   // the first two, and the first one past wave 10, where the odds stop moving
 const oddsRow = (label, sub, ws) => `<tr><th scope="row">${label}<small>${sub}</small></th>${pct(ws).map((p, i) => '<td class="' + rarClass[i] + '">' + p + '</td>').join('')}</tr>`;
 
 const html = `<title>Swarmfall Upgrade Guide</title>
@@ -213,7 +214,7 @@ a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     <h1>Build the <b>ship</b></h1>
     <p class="lede">Everything that makes your ship stronger: all ${UP.length} boosters and all ${SHOP.length} station modules, with what each one really does in numbers.</p>
     <div class="kinds">
-      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after every ${ord(DRAFT_EVERY)} wave, and you get a stronger choice each time you leave the station after a boss. Passing on all three pays ◆ ${SKIP_SCRAP}.</p><p><a href="#boosters">${UP.length} boosters</a></p></div>
+      <div class="b"><h3>Boosters</h3><p>Last for one run. A shuttle brings a choice of three after waves ${SHUTTLE.after.slice(0, -1).join(', ')} and ${lastSet}, then after every ${ord(SHUTTLE.every)} wave (${lastSet + SHUTTLE.every}, ${lastSet + 2 * SHUTTLE.every} and so on), and you get a stronger choice each time you leave the station after a boss. Passing on all three pays ◆ ${SKIP_SCRAP}.</p><p><a href="#boosters">${UP.length} boosters</a></p></div>
       <div class="m"><h3>Station modules</h3><p>Yours for good. A new ship has ${START_MODS.length}; each boss you destroy has the next one fitted. You raise their levels with scrap, at the station between runs or while docked.</p><p><a href="#modules">${SHOP.length} modules</a></p></div>
     </div>
   </header>

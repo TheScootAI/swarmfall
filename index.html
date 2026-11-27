@@ -207,7 +207,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       <div class="inner">
         <p class="eyebrow">Roguelite swarm shooter</p>
         <h1 id="logo">SWARM<b>FALL</b></h1>
-        <p class="lede">One hit destroys a new ship. A booster shuttle arrives after every third wave. Destroy a boss to dock at the station for a new module, upgraded with the scrap you salvage.</p>
+        <p class="lede">One hit destroys a new ship. A booster shuttle arrives after wave 1, then every few waves. Destroy a boss to dock at the station for a new module, upgraded with the scrap you salvage.</p>
         <p class="fine" id="howto">Drag anywhere to steer. Your ship fires on its own.</p>
         <p class="fine">Grab anything inside a blue halo: gold rings are scrap, green crosses repair hull. Anything red is enemy fire.</p>
         <p class="fine" id="bestLine"></p>
@@ -498,7 +498,7 @@ const M = {
   trip: pbr(0x3d7bff, 0x0c1f66),
   lancer: pbr(0xff3355, 0x5a0a18), lancerShell: pbr(0x3a1638, 0x12061a, 0.7, 0.35), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: addMat(0xffffff, 0.95),   // no halo on the white core: blurred, it would turn the red beam pink
  
-  siegeCore: glowing(basic(0xfff1c0)), eye: basic(0xffffff), elite: glowing(basic(ENEMY_RED)), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
+  siegeCore: glowing(basic(0xfff1c0)), eye: basic(0xffffff), elite: basic(ENEMY_RED), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
   scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), drone: pbr(0xc7b0ff, 0x2a1a5a), laserOn: glowMat(0xc7b0ff, 0.85), laserCore: addMat(0xffffff, 0.9),
   // the shield: an energy bubble that is bright at its rim, with bands rising through it
   shield: glowing(new THREE.ShaderMaterial({
@@ -673,7 +673,7 @@ stRing.add(part(geo.band, stM.hull, 62, 62, 62)); for (let i = 0; i < 4; i++) st
 stRing.rotation.x = 1.15; station.add(stRing);
 const stLights = [[0, 59, 5], [0, -59, 5], [-118, 0, 2], [118, 0, 2]].map(([x, y, z]) => { const m = part(geo.sph, stM.light, 2.4, 2.4, 2.4, x, y, z); station.add(m); return m; });
 station.visible = false; scene.add(station);
-// The booster shuttle that arrives after every third wave: a small ship of the station's own make. The group
+// The booster shuttle (it comes on the waves in SHUTTLE): a small ship of the station's own make. The group
 // carries its position and heading; shBody inside it banks into the turn.
 const shuttle = new THREE.Group(), shBody = new THREE.Group();
 shBody.add(
@@ -817,7 +817,12 @@ const ET = {
 const BOSS_TINT = [0xff4f8b, 0xffb02e, 0x5fe8ff, 0xa56bff];
 const RARITY = ['Common', 'Rare', 'Prototype'];
 const CATEGORY = { w: 'Weapons', a: 'Armor', h: 'Shields', s: 'Specials' };
-const DRAFT_EVERY = 3, BOSS_EVERY = 6;   // a booster after every 3rd wave; every 6th wave is a boss, so its booster is the rare one
+// The booster shuttle comes after the waves in `after`, then after every `every`-th wave from the last of them
+// (1, 4, 9, 14, 19 and so on). Every BOSS_EVERY-th wave is a boss: it ends at the station, and leaving there
+// gives the rare booster, so no shuttle comes after a boss wave even when the count lands on one (wave 24).
+const SHUTTLE = { after: [1, 4, 9], every: 5 }, BOSS_EVERY = 6;
+const shuttleAfter = n => !isBossWave(n) && (SHUTTLE.after.includes(n) || (n > SHUTTLE.after[SHUTTLE.after.length - 1] && (n - SHUTTLE.after[SHUTTLE.after.length - 1]) % SHUTTLE.every === 0));
+const wavesToShuttle = n => { let k = 0; while (!shuttleAfter(n + k)) k++; return k; };   // 0 when the shuttle comes after wave n
 // The bosses, in the order they are met: one on every BOSS_EVERY-th wave, round and round, tougher each time
 // (waves 6, 12, 18, 24, 30, then the Hive Core again on 36). tip is the line under the name when it arrives: a first-time
 // hint() would never show, since nobody reaches these waves in their first few runs. short is the name on the HUD
@@ -885,8 +890,21 @@ const SKIP_SCRAP = 10;   // scrap for passing up a booster
 // stops to launch its missiles). So the rest arrive as
 // reinforcements: when the formation is down to `thin` of its places, a fresh flight fills empty places, up to
 // `refill` of the formation. flights: the wave from which there is one such flight, then two, and so on.
-const SWARM = { cols0: 4, colsPer: 0.5, maxCols: 8, rows1: 2, rows0: 3, rowsPer: 0.25, maxRows: 5, elites: 3, flights: [2, 10], thin: 0.35, refill: 0.5 };
-const CLEAR = { wave: 2, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
+const SWARM = { cols0: 4, colsPer: 0.5, maxCols: 8, rows1: 2, rows0: 3, rowsPer: 0.25, maxRows: 5, flights: [2, 10], thin: 0.35, refill: 0.5 };
+// Elites (the red ring). share: the part of a wave's enemies that are elite on the wave they first appear
+// (UNLOCK.elite); more: added each wave after, until every enemy is one (wave 40). hp: times the health.
+// scrap: what its ring is worth. It drops every time while elites are rare, and less often as they become
+// common (never less often than the enemy underneath). repair: its chance of a repair cross when the hull is
+// damaged; repairs: the most of those in one wave, so a wave full of elites does not keep the hull topped up.
+// size: how much bigger its model is; ring: the widest its ring may be, before that.
+const ELITE = { share: 0.04, more: 0.03, hp: 3, scrap: 3, repair: 0.3, repairs: 2, size: 1.12, ring: 17 };
+const eliteShare = n => n < UNLOCK.elite ? 0 : Math.min(1, ELITE.share + ELITE.more * (n - UNLOCK.elite));
+// Every enemy's chance of dropping scrap is multiplied by this. A boss's shower is not: it pays in full.
+const SCRAP_RATE = 0.5;
+// Volatile Payload, by level: a destroyed enemy hurts whatever is within r of it for dmg of one shot. An enemy
+// that a blast destroys sets off no blast of its own: at levels 2 and 3 that chain cleared the whole formation.
+const BLAST = { r: [40, 45, 50], dmg: [0.6, 0.75, 0.9] };
+const CLEAR = { wave: 3, boss: 2 };   // seconds of quiet after a wave's last enemy goes, and after a boss
 const ENTER = { faster: 0.05, max: 2.5 };
 // Darts bend a little toward the ship as they fly, so they do not always come straight down. rate: radians a
 // second (a missile turns some thirty times as fast). total: all the turning one dart may ever do, about 6 degrees,
@@ -994,7 +1012,7 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
 // ---------- game state ----------
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
-  form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, elites: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
+  form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, repairs: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
@@ -1065,9 +1083,15 @@ function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
   const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
-  e.hp = e.maxHp = def.hp * hpMul * (e.elite ? 3 : 1) * (o.hpMul || 1);
+  e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
-  if (e.elite) { e.g.scale.setScalar(1.25); e.rad *= 1.2; e.halo = part(geo.hoop, M.elite, def.r + 7, def.r + 7, def.r + 7); e.g.add(e.halo); }
+  if (e.elite) {
+    // A whole wave can be elite, so the ring must sit inside its own place in the formation (38 wide) and must not
+    // glow: forty glowing red rings washed every enemy's own colour out. A lancer keeps its size: its beam is part
+    // of its model, and must look as wide as it hits.
+    if (type !== 'lancer') { e.g.scale.setScalar(ELITE.size); e.rad *= 1.1; }
+    const hr = Math.min(def.r + 4, ELITE.ring); e.halo = part(geo.hoop, M.elite, hr, hr, hr); e.g.add(e.halo);
+  }
   e.meshes = []; e.g.traverse(m => { if (m.isMesh) { m.userData.base = m.material; e.meshes.push(m); } });
   if (type === 'lancer') {   // its beam: added after the list above so the hit-flash leaves it alone
     e.laser = { phase: 'idle', t: rand(1.5, 4) }; e.pt = 0; e.pv = 1; e.beam = part(geo.plane, M.beamAim, 1, 1, 1); e.core = part(geo.plane, M.beamCore, 1, 1, 1, 0, 0, 0.5);
@@ -1106,7 +1130,7 @@ function launchDive(e) {
   despawn(e);   // not a kill: no scrap, no credit
   SFX.split(); ringFx(e.x, e.y, 6, 34, 0x3d7bff, 0.3); burst(e.x, e.y, e.def.col, 12, 140, 0.4);
   for (let i = 0; i < 3; i++) {
-    const m = spawnEnemy('triplet', null, null, { x: e.x + (i - 1) * 12, y: e.y, hpMul: 0.45 });
+    const m = spawnEnemy('triplet', null, null, { x: e.x + (i - 1) * 12, y: e.y, hpMul: 0.45, elite: e.elite });   // an elite's copies keep its ring
     m.g.scale.setScalar(0.74); m.rad = e.def.r * 0.74; diveToLane(m, W * (i + 0.5) / 3, -40);
   }
 }
@@ -1459,7 +1483,7 @@ function queueFlight(n, at, most) {
   const pWeaver = chance(UNLOCK.weaver, Math.min(0.3, 0.1 + n * 0.012));
   const pSplit = chance(UNLOCK.splitter, Math.min(0.2, 0.06 + n * 0.01));
   const pTrip = chance(UNLOCK.triplet, Math.min(0.15, 0.06 + n * 0.008));
-  const pElite = chance(UNLOCK.elite, Math.min(0.09, 0.02 + n * 0.005));
+  const pElite = eliteShare(n);
   let group = -1, i = 0, last = -1;
   for (const { c, r, side } of places) {
     if (r * 2 + side !== last) { last = r * 2 + side; group++; i = 0; }   // each half of a row flies in together
@@ -1469,15 +1493,14 @@ function queueFlight(n, at, most) {
     if (roll < pWeaver) type = 'weaver';
     else if (roll < pWeaver + pSplit) type = 'splitter';
     else if (roll < pWeaver + pSplit + pTrip) type = 'triplet';
-    // a few elites a wave, reinforcements included; triplets are never elite, since three elite copies would be too much
-    const elite = type !== 'triplet' && G.elites < SWARM.elites && Math.random() < pElite; if (elite) G.elites++;
+    const elite = Math.random() < pElite;   // more of them each wave, until every enemy is one (ELITE)
     const tpl = (r + side + n) % 3;
     G.queue.push({ t: at + (0.4 + group * 0.75 + i++ * 0.15) / pace, fn: () => startEnter(spawnEnemy(type, c, r, { elite }), tpl, !!side) });
   }
   return places.length;
 }
 function buildWave(n) {
-  G.queue = []; G.waveT = 0; G.diveT = 2.6; G.shootT = 3; G.bossDown = false; G.flights = 0; G.elites = 0; clearBoss();
+  G.queue = []; G.waveT = 0; G.diveT = 2.6; G.shootT = 3; G.bossDown = false; G.flights = 0; G.repairs = 0; clearBoss();
   if (isBossWave(n)) { G.form = { cols: 1, rows: 1, top: 96, shape: null, size: 1 }; G.queue.push({ t: 0.9, fn: () => spawnBoss(n / BOSS_EVERY) }); return; }
   // extra rows of mites screen the stronger enemies behind them
   const Z = SWARM, cols = Math.min(Z.maxCols, Z.cols0 + Math.ceil(n * Z.colsPer)), rows = n === 1 ? Z.rows1 : Math.min(Z.maxRows, Z.rows0 + Math.floor(n * Z.rowsPer)), mid = (cols - 1) / 2;
@@ -1489,7 +1512,7 @@ function buildWave(n) {
   G.flights = Z.flights.filter(w => n >= w).length;   // reinforcement flights still to come
   // lancers (the laser enemy) ride a rail above the top row, where the swarm shields them; they have no slot
   const lancers = UNLOCK.lancer.filter(w => n >= w).length, pace = enterPace();
-  for (let i = 0; i < lancers; i++) G.queue.push({ t: (0.6 + i * 0.5) / pace, fn: () => { const e = spawnEnemy('lancer', null, null); e.ph = i * 2.1 + rand(0.6); startEnter(e, 2, i % 2 === 1); } });
+  for (let i = 0; i < lancers; i++) G.queue.push({ t: (0.6 + i * 0.5) / pace, fn: () => { const e = spawnEnemy('lancer', null, null, { elite: Math.random() < eliteShare(n) }); e.ph = i * 2.1 + rand(0.6); startEnter(e, 2, i % 2 === 1); } });
   G.queue.sort((a, b) => a.t - b.t);
 }
 // Reinforcements: once the formation has been thinned (or is gone), the next flight sets off into its empty places.
@@ -1551,10 +1574,14 @@ function killEnemy(e) {
     return;
   }
   SFX.boom(); shake(e.elite ? 5 : 2);
-  if (Math.random() < e.def.scrap || e.elite) spawnPick('scrap', e.x, e.y, e.elite ? 3 : e.type === 'beetle' ? 2 : 1);   // one ring, worth more, in place of several
-  if (P.hp < S.maxHp && Math.random() < (e.elite ? 0.3 : 0.03)) spawnPick('heart', e.x, e.y);
+  const pScrap = e.elite ? Math.max(e.def.scrap, 1 - eliteShare(G.wave)) : e.def.scrap;
+  if (Math.random() < pScrap * SCRAP_RATE) spawnPick('scrap', e.x, e.y, e.elite ? ELITE.scrap : e.type === 'beetle' ? 2 : 1);   // one ring, worth more, in place of several
+  if (P.hp < S.maxHp) {
+    if (!e.elite) { if (Math.random() < 0.03) spawnPick('heart', e.x, e.y); }
+    else if (G.repairs < ELITE.repairs && Math.random() < ELITE.repair) { G.repairs++; spawnPick('heart', e.x, e.y); }
+  }
   if (S.blast > 0) G.blastQ.push({ x: e.x, y: e.y });
-  if (e.type === 'splitter') for (const s of [-1, 1]) { const m = spawnEnemy('mite', null, null, { x: e.x + s * 8, y: e.y }); startDive(m); m.vx = s * 120; m.vy = -60; }
+  if (e.type === 'splitter') for (const s of [-1, 1]) { const m = spawnEnemy('mite', null, null, { x: e.x + s * 8, y: e.y, elite: e.elite }); startDive(m); m.vx = s * 120; m.vy = -60; }   // an elite splitter's mites keep its ring
 }
 function nearest(x, y, skip, maxD) {
   let best = null, bd = maxD * maxD;
@@ -1839,9 +1866,10 @@ function updateShots(dt) {
     }
   }
   sweepDead(G.pb);
-  for (let guard = 0; G.blastQ.length && guard < 40; guard++) {
-    const q = G.blastQ.shift(), r = 30 + 10 * S.blast;
-    ringFx(q.x, q.y, 6, r, 0xff9a4d, 0.3); areaDamage(q.x, q.y, r, S.dmg * 0.6 * S.blast);
+  // only the blasts queued by this frame's kills go off: whatever a blast destroys queues one too, and those are dropped
+  for (let i = 0, n = Math.min(40, G.blastQ.length), lv = Math.min(S.blast, BLAST.r.length) - 1; i < n; i++) {
+    const q = G.blastQ[i], r = BLAST.r[lv];
+    ringFx(q.x, q.y, 6, r, 0xff9a4d, 0.3); areaDamage(q.x, q.y, r, S.dmg * BLAST.dmg[lv]);
   }
   G.blastQ.length = 0;
   for (const b of G.eb) {
@@ -1968,9 +1996,9 @@ function updateEnemies(dt) {
 }
 let bossFrac = -1;   // the boss bar's last drawn fill, so it is only restyled when it changes
 function clearedToast() {
-  const left = DRAFT_EVERY - G.wave % DRAFT_EVERY;
+  const left = wavesToShuttle(G.wave);
   if (G.bossDown) { if (FIN.on) FIN.toast = true; else CORE_TOAST(); }   // the words wait for the death scene to end, so the explosion plays uncluttered
-  else toast('WAVE CLEARED', left === DRAFT_EVERY ? 'Booster shuttle inbound' : left === 1 ? 'Booster shuttle arrives after the next wave' : 'Booster shuttle arrives in ' + left + ' waves');
+  else toast('WAVE CLEARED', left === 0 ? 'Booster shuttle inbound' : left === 1 ? 'Booster shuttle arrives after the next wave' : 'Booster shuttle arrives in ' + left + ' waves');
 }
 function updateGame(dt) {
   if (G.state === 'dying') dt *= 0.45;
@@ -1983,7 +2011,7 @@ function updateGame(dt) {
   else if (G.state === 'clear') {
     G.clearT -= dt;
     if (G.clearT <= 0 && P.alive) {
-      if (G.wave % DRAFT_EVERY !== 0) nextWave();
+      if (!G.bossDown && !shuttleAfter(G.wave)) nextWave();
       // the booster and the station wait until the last enemy shots have left the field, so nothing vanishes mid-flight;
       // the station also waits for the last of the boss's scrap to reach the ship
       else if (!G.eb.length && !G.em.length && !(G.bossDown && G.picks.length)) { if (G.bossDown) startCut('dock', arriveStation); else startCut('shuttle', () => openDraft('wave')); }
@@ -2384,7 +2412,7 @@ const INTRO_TEXT = {
   wasp: ['Fires fast darts as it dives. The darts lean toward you.', 'Keep moving, and shoot it before it leaves the top row.'],
   weaver: ['Zigzags as it dives, so it is hard to line up.', 'Shoot it while it sits.'],
   splitter: ['Breaks into two mites when it is destroyed.', 'Be ready for the pair that comes out.'],
-  elite: ['A red ring marks a tougher enemy, with three times the health.', 'Worth the effort: it always drops a ring worth 3.'],
+  elite: ['A red ring marks a tougher enemy, with three times the health.', 'Worth the effort: its scrap ring is worth 3.'],
   beetle: ['Armoured. It stops partway down and launches homing missiles.', 'Shoot the missiles down, or slip past them.'],
   triplet: ['Breaks into three when it leaves the formation.', 'Shoot it while it sits and it never splits.'],
   lancer: ['Charges up, then fires a laser down the whole screen.', 'A thin red line shows the lane first. Leave it.'],
@@ -2679,7 +2707,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UNLOCK, BOSSES, CLEAR, SWARM, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SHUTTLE, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

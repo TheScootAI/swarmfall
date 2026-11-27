@@ -42,6 +42,11 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
   await page.evaluate(() => { const s = window.__swarmfall; const L = s.G.enemies.filter(e => e.laser); if (L[0]) { L[0].laser.phase = 'fire'; L[0].laser.t = 1.6; } s.spawnPick('scrap', 250, 380); s.spawnPick('scrap', 300, 300); s.spawnPick('heart', 200, 330); });
   await hold(page, 500); await snap(page, '4-laser-pickups');
 
+  // a wave where every enemy is an elite: the red rings must leave each enemy's own colour, and the red shots, easy to read
+  page = await open(); await start(page);
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 39; s.nextWave(); s.G.shootT = 0.4; window.__tick = s => { s.P.inv = 9; s.P.fireT = 9; }; });
+  await hold(page, 6500); await snap(page, '4a-all-elites');
+
   // reinforcements: most of the formation destroyed, and a fresh flight on its way in under the word
   page = await open(); await start(page);
   await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 8; s.nextWave(); window.__tick = s => { s.P.inv = 9; }; });
@@ -61,7 +66,7 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
 
   // a hit on the shield, then booster screen for UI over the scene
   page = await open(); await start(page);
-  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 2; s.nextWave(); s.G.queue.length = 0; s.G.flights = 0; for (const e of s.G.enemies) e.hp = 0; window.__tick = null; });
+  await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 3; s.nextWave(); s.G.queue.length = 0; s.G.flights = 0; for (const e of s.G.enemies) e.hp = 0; window.__tick = null; });   // wave 4: a shuttle follows it
   await page.waitForFunction(() => window.__swarmfall.G.state === 'cut', null, { timeout: 90000 }); await page.waitForTimeout(4000); await snap(page, '7-shuttle');
   await page.waitForFunction(() => window.__swarmfall.G.state === 'draft', null, { timeout: 90000 }); await page.waitForTimeout(300); await snap(page, '8-booster');
 
