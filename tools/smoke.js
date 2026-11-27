@@ -602,7 +602,7 @@ const GROUPS = {
     // an introduction stays until the player touches the screen afresh: wait well past the point, then tap
     const through = async wait => { const w = watchIntro(90000); await cardUpFor(wait); await ip.touchscreen.tap(200, 520); return w; };
     // scrap and missiles are introduced the same way; marked as seen here so that they do not cut in before their own checks below
-    await ip.evaluate(() => { const s = window.__swarmfall; s.meta.seen.scrap = s.meta.seen.missile = true; });
+    await ip.evaluate(() => { const s = window.__swarmfall; s.meta.seen.scrap = s.meta.seen.heart = s.meta.seen.missile = true; });
     await startIp(); const i1 = await through(2.5);
     check(i1.started && i1.key === 'mite' && i1.name === 'Mite' && i1.kind === 'New enemy' && i1.shown && i1.ring > 20 && i1.cardOnScreen && i1.cardClearOfRing, 'a new enemy is introduced when it takes its place: a spotlight on it and a card with its name and what to do', JSON.stringify({ name: i1.name, text: i1.text, ring: i1.ring }));
     check(ramps(i1.in) && i1.in[0] > i1.in[i1.in.length - 1] && i1.frozen && ramps(i1.out) && i1.out[0] < i1.out[i1.out.length - 1] && i1.after === 1 && i1.hidden, 'the game slows quickly to a stop for it, then speeds quickly back up', 'in ' + i1.in.join(' ') + ' · out ' + i1.out.join(' '));
@@ -616,9 +616,12 @@ const GROUPS = {
     const i6 = await through(0.6);
     check(i5.key === 'scrap' && i5.name === 'Scrap' && i5.kind === 'Salvage' && i5.frozen && i5.ring > 20 && i5.cardOnScreen && i5.cardClearOfRing, 'the first scrap ring is introduced like a new enemy: the game stops, a spotlight on the ring, a card', JSON.stringify({ key: i5.key, name: i5.name, kind: i5.kind, text: i5.text, ring: i5.ring }));
     check(i6.key === 'missile' && i6.name === 'Missile' && i6.kind === 'New threat' && i6.frozen && i6.ring > 20 && i6.cardOnScreen && i6.cardClearOfRing, 'the first missile is introduced the same way', JSON.stringify({ key: i6.key, name: i6.name, kind: i6.kind, text: i6.text, ring: i6.ring }));
+    await ip.evaluate(() => { const s = window.__swarmfall; s.G.diveT = 99; s.G.shootT = 99; s.P.inv = 9; s.IN.cool = 0; delete s.meta.seen.heart; const p = s.spawnPick('heart', 180, 260); p.vx = 0; p.vy = 0; });
+    const i7 = await through(0.6);
+    check(i7.key === 'heart' && i7.name === 'Repair Cross' && i7.kind === 'Repair' && i7.frozen && i7.ring > 20 && i7.cardOnScreen && i7.cardClearOfRing, 'the first repair cross is introduced the same way', JSON.stringify({ key: i7.key, name: i7.name, kind: i7.kind, text: i7.text, ring: i7.ring }));
     const steers = await ip.evaluate(() => window.__swarmfall.G.state === 'play');
     const seenSaved = await ip.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('swarmfall.v1')).seen || {}).sort().join());
-    check(i2.key === 'wasp' && i2.name === 'Wasp' && seenSaved === 'missile,mite,scrap,wasp', 'the next new kind is introduced in its turn, and the save remembers which have been', 'saved as seen: ' + seenSaved);
+    check(i2.key === 'wasp' && i2.name === 'Wasp' && seenSaved === 'heart,missile,mite,scrap,wasp', 'the next new kind is introduced in its turn, and the save remembers which have been', 'saved as seen: ' + seenSaved);
     await ip.reload(); await ip.waitForTimeout(600); await startIp();
     const i3 = await watchIntro(9000);
     check(!i3.started, 'an enemy already introduced is not introduced again in a later run');
@@ -629,7 +632,7 @@ const GROUPS = {
     await ip.tap('#dbgGo'); await ip.waitForFunction(() => window.__swarmfall.G.state === 'play', null, { timeout: 30000 });
     const i4 = await through(0.6);
     const seenAfter = await ip.evaluate(() => Object.keys(window.__swarmfall.meta.seen).sort().join());
-    check(i4.key === 'boss' && i4.name === 'Hive Core' && i4.kind === 'New boss' && seenAfter === 'missile,mite,scrap,wasp' && steers, 'test bench: "Introduce enemies" shows them on a test run (a boss here) without touching the save', i4.name + ' · save still has ' + seenAfter);
+    check(i4.key === 'boss' && i4.name === 'Hive Core' && i4.kind === 'New boss' && seenAfter === 'heart,missile,mite,scrap,wasp' && steers, 'test bench: "Introduce enemies" shows them on a test run (a boss here) without touching the save', i4.name + ' · save still has ' + seenAfter);
     await ip.context().close();
   },
   // A short phone: every screen keeps its main buttons on screen and says when there is more.
@@ -665,7 +668,7 @@ const ABOUT = {
   stress: 'Volatile Payload in a full formation; the hull cap; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',
   bench: 'the test bench and test runs',
-  intro: 'enemy introductions, and the same for the first scrap ring and the first missile',
+  intro: 'enemy introductions, and the same for the first scrap ring, repair cross and missile',
   small: 'a short phone: bottom bars and "More below" on every screen',
 };
 

@@ -825,8 +825,8 @@ const SHUTTLE = { after: [1, 4, 9], every: 5 }, BOSS_EVERY = 6;
 const shuttleAfter = n => !isBossWave(n) && (SHUTTLE.after.includes(n) || (n > SHUTTLE.after[SHUTTLE.after.length - 1] && (n - SHUTTLE.after[SHUTTLE.after.length - 1]) % SHUTTLE.every === 0));
 const wavesToShuttle = n => { let k = 0; while (!shuttleAfter(n + k)) k++; return k; };   // 0 when the shuttle comes after wave n
 // The bosses, in the order they are met: one on every BOSS_EVERY-th wave, round and round, tougher each time
-// (waves 6, 12, 18, 24, 30, then the Hive Core again on 36). tip is the line under the name when it arrives: a first-time
-// hint() would never show, since nobody reaches these waves in their first few runs. short is the name on the HUD
+// (waves 6, 12, 18, 24, 30, then the Hive Core again on 36). tip is the line under the name when it arrives, for players who have
+// already seen its introduction. short is the name on the HUD
 // of a narrow phone, where the full one would run into the scrap count.
 const BOSSES = [
   { type: 'boss', name: 'Hive Core', short: 'Core', down: 'CORE DESTROYED', tip: '' },
@@ -1018,7 +1018,7 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
 // ---------- game state ----------
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
-  form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, repairs: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], hint: {}, cut: null, draftKind: 'wave', newMod: null };
+  form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, repairs: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
@@ -1043,7 +1043,6 @@ const pick = a => a[(Math.random() * a.length) | 0];
 const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
 const turnToward = (cur, want, maxStep) => cur + clamp(wrapAngle(want - cur), -maxStep, maxStep);
 // A one-line tip the first time something appears, in a player's first few runs only.
-function hint(key, maxRuns, big, small) { if (meta.runs < maxRuns && !G.hint[key] && G.state === 'play') { G.hint[key] = true; toast(big, small); } }
 // Removes items flagged dead from an array, in place. Things are only ever flagged during a frame and swept
 // here afterwards, so code that runs mid-loop (a hit clearing nearby shots, a boss taking its swarm with it)
 // never pulls an array out from under the loop that called it.
@@ -1555,7 +1554,6 @@ function spawnPick(kind, x, y, worth = 1) {
   const p = { kind, x, y, vx: rand(-45, 45), vy: rand(-90, -30), mesh, core, halo, ph: rand(TAU), sp: 1, worth, big };   // sp: how fast it flies to the ship when the field is swept, as a share of full speed
   G.picks.push(p);
   if (G.bossDown) return p;   // the post-boss shower of scrap is no time for a lesson
-  if (kind === 'heart') hint(kind, 3, 'REPAIR', 'Fly into the green cross to restore 1 hull');   // scrap is introduced like a new enemy (INTRO_TEXT)
   return p;
 }
 function killEnemy(e) {
@@ -2258,7 +2256,7 @@ function startRun(test) {
   audioInit(); resetField();
   G.test = test; G.god = test && DBG.god; testMods = test ? DBG.mod : null; G.seen = {}; IN.cool = 0.4;
   G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
-  G.run = { scrap: 0, kills: 0, banked: 0 }; G.hint = {}; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
+  G.run = { scrap: 0, kills: 0, banked: 0 }; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
   Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 2.5, lasOn: 0, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
@@ -2425,15 +2423,18 @@ const INTRO_TEXT = {
   warden: ['Stops, then fires a fan of laser beams down the screen.', 'Stand between the thin red lines.'],
   siege: ['Its shell stops most shots. It marks a lane, then charges down it.', 'Step aside, then hit it while its shell is open.'],
   triad: ['Three cores circling one centre.', 'Each one you destroy makes the others faster.'],
-  // not enemies, but introduced the same way, at the owner's request: the first scrap ring and the first missile
+  // not enemies, but introduced the same way, at the owner's request: the first scrap ring, repair cross and missile
   scrap: ['A gold ring in a blue glow is scrap.', 'Fly into it. Scrap buys upgrades at the station.'],
+  heart: ['A green cross in a blue glow repairs your hull.', 'Fly into it to get 1 hull back.'],
   missile: ['A homing missile. It turns to follow you.', 'Shoot it down, or slip past it.'],
 };
-const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer', scrap: 'Scrap', missile: 'Missile' };   // bosses take theirs from BOSSES
-const INTRO_KIND = { scrap: 'Salvage', missile: 'New threat' };   // the small heading, where 'New enemy' would be wrong
-// The thing a card is about: an enemy of that kind, or the first scrap ring or missile on the field.
-const introFind = key => key === 'scrap' ? G.picks.find(p => p.kind === 'scrap') : key === 'missile' ? G.em.find(m => !m.dead) : G.enemies.find(e => !e.dead && (key === 'elite' ? e.elite : e.type === key));
-const introGone = (key, e) => !e || (key === 'scrap' ? !G.picks.includes(e) : e.dead);
+const INTRO_NAME = { mite: 'Mite', wasp: 'Wasp', weaver: 'Weaver', splitter: 'Splitter', elite: 'Elite', beetle: 'Beetle', triplet: 'Triplet', lancer: 'Lancer', scrap: 'Scrap', heart: 'Repair Cross', missile: 'Missile' };   // bosses take theirs from BOSSES
+const INTRO_KIND = { scrap: 'Salvage', heart: 'Repair', missile: 'New threat' };   // the small heading, where 'New enemy' would be wrong
+// The thing a card is about: an enemy of that kind, or the first scrap ring, repair cross or missile on the field.
+// A pickup's kind ('scrap' or 'heart') is its key.
+const introPick = key => key === 'scrap' || key === 'heart';
+const introFind = key => introPick(key) ? G.picks.find(p => p.kind === key) : key === 'missile' ? G.em.find(m => !m.dead) : G.enemies.find(e => !e.dead && (key === 'elite' ? e.elite : e.type === key));
+const introGone = (key, e) => !e || (introPick(key) ? !G.picks.includes(e) : e.dead);
 const introOff = new URLSearchParams(location.search).get('intro') === 'off';   // the tests switch them off with ?intro=off
 const IN = { on: false, phase: '', t: 0, key: '', e: null, cool: 0 }, introV = new THREE.Vector3();
 const introSeen = () => G.test ? G.seen : meta.seen;   // a test run keeps its own list and leaves the save alone
@@ -2449,9 +2450,9 @@ function introScan(dt) {
     const key = !seen[e.type] ? e.type : e.elite && !seen.elite ? 'elite' : '';
     if (key && INTRO_TEXT[key]) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = key; IN.e = e; return; }
   }
-  // then the first missile, once it is clear of whatever launched it, and the first scrap ring, once it has stopped rising
+  // then the first missile, once it is clear of whatever launched it, and the first scrap ring and repair cross, once they have stopped rising
   if (!seen.missile) for (const m of G.em) if (!m.dead && m.t > 0.3 && m.y < P.y - 120) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = 'missile'; IN.e = m; return; }
-  if (!seen.scrap) for (const p of G.picks) if (p.kind === 'scrap' && p.vy >= 0 && p.y < P.y - 120) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = 'scrap'; IN.e = p; return; }
+  if (!seen.scrap || !seen.heart) for (const p of G.picks) if (!seen[p.kind] && p.vy >= 0 && p.y < P.y - 120) { IN.on = true; IN.phase = 'in'; IN.t = 0; IN.key = p.kind; IN.e = p; return; }
 }
 // Puts the spotlight, ring and card where the enemy is on screen.
 function introPlace() {
