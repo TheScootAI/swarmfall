@@ -29,7 +29,7 @@ const NOTES = {
   velocity: 'Each level adds 25% shot speed and 10% damage. All 4 double shot speed and add 40% damage.',
   magnet: 'Pickup reach grows from 42 to 102, 162, then 222: about five times as far at level 3.',
   patch: 'Repairs 2 hull now and nothing else. Only offered while your hull is damaged. No limit on how often.',
-  twin: 'Each level adds 1 shot to every volley, up to 4 shots (5 with the Twin Mount module).',
+  twin: 'Level 1: every 3rd volley fires 1 extra shot. Level 2: every volley fires 1 extra. Level 3: every volley fires 2 extra, so a one-barrel ship fires 3 shots a volley (4 with the Twin Mount module).',
   pierce: 'Each level lets a shot pass through 1 more enemy, up to 3. A shot bounces (Ricochet) only after its passes are used up.',
   shield: 'The first level gives a shield that absorbs one hit and comes back after 15 seconds. Each level after that takes 3.5 seconds off, as does owning the Aegis Generator module. Recharge never drops below 4 seconds.',
   drone: 'Each level adds 1 drone, up to 3 drones counting the Drone Bay module. A drone fires every 0.7 seconds for half your shot damage.',
@@ -50,7 +50,7 @@ const NOTES = {
   'm:dmg': '+10% damage per level: +50% with all 5.',
   'm:rate': '+6% fire rate per level: +30% with all 5.',
   'm:speed': '+8% bullet speed per level: +40% with all 5.',
-  'm:twin': 'Every volley is 2 shots from the first wave. Split Barrel boosters add to it.',
+  'm:twin': 'Every volley is 2 shots from the first wave. Split Barrel boosters add their extra shots to it.',
   'm:hull': '+1 hull: a new ship takes 1 hit and the 2nd ends the run. It has a single level. A ship can add 2 hull at the most, so one more can come from a Hull Plate booster.',
   'm:revive': 'The blow that would end the run leaves you on 1 hull instead, untouchable for 2.5 seconds, and blasts every enemy for 80 damage while wiping their shots.',
   'm:shield': 'The same shield as the Aegis Shell booster. With both, the recharge is 3.5 seconds shorter.',
@@ -76,7 +76,7 @@ const rarClass = ['common', 'rare', 'proto'];
 const boosterCard = u => `
         <article class="item ${rarClass[u.r]}" id="booster-${u.id}">
           <div class="top"><h4>${esc(u.n)}</h4><span class="tag">${CATEGORY[u.c]}</span></div>
-          <p class="says">${esc(u.d)}</p>
+          <p class="says">${esc(Array.isArray(u.d) ? 'Extra shots on some volleys, then on all: see below.' : u.d)}</p>
           <div class="stats"><span>${RARITY[u.r]}</span><span>${u.max >= 99 ? 'No limit' : 'Up to <b>' + u.max + '</b> ' + (u.max === 1 ? 'level' : 'levels')}</span></div>
           <p class="detail">${esc(NOTES[u.id])}</p>
         </article>`;
@@ -259,7 +259,7 @@ ${boosters}
       <dt>Hull</dt><dd><b>1</b> + Reinforced Hull + Hull Plate − Overdrive, never less than 1</dd>
       <dt>Shield</dt><dd><b>15</b> seconds to recharge, less 3.5 for each shield level past the first (Aegis Generator and Aegis Shell both count), less 2 for each Fast Recharge level, never under 4</dd>
       <dt>Scrap</dt><dd>Salvage Rig × Scavenger</dd>
-      <dt>Shots per volley</dt><dd><b>1</b> + Twin Mount + Split Barrel</dd>
+      <dt>Shots per volley</dt><dd><b>1</b> + Twin Mount, plus Split Barrel's extra shots on the volleys its level gives them to</dd>
     </dl>
   </section>
 

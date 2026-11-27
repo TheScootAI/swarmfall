@@ -56,6 +56,8 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `ELITE`: how many enemies are elites as the waves go (all of them by wave 40), and what an elite pays.
 - `SCRAP_RATE`: one number that scales every enemy's scrap chance (bosses pay in full).
 - `BLAST`: Volatile Payload's reach and strength by level.
+- `SPLIT`: Split Barrel by level: how many extra shots, and on which volleys.
+- `SWAY`: how a boss's sweep across the top varies its pace, its reach and its direction.
 - `BOSSES`: the bosses in the order they take turns. `CUBE`, `WARDEN`, `SIEGE` and `TRIAD`: each later boss's numbers.
 - `SKIP_SCRAP`: scrap for passing up a booster.
 - `SWARM`: how big the formation grows, and the reinforcements (from which waves, how thin the formation gets first, how much comes back).
