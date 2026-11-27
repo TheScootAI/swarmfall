@@ -450,7 +450,7 @@ const GROUPS = {
     await page.reload(); await page.waitForTimeout(500);
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await waitFor(x => x.state === 'play');
     const sg = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, out = {}, t0 = performance.now(), light = s.sats[0], heavy = s.sats[1]; G.wave = 3; s.nextWave(); G.flights = 0;   // no reinforcements: this scene counts on the formation it built
-      let step = 0, at = 0, sum0 = 0, seen3 = 0, lane = [], other = null, laneHp = 0, otherHp = 0;
+      let step = 0, at = 0, sum0 = 0, seen3 = 0, lasT = null, other = null, laneHp = 0, otherHp = 0;
       const hpSum = () => G.enemies.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0), since = () => G.time - at, go = n => { step = n; at = G.time; };
       const ball = o => G.eb.push({ x: o.x, y: o.y - 1, vx: 0, vy: 1, r: 4.5, kind: 0, turn: 0, dead: false });
       (function f() {
@@ -464,21 +464,23 @@ const GROUPS = {
         else if (step === 4 && light.on) { light.t = 0.03; go(5); }
         else if (step === 5 && since() > 0.3) { out.ranOut = !light.on; G.up.sentry = 0; s.meta.up.sentry = 1; s.recalc(); heavy.cool = 0.05; seen3 = 0; go(6); }   // now the station module's
         else if (step === 6 && heavy.on && since() > 2.5) { out.heavyHp = heavy.hp; out.heavyLife = heavy.t > 10; out.twoBarrels = seen3 === 2; out.lightStaysAway = !light.on; s.meta.up.sentry = 0; s.recalc(); heavy.t = 0.03; go(7); }
-        else if (step === 7 && since() > 0.5) {   // the Laser Drone: line its lane up with one column of the formation
-          const E = formed[0]; if (!E) return res(out); P.x = P.target = Math.max(14, E.x - s.LASER.side); const bx = P.x + s.LASER.side;
-          lane = formed.filter(e => Math.abs(e.x - bx) < e.rad + s.LASER.half); other = formed.find(e => Math.abs(e.x - bx) > 70); laneHp = lane.reduce((a, e) => a + e.hp, 0); otherHp = other ? other.hp : 0;
-          G.up.beam = 1; s.recalc(); P.lasT = 0.05; go(8); }
-        else if (step === 8) {
-          if (P.lasOn > 0) out.fired = true;
-          if (out.fired && P.lasOn <= 0) { out.laneLost = +(laneHp - lane.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0)).toFixed(1); out.laneOf = +laneHp.toFixed(1); out.inLane = lane.length; out.otherUntouched = !!other && !other.dead && other.hp === otherHp; G.up.beam = 0; s.recalc(); return res(out); }
+        else if (step === 7 && since() > 0.5) { P.x = P.target = 180; G.up.beam = 1; s.recalc(); P.lasT = 0.05; go(8); }   // the Laser Drone
+        else if (step === 8 && P.las) {   // it locks onto the enemy nearest the ship
+          lasT = P.las; const live = G.enemies.filter(e => !e.dead && e.z > -60), dist = e => Math.hypot(e.x - P.x, e.y - P.y);
+          out.lockedNearest = live.every(e => dist(e) >= dist(lasT) - 0.01); laneHp = lasT.hp; other = live.sort((a, b) => dist(b) - dist(a))[0]; otherHp = other.hp; out.stayed = true; go(9); }
+        else if (step === 9) {   // and stays on it, burning, until it is destroyed; nothing else is touched
+          if (!lasT.dead) { if (P.las !== lasT) out.stayed = false; if (lasT.lit > 0 && lasT.hp < laneHp) out.burning = true; }
+          else { out.killedIn = +since().toFixed(2); out.otherUntouched = !other.dead && other.hp === otherHp; go(10); }
+          if (since() > 8) { out.laserTimeout = true; G.up.beam = 0; s.recalc(); return res(out); }
         }
+        else if (step === 10 && (P.las && P.las !== lasT || since() > 3)) { out.lockedNext = !!P.las && P.las !== lasT && !P.las.dead; G.up.beam = 0; s.recalc(); return res(out); }   // then the next one
         if (performance.now() - t0 > 120000) { out.stuckAt = step; return res(out); }
         requestAnimationFrame(f); })(); }));
     check(sg.ahead === 150 && sg.life && sg.hp === 2 && sg.oneBarrel && sg.hurtSwarm >= 2, 'Sentry Satellite: set down ahead of the ship, it fires at the swarm by itself', sg.hurtSwarm + ' enemies destroyed or damaged in 3 seconds · ' + JSON.stringify(sg));
     check(sg.tookHit && sg.destroyed && sg.rest === 9, 'Sentry Satellite: it stops an enemy shot, takes the damage, and is shot down when its health is gone');
     check(sg.ranOut === true, 'Sentry Satellite: it runs out when its time is up');
     check(sg.heavyHp === 5 && sg.heavyLife && sg.twoBarrels && sg.lightStaysAway, 'Sentry Platform (station module): a tougher satellite with twin guns that lasts longer', 'health ' + sg.heavyHp);
-    check(sg.fired && sg.inLane > 0 && sg.laneLost > sg.laneOf * 0.5 && sg.otherUntouched, 'Laser Drone: its beam burns every enemy in its lane and nothing outside it', sg.inLane + ' in the lane lost ' + sg.laneLost + ' of ' + sg.laneOf);
+    check(sg.lockedNearest === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.6 && sg.killedIn < 4 && sg.otherUntouched === true && sg.lockedNext === true, 'Laser Drone: it locks onto the nearest enemy, sets it alight, stays on it until it is destroyed and touches nothing else, then locks onto the next', JSON.stringify({ lockedNearest: sg.lockedNearest, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, lockedNext: sg.lockedNext, timeout: sg.laserTimeout }));
     await page.context().close();
   },
   // The latcher: clamps onto the ship, goes off after 1.5 seconds, and is thrown off by flicks or by a slam into the edge.

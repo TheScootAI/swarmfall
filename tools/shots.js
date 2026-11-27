@@ -60,6 +60,12 @@ const GAME = 'file://' + path.join(__dirname, '..', 'index.html') + QUERY;
     window.__tick = s => { G.diveT = 99; G.shootT = 99; P.fireT = 9; if (!e && !G.queue.length && G.waveT > 6) { e = s.spawnEnemy('latcher', null, null, { x: P.x + 6, y: P.y - 90 }); s.launchDive(e); e.x = P.x + 6; e.y = P.y - 90; e.vx = 0; e.vy = 220; } if (e && e.state !== 'latch') P.inv = 0; }; });
   await hold(page, 7600, 200); await snap(page, '4d-latcher');
 
+  // the Laser Drone: its thin yellow beam held on one enemy, which is on fire
+  page = await open(); await start(page);
+  await page.evaluate(() => { const s = window.__swarmfall, G = s.G, P = s.P; G.wave = 12; s.nextWave(); G.flights = 0; G.up.beam = 2; s.recalc();
+    window.__tick = s => { G.diveT = 99; G.shootT = 99; P.fireT = 9; P.inv = 9; for (const e of G.enemies) if (e.def.latch) e.leap = 9; if (P.las) P.las.hp = Math.max(P.las.hp, P.las.maxHp * 0.6); }; });
+  await hold(page, 8000, 150); await snap(page, '4e-laser-drone');
+
   // reinforcements: most of the formation destroyed, and a fresh flight on its way in under the word
   page = await open(); await start(page);
   await page.evaluate(() => { const s = window.__swarmfall; s.G.wave = 8; s.nextWave(); window.__tick = s => { s.P.inv = 9; }; });

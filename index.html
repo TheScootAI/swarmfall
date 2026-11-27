@@ -509,7 +509,7 @@ const M = {
   lancer: pbr(0xff3355, 0x5a0a18), lancerShell: pbr(0x3a1638, 0x12061a, 0.7, 0.35), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: addMat(0xffffff, 0.95),   // no halo on the white core: blurred, it would turn the red beam pink
  
   siegeCore: glowing(basic(0xfff1c0)), eye: basic(0xffffff), elite: basic(ENEMY_RED), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
-  scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), drone: pbr(0xc7b0ff, 0x2a1a5a), laserOn: glowMat(0xc7b0ff, 0.85), laserCore: addMat(0xffffff, 0.9),
+  scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), drone: pbr(0xc7b0ff, 0x2a1a5a), laserOn: glowMat(0xffd23f, 0.5), laserCore: addMat(0xfff3c4, 0.9),
   // the shield: an energy bubble that is bright at its rim, with bands rising through it
   shield: glowing(new THREE.ShaderMaterial({
     uniforms: { time: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -718,7 +718,7 @@ const DOCK_TOP = 71, DOCK_BOTTOM = 75;   // how far the ship's centre sits from 
 // the station always sits in the middle of the field; only its height moves
 const ST = { on: false, y: 0 }, SH = { on: false, x: 0, y: 0, rot: 0, pod: true, leave: false, side: 1, bank: 0, gift: -1, gx: 0, gy: 0 };   // gift: 0 to 1 while the chosen booster flies across to the ship (-1 when none is)
 const droneMeshes = [0, 1, 2].map(() => { const m = part(geo.oct, M.drone, 5, 7, 5); m.visible = false; scene.add(m); return m; });
-// The Laser Drone: a small drone off the ship's wing, with its beam (violet with a white core, never red: it is yours).
+// The Laser Drone: a small drone off the ship's wing, with its beam (thin and yellow with a pale core, never red: it is yours).
 const laserDrone = new THREE.Group(); laserDrone.add(part(geo.oct, M.drone, 5, 8, 5), part(geo.box, M.wing, 12, 2.5, 2.5, 0, -3));
 const laserBeam = part(geo.plane, M.laserOn, 1, 1, 1), laserCore = part(geo.plane, M.laserCore, 1, 1, 1, 0, 0, 0.5);
 laserDrone.visible = laserBeam.visible = laserCore.visible = false; scene.add(laserDrone, laserBeam, laserCore);
@@ -975,8 +975,7 @@ const SENTRY = {
   ahead: 150, range: 620, r: 13 };
 // Laser Drone, by level: every is the seconds between beams, on how long a beam lasts, dps its damage a second
 // (× your shot damage) to everything in its lane. half: half the beam's width. side: how far out from the ship it flies.
-const LASER = { every: [4.5, 4, 3.5], on: [1.2, 1.5, 1.8], dps: [2.2, 2.8, 3.4], half: 6, side: 24 };
-const LASER_RGB = [0.78, 0.69, 1];
+const LASER = { dps: [0.9, 1.3, 1.7], burn: 2, relock: 0.35, range: 900, width: 2.2, side: 24 };
 const enterPace = () => Math.min(ENTER.max, 1 + ENTER.faster * (Math.max(1, G.wave) - 1));
 // A boss's death scene (the Hive Core, the last piece of the Fracture Cube, the Beam Warden): time slows and
 // smaller blasts follow the first, then time eases back. The camera does not move: the owner tried a push-in
@@ -1009,7 +1008,7 @@ const UP = [
   { id: 'flame', c: 'w', n: 'Flame Cloud', r: 1, max: 3, d: 'Lob a cloud of flame ahead of your ship. Enemies that fly through it burn slowly.' },
   { id: 'scav', c: 's', n: 'Scavenger', r: 1, max: 2, d: '+50% scrap for the rest of this run.' },
   { id: 'sentry', c: 's', n: 'Sentry Satellite', r: 1, max: 3, d: 'Deploy a satellite that fires at the swarm. It can be shot down, and it runs out after a while.' },
-  { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing fires a solid laser straight up, burning everything in its lane.' },
+  { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing locks a thin laser onto one enemy and sets it alight. It burns until it is destroyed.' },
   { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
   { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
   { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
@@ -1127,7 +1126,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, lit: 0, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) {
@@ -1845,22 +1844,26 @@ function updateSats(dt) {
 }
 
 // ---- Laser Drone ----
+// The drone picks the enemy nearest the ship and holds a thin yellow beam on it until it is destroyed (or flies out
+// of reach). The beam sets it alight, and the fire is what hurts it: LASER.dps of a shot every second, for as long as
+// the beam is on it and for LASER.burn seconds after. Unlike a Flame Cloud's, this fire does finish an enemy off.
 function updateLaser(dt) {
   const lv = Math.min(3, S.beam);
-  if (!lv || G.state !== 'play') { P.lasOn = 0; return; }
-  const x = P.x + LASER.side, y = P.y - 6;
-  if (P.lasOn > 0) {
-    P.lasOn -= dt;
-    const d = S.dmg * LASER.dps[lv - 1] * dt;
-    for (const e of G.enemies) {   // everything in its lane, all the way up
-      if (e.dead || e.z < -60 || e.y > y || Math.abs(e.x - x) > e.rad + LASER.half) continue;
-      damageEnemy(e, d, true); if (Math.random() < 0.35) burst(e.x + rand(-6, 6), e.y + e.rad * 0.6, LASER_RGB, 1, 70, 0.25);
-    }
-    for (const m of G.em) if (!m.dead && m.y < y && Math.abs(m.x - x) < LASER.half + 5) popMissile(m, true);
-    return;
+  if (!lv || G.state !== 'play') { P.las = null; return; }
+  const dx = P.x + LASER.side, dy = P.y - 6, d = S.dmg * LASER.dps[lv - 1] * dt;
+  for (const e of G.enemies) {   // whatever is alight burns
+    if (e.dead || !(e.lit > 0)) continue;
+    e.lit -= dt; if (Math.random() < 0.8) burst(e.x + rand(-0.6, 0.6) * e.rad, e.y - 2, FLAME_RGB, 2, 48, 0.45);   // flames, plain to see: it is on fire
+    damageEnemy(e, d, true);
   }
-  P.lasT -= dt;
-  if (P.lasT <= 0) { let any = false; for (const e of G.enemies) if (!e.dead && e.z > -60) { any = true; break; } if (any) { P.lasOn = LASER.on[lv - 1]; P.lasT = LASER.every[lv - 1]; SFX.lase(); } else P.lasT = 0.3; }
+  let t = P.las;
+  if (t && (t.dead || t.z < -60 || (t.x - dx) ** 2 + (t.y - dy) ** 2 > LASER.range * LASER.range)) { t = P.las = null; P.lasT = LASER.relock; }   // destroyed, or gone: a moment, then the next
+  if (!t) {
+    P.lasT -= dt; if (P.lasT > 0) return;
+    t = P.las = nearest(P.x, P.y, null, LASER.range); if (!t) { P.lasT = 0.3; return; }
+    SFX.lase();
+  }
+  t.lit = LASER.burn;
 }
 
 // ---- clouds (Confusion Gas and Flame Cloud) ----
@@ -2174,7 +2177,7 @@ const easeIO = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 const CUTS = { launch: { dur: 2.4 }, shuttle: { dur: 3.05, hold: 0.75 }, dock: { dur: 2.8 } };
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function startCut(kind, done) {
-  FIN.on = FIN.toast = false; clearClouds(); clearSats(); P.lasOn = 0;   // a cloud, satellite or beam would hang frozen through the scene
+  FIN.on = FIN.toast = false; clearClouds(); clearSats(); P.las = null;   // a cloud, satellite or beam would hang frozen through the scene
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
   else if (kind === 'dock') { ST.on = true; toast('DOCKING'); }
@@ -2244,12 +2247,16 @@ function syncScene(dt) {
     const m = droneMeshes[i]; m.visible = P.alive && i < S.drones && G.state !== 'title';
     if (m.visible) { const a = G.time * 2.4 + i * TAU / S.drones; m.position.set(TX(P.x) + Math.cos(a) * 30, TY(P.y) + 6, Math.sin(a) * 30); m.rotation.y = a * 2; }
   }
-  // the Laser Drone off the right wing, and its beam up the lane while it fires
-  const las = P.alive && S.beam > 0 && G.state !== 'title' && G.state !== 'browse', lasOn = las && P.lasOn > 0;
-  laserDrone.visible = las; laserBeam.visible = laserCore.visible = lasOn;
+  // the Laser Drone off the right wing, and its beam held on the enemy it has locked onto
+  const las = P.alive && S.beam > 0 && G.state !== 'title' && G.state !== 'browse', lt = las && G.state === 'play' && P.las && !P.las.dead ? P.las : null;
+  laserDrone.visible = las; laserBeam.visible = laserCore.visible = !!lt;
   if (las) {
     const lx = TX(P.x + LASER.side), ly = TY(P.y - 6); laserDrone.position.set(lx, ly, 0); laserDrone.rotation.y = G.time * 2;
-    if (lasOn) { const len = P.y + 60, w = LASER.half * 2 + Math.sin(G.time * 45) * 1.5; laserBeam.scale.set(w, len, 1); laserBeam.position.set(lx, ly + 8 + len / 2, 0); laserCore.scale.set(3, len, 1); laserCore.position.set(lx, ly + 8 + len / 2, 0.5); }
+    if (lt) {
+      const tx = TX(lt.x), ty = TY(lt.y), len = Math.hypot(tx - lx, ty - ly), a = Math.atan2(ty - ly, tx - lx) - Math.PI / 2, w = LASER.width + Math.sin(G.time * 45) * 0.6;
+      laserBeam.scale.set(w, len, 1); laserBeam.position.set((lx + tx) / 2, (ly + ty) / 2, 0); laserBeam.rotation.z = a;
+      laserCore.scale.set(w * 0.45, len, 1); laserCore.position.set((lx + tx) / 2, (ly + ty) / 2, 0.5); laserCore.rotation.z = a;
+    }
   }
   // station and shuttle
   station.visible = ST.on;
@@ -2399,7 +2406,7 @@ function startRun(test) {
   G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
   G.run = { scrap: 0, kills: 0, banked: 0 }; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
-  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 2.5, lasOn: 0, target: null, alive: true });
+  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 1, las: null, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
   Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
