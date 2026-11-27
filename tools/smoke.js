@@ -635,7 +635,7 @@ const GROUPS = {
       for (const [m, b] of [[0, 2], [1, 1], [1, 2], [0, 1], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
       s.meta.up.hull = was; s.G.up = {}; s.recalc(); out.max = plate.max; const shopHull = s.SHOP.find(x => x.id === 'hull'); out.levels = shopHull.cost.length; out.price = shopHull.cost[0]; return out; });
     check(hull['0+2'] === '3 full' && hull['1+1'] === '3 full' && hull['1+2'] === '3 full' && hull['0+1'] === '2 more' && hull['1+0'] === '2 more' && hull.max === 2 && hull.levels === 1 && hull.price === 90, 'hull: at most 2 upgrades, of which the station sells one (for 90); Hull Plate is not offered past the two', JSON.stringify(hull));
-    // Split Barrel: extra shots on every third volley, then two extra on every other volley, then two extra on every volley.
+    // Split Barrel: one extra shot on every third volley, then one extra on every volley, then two extra on every volley.
     // Each volley is counted by itself, on a ship with one barrel and on one with the Twin Mount's two.
     const sb = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, { G, P, S } = s, was = s.meta.up.twin, out = { state: G.state, text: s.UP.find(u => u.id === 'twin').d };
       for (const e of G.enemies) { e.dead = true; s.scene.remove(e.g); } G.queue.length = 0; G.flights = 0;
@@ -649,8 +649,8 @@ const GROUPS = {
         if (G.pb.length > n0) { seen.push(G.pb.length - n0); n0 = G.pb.length; if (seen.length === 6) next(); else P.fireT = 0; }
         requestAnimationFrame(f); })(); }));
     const six = a => (a || []).join('');
-    check(sb.state === 'play' && six(sb['0+0']) === '111111' && six(sb['0+1']) === '112112' && six(sb['0+2']) === '131313' && six(sb['0+3']) === '333333', 'Split Barrel: one extra shot on every third volley, then three shots on every other volley, then three on every volley', JSON.stringify({ none: six(sb['0+0']), lv1: six(sb['0+1']), lv2: six(sb['0+2']), lv3: six(sb['0+3']) }));
-    check(six(sb['1+0']) === '222222' && six(sb['1+1']) === '223223' && six(sb['1+2']) === '242424' && six(sb['1+3']) === '444444' && Array.isArray(sb.text) && sb.text.length === 3, 'with the Twin Mount its extra shots are added to two barrels; its card has a line for each level', JSON.stringify({ none: six(sb['1+0']), lv1: six(sb['1+1']), lv2: six(sb['1+2']), lv3: six(sb['1+3']) }));
+    check(sb.state === 'play' && six(sb['0+0']) === '111111' && six(sb['0+1']) === '112112' && six(sb['0+2']) === '222222' && six(sb['0+3']) === '333333', 'Split Barrel: two shots on every third volley, then two on every volley, then three on every volley', JSON.stringify({ none: six(sb['0+0']), lv1: six(sb['0+1']), lv2: six(sb['0+2']), lv3: six(sb['0+3']) }));
+    check(six(sb['1+0']) === '222222' && six(sb['1+1']) === '223223' && six(sb['1+2']) === '333333' && six(sb['1+3']) === '444444' && Array.isArray(sb.text) && sb.text.length === 3, 'with the Twin Mount its extra shots are added to two barrels; its card has a line for each level', JSON.stringify({ none: six(sb['1+0']), lv1: six(sb['1+1']), lv2: six(sb['1+2']), lv3: six(sb['1+3']) }));
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;

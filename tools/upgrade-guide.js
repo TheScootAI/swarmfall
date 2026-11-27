@@ -29,7 +29,7 @@ const NOTES = {
   velocity: 'Each level adds 25% shot speed and 10% damage. All 4 double shot speed and add 40% damage.',
   magnet: 'Pickup reach grows from 42 to 102, 162, then 222: about five times as far at level 3.',
   patch: 'Repairs 2 hull now and nothing else. Only offered while your hull is damaged. No limit on how often.',
-  twin: 'Level 1: every 3rd volley fires 1 extra shot. Level 2: every other volley fires 2 extra. Level 3: every volley fires 2 extra, so a one-barrel ship fires 3 shots a volley (4 with the Twin Mount module).',
+  twin: 'Level 1: every 3rd volley fires 1 extra shot. Level 2: every volley fires 1 extra. Level 3: every volley fires 2 extra, so a one-barrel ship fires 3 shots a volley (4 with the Twin Mount module).',
   pierce: 'Each level lets a shot pass through 1 more enemy, up to 3. A shot bounces (Ricochet) only after its passes are used up.',
   shield: 'The first level gives a shield that absorbs one hit and comes back after 15 seconds. Each level after that takes 3.5 seconds off, as does owning the Aegis Generator module. Recharge never drops below 4 seconds.',
   drone: 'Each level adds 1 drone, up to 3 drones counting the Drone Bay module. A drone fires every 0.7 seconds for half your shot damage.',
