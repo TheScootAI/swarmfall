@@ -913,11 +913,11 @@ const SCRAP_RATE = 0.5;
 // Volatile Payload, by level: a destroyed enemy hurts whatever is within r of it for dmg of one shot. An enemy
 // that a blast destroys sets off no blast of its own: at levels 2 and 3 that chain cleared the whole formation.
 const BLAST = { r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
-// Escorts: when a stronger enemy leaves the formation, sometimes a few mites leave with it and fly just ahead of it
-// as pawns. chance and n: how often, and how many, by the kind they escort (a beetle most of all: its three form a
+// Escorts: when a stronger enemy leaves the formation, more often than not a few mites leave with it and fly just
+// ahead of it as pawns (the owner wanted it for wasps and the others as much as for beetles, and from wave 2). chance and n: how often, and how many, by the kind they escort (a beetle most of all: its three form a
 // wall in front of it while it stops to launch its missiles). ahead: how far in front of it they fly; gap: how far
 // apart; from: the first wave it can happen on.
-const ESCORT = { beetle: { chance: 0.7, n: 3 }, wasp: { chance: 0.3, n: 2 }, weaver: { chance: 0.3, n: 2 }, splitter: { chance: 0.3, n: 2 }, ahead: 30, gap: 24, from: 4 };
+const ESCORT = { beetle: { chance: 0.8, n: 3 }, wasp: { chance: 0.6, n: 2 }, weaver: { chance: 0.6, n: 2 }, splitter: { chance: 0.6, n: 2 }, ahead: 30, gap: 24, from: 2 };
 // The latcher: a fast enemy that clamps onto the side of the ship and blows up `fuse` seconds later, costing a hit.
 // The ship's shield stops it like any other rammer. It is thrown off, and destroyed, in two ways:
 //   by shaking: `flicks` changes of direction, each after at least `flick` units of travel (measured from where
