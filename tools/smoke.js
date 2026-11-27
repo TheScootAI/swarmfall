@@ -88,7 +88,7 @@ const GROUPS = {
       (function f() { if (s.SH.gift >= 0) { out.crossed = true; out.podLeftShuttle = !s.SH.pod; } if (out.crossed && s.SH.gift < 0 && !s.SH.on) { out.gone = true; return res(out); } if (performance.now() - t0 > 8000) return res(out); requestAnimationFrame(f); })(); }));
     check(side.beside && side.pod && side.on && handOver.crossed && handOver.podLeftShuttle && handOver.gone, 'the shuttle holds beside the ship, the chosen booster crosses over, and the shuttle drops back', JSON.stringify({ ...side, ...handOver }));
 
-    await page.evaluate(() => { window.__swarmfall.G.run.scrap += 60; });
+    await page.evaluate(() => { window.__swarmfall.G.run.scrap += 120; });   // enough to buy Reinforced Hull (90) at the station
     // watch the Hive Core's death scene from inside the page: slowest game speed, closest camera, and hull lost during it
     await page.evaluate(() => { const s = window.__swarmfall, w = window.__fin = { slowest: 1, closest: 1, far: s.camera.position.z, hp: null, hurt: false };
       (function f() {
@@ -113,7 +113,7 @@ const GROUPS = {
     check(!fin.on && fin.speed === 1 && Math.abs(fin.z - fin.far) < 0.01, 'speed and camera are back to normal by the time docking starts', JSON.stringify(fin));
     check(fin.sps.length === 14 && fin.worth === 14 && new Set(fin.sps).size >= 10 && Math.max(...fin.sps) === 1 && Math.min(...fin.sps) < 0.6 && fin.gotLast - fin.gotFirst > 0.3 && fin.picksLeft === 0, 'the boss\'s scrap is a shower of 14 single rings, which fly to the ship at different speeds and are all in before docking', fin.sps.length + ' rings worth ' + fin.worth + ', speeds ' + Math.min(...fin.sps) + ' to 1, collected over ' + (fin.gotLast - fin.gotFirst).toFixed(2) + ' s of game time');
     s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);
-    check(s.scrap >= 60, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
+    check(s.scrap >= 120, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
     await shot('05-station');
     const hp0 = await page.evaluate(() => window.__swarmfall.S.maxHp);
     await page.locator('#shop .item', { hasText: 'Reinforced Hull' }).locator('button').tap();
@@ -612,9 +612,9 @@ const GROUPS = {
     check(vp.chance === 0.25 && vp.none === 1 && vp.hurtNone === 0, 'Volatile Payload: a destroyed enemy explodes one time in four; on the other three nothing near it is touched', JSON.stringify({ chance: vp.chance, destroyed: vp.none, hurt: vp.hurtNone }));
     // Hull: two upgrades at the most, counting the station's Reinforced Hull and Hull Plate boosters together
     const hull = await page.evaluate(() => { const s = window.__swarmfall, was = s.meta.up.hull, plate = s.UP.find(u => u.id === 'plate'), out = {};
-      for (const [m, b] of [[0, 2], [1, 1], [2, 2], [2, 0], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
-      s.meta.up.hull = was; s.G.up = {}; s.recalc(); out.max = plate.max; return out; });
-    check(hull['0+2'] === '3 full' && hull['1+1'] === '3 full' && hull['2+2'] === '3 full' && hull['2+0'] === '3 full' && hull['1+0'] === '2 more' && hull.max === 2, 'hull: at most 2 upgrades, station levels and Hull Plates together, and Hull Plate is not offered past that', JSON.stringify(hull));
+      for (const [m, b] of [[0, 2], [1, 1], [1, 2], [0, 1], [1, 0]]) { s.meta.up.hull = m; s.G.up = { plate: b }; s.recalc(); out[m + '+' + b] = s.S.maxHp + (plate.ok() ? ' more' : ' full'); }
+      s.meta.up.hull = was; s.G.up = {}; s.recalc(); out.max = plate.max; const shopHull = s.SHOP.find(x => x.id === 'hull'); out.levels = shopHull.cost.length; out.price = shopHull.cost[0]; return out; });
+    check(hull['0+2'] === '3 full' && hull['1+1'] === '3 full' && hull['1+2'] === '3 full' && hull['0+1'] === '2 more' && hull['1+0'] === '2 more' && hull.max === 2 && hull.levels === 1 && hull.price === 90, 'hull: at most 2 upgrades, of which the station sells one (for 90); Hull Plate is not offered past the two', JSON.stringify(hull));
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
