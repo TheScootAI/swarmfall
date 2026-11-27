@@ -50,7 +50,7 @@ Choose the test groups to fit the change. Do not run everything for a small one:
 ```
 cd tools
 node smoke.js --only core,bosses /tmp/shots   # the groups you need; screenshots land in /tmp/shots
-node smoke.js /tmp/shots                      # every group, about 8 minutes
+node smoke.js /tmp/shots                      # every group, about 14 minutes
 node smoke.js --list
 ```
 
