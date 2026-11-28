@@ -867,13 +867,12 @@ const droneMeshes = [0, 1, 2].map(() => { const m = part(geo.oct, M.drone, 5, 7,
 const laserDrone = new THREE.Group(); laserDrone.add(part(geo.oct, M.drone, 5, 8, 5), part(geo.box, M.wing, 12, 2.5, 2.5, 0, -3));
 const laserBeam = part(geo.plane, M.laserOn, 1, 1, 1), laserCore = part(geo.plane, M.laserCore, 1, 1, 1, 0, 0, 0.5);
 laserDrone.visible = laserBeam.visible = laserCore.visible = false; scene.add(laserDrone, laserBeam, laserCore);
-// Sentry satellites: [0] is the light one (booster), [1] the heavy one (station module, with a second barrel and wider panels).
-const sats = [0, 1].map(heavy => {
-  const g = new THREE.Group(), k = heavy ? 1.35 : 1;
-  g.add(part(geo.oct, M.hull, 7 * k, 9 * k, 7 * k), part(geo.box, M.wing, (heavy ? 20 : 13) * k, 5 * k, 1.5, -(heavy ? 17 : 12) * k, 0), part(geo.box, M.wing, (heavy ? 20 : 13) * k, 5 * k, 1.5, (heavy ? 17 : 12) * k, 0));
-  if (heavy) g.add(part(geo.box, M.hull, 2.5, 9, 2.5, -4, 9), part(geo.box, M.hull, 2.5, 9, 2.5, 4, 9)); else g.add(part(geo.box, M.hull, 2.5, 8, 2.5, 0, 8));
+// The sentry satellite (the Sentry Satellite booster's). A list of one: the station once sold a heavier second one.
+const sats = [0].map(() => {
+  const g = new THREE.Group();
+  g.add(part(geo.oct, M.hull, 7, 9, 7), part(geo.box, M.wing, 13, 5, 1.5, -12, 0), part(geo.box, M.wing, 13, 5, 1.5, 12, 0), part(geo.box, M.hull, 2.5, 8, 2.5, 0, 8));
   g.visible = false; scene.add(g);
-  return { on: false, heavy: !!heavy, lv: 1, x: 0, y: 0, x0: 0, y0: 0, tx: 0, ty: 0, fly: 0, t: 0, hp: 0, fireT: 0, cool: 2, hitT: 0, mesh: g };
+  return { on: false, lv: 1, x: 0, y: 0, x0: 0, y0: 0, tx: 0, ty: 0, fly: 0, t: 0, hp: 0, fireT: 0, cool: 2, hitT: 0, mesh: g };
 });
 
 // ---- post-processing ----
@@ -1187,15 +1186,13 @@ const GAS_RGB = [0.45, 1, 0.6], FLAME_RGB = [1, 0.6, 0.15];
 // many sitting enemies one enemy in flight is worth when it chooses where to burst.
 // It is aimed (empAim): lobbed blindly ahead, as the clouds are, it knocked out less than one enemy a bomb in play.
 const EMP = { every: [9, 8, 7], r: [100, 120, 140], stun: [3, 4, 5], fly: 0.55, wave: 0.4, clear: 50, flying: 3 };
-// Sentry satellites: guns the ship leaves behind it. light is the Sentry Satellite booster's, heavy the Sentry
-// Platform station module's; both can be out at once. Each list is by level 1, 2, 3.
+// The sentry satellite: a gun the ship leaves behind it (the Sentry Satellite booster). Each list is by level 1, 2, 3.
 // life: seconds it lasts. hp: enemy shots it can take (a missile counts as 2; an enemy that flies into it destroys
 // it). rate: volleys a second. dmg: each shot, × your shot damage. shots: barrels. rest: seconds after one is gone
 // before the next is deployed. ahead: how far above the ship it is set down. range: how far it can see. r: its size.
-const SENTRY = {
-  light: { life: [9, 11, 13], hp: [2, 3, 4], rate: [1.8, 2.2, 2.6], dmg: 0.6, shots: 1, rest: 9 },
-  heavy: { life: [14, 17, 20], hp: [5, 7, 9], rate: [2.6, 3, 3.4], dmg: 0.9, shots: 2, rest: 8 },
-  ahead: 150, range: 620, r: 13 };
+// The station sold a heavier one too (the Sentry Platform module) until the owner asked for it to go: "Keep the booster one only".
+const SENTRY = { life: [9, 11, 13], hp: [2, 3, 4], rate: [1.8, 2.2, 2.6], dmg: 0.6, shots: 1, rest: 9, ahead: 150, range: 620, r: 13 };
+const PLATFORM_PAID = [0, 160, 460, 940];   // what a save had spent on the Sentry Platform's levels: given back on loading
 // Laser Drone, by level: every is the seconds between beams, on how long a beam lasts, dps its damage a second
 // (× your shot damage) to everything in its lane. half: half the beam's width. side: how far out from the ship it flies.
 // relock: the drone's rest between one target and the next (0.35 at first; the owner asked for "a little longer cooldown between shots", then for another second)
@@ -1264,7 +1261,7 @@ const GROUPS = [
 ];
 // The station starts with two modules fitted. Each boss destroyed earns the next one, in this order.
 const START_MODS = ['dmg', 'hull'];
-const UNLOCK_ORDER = ['shield', 'rate', 'speed', 'drone', 'sentry', 'scrap', 'charge', 'twin', 'magnet', 'missile', 'reroll', 'head', 'revive'];
+const UNLOCK_ORDER = ['shield', 'rate', 'speed', 'drone', 'scrap', 'charge', 'twin', 'magnet', 'missile', 'reroll', 'head', 'revive'];
 const SHOP = [
   { g: 'weapons', id: 'dmg', n: 'Tuned Cannons', d: '+10% damage.', cost: [15, 35, 70, 120, 200] },
   { g: 'weapons', id: 'rate', n: 'Feed Mechanism', d: '+6% fire rate.', cost: [15, 35, 70, 120, 200] },
@@ -1274,7 +1271,6 @@ const SHOP = [
   { g: 'armor', id: 'revive', n: 'Emergency Reboot', d: 'Once per run, survive a killing blow.', cost: [300] },
   { g: 'shields', id: 'shield', n: 'Aegis Generator', d: 'Start each run with a shield that absorbs one hit, then recharges in 15 seconds.', cost: [70] },
   { g: 'shields', id: 'charge', n: 'Fast Recharge', d: 'Shields recharge 2 seconds sooner.', cost: [40, 90, 160] },
-  { g: 'specials', id: 'sentry', n: 'Sentry Platform', d: 'Start each run with a heavy sentry satellite: tougher than the booster\'s, with twin guns, and it lasts longer.', cost: [160, 300, 480] },
   { g: 'specials', id: 'drone', n: 'Drone Bay', d: 'Start each run with a wing drone that fires with you.', cost: [150] },
   { g: 'specials', id: 'missile', n: 'Seeker Rack', d: 'Start each run with homing missiles.', cost: [220] },
   { g: 'salvage', id: 'scrap', n: 'Salvage Rig', d: '+20% scrap from every run.', cost: [40, 90, 170] },
@@ -1286,6 +1282,12 @@ const SHOP = [
 // older saves had every module available: keep whatever was already bought
 if (!meta.mods) meta.mods = SHOP.filter(m => START_MODS.includes(m.id) || mlv(m.id) > 0).map(m => m.id);
 for (const id of START_MODS) if (!meta.mods.includes(id)) meta.mods.push(id);
+// The Sentry Platform module is gone. A save that had it gets back the scrap spent on its levels, and, since a boss was
+// destroyed to earn it, the next module in its place. (meta.up.sentry was the module's level; the booster's is G.up.sentry.)
+if (meta.mods.includes('sentry') || meta.up.sentry) {
+  const had = meta.mods.includes('sentry'); meta.scrap += PLATFORM_PAID[clamp(meta.up.sentry | 0, 0, 3)]; delete meta.up.sentry;
+  meta.mods = meta.mods.filter(id => id !== 'sentry'); const id = had && UNLOCK_ORDER.find(x => !meta.mods.includes(x)); if (id) meta.mods.push(id); save();
+}
 const SHOPBY = {}; SHOP.forEach(m => SHOPBY[m.id] = m);
 const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 
@@ -1309,7 +1311,7 @@ function recalc() {
   S.maxHp = Math.max(1, 1 + Math.min(HULL_UPGRADES, mlv('hull') + ulv('plate')) - od);   // a new ship has 1 hull: one hit ends the run until hull is added
   S.rate = 2.75 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
   S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
-  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.arc = ulv('arc'); S.emp = ulv('emp'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame'); S.sentry = ulv('sentry'); S.platform = mlv('sentry'); S.beam = ulv('beam');
+  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.arc = ulv('arc'); S.emp = ulv('emp'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame'); S.sentry = ulv('sentry'); S.beam = ulv('beam');
   S.ebMul = 1 - 0.2 * ulv('slow');
   S.scrapMul = (1 + 0.2 * mlv('scrap')) * (1 + 0.5 * ulv('scav'));
   S.magnet = 42 + 22 * mlv('magnet') + 60 * ulv('magnet');
@@ -2160,20 +2162,20 @@ function updatePlayer(dt) {
 }
 // ---- sentry satellites ----
 function satGone(o, destroyed) {
-  o.on = false; o.mesh.visible = false; o.cool = (o.heavy ? SENTRY.heavy : SENTRY.light).rest;
+  o.on = false; o.mesh.visible = false; o.cool = SENTRY.rest;
   burst(o.x, o.y, HIT_RGB, destroyed ? 22 : 8, destroyed ? 170 : 60, 0.45); if (destroyed) { ringFx(o.x, o.y, 6, 40, 0x9ff3ff, 0.3); SFX.boom(); }
 }
 function satHit(o, n) { o.hp -= n; o.hitT = 0.15; if (o.hp <= 0) satGone(o, true); else SFX.hit(); }
 function clearSats() { for (const o of sats) { o.on = false; o.mesh.visible = false; o.cool = 2; } }
 function updateSats(dt) {
   for (const o of sats) {
-    const lv = Math.min(3, o.heavy ? S.platform : S.sentry), Q = o.heavy ? SENTRY.heavy : SENTRY.light;
+    const lv = Math.min(3, S.sentry), Q = SENTRY;
     if (!o.on) {
       if (!lv || G.state !== 'play') continue;
       o.cool -= dt;
-      if (o.cool <= 0 && G.enemies.length) {   // set one down ahead of the ship, the light one to its left and the heavy one to its right
+      if (o.cool <= 0 && G.enemies.length) {   // set one down ahead of the ship, a little to its left
         o.on = true; o.lv = lv; o.t = Q.life[lv - 1]; o.hp = Q.hp[lv - 1]; o.fireT = 0.5; o.fly = 0; o.hitT = 0;
-        o.x = o.x0 = P.x; o.y = o.y0 = P.y - 16; o.tx = clamp(P.x + (o.heavy ? 34 : -34), 26, W - 26); o.ty = P.y - SENTRY.ahead - (o.heavy ? 34 : 0);
+        o.x = o.x0 = P.x; o.y = o.y0 = P.y - 16; o.tx = clamp(P.x - 34, 26, W - 26); o.ty = P.y - SENTRY.ahead;
         o.mesh.visible = true; SFX.deploy();
       }
       continue;

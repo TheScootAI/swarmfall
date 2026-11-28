@@ -497,9 +497,17 @@ const GROUPS = {
   sentry: async () => {
     const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
     // ---- sentry satellites and the Laser Drone ----
+    // The station no longer sells a satellite (the Sentry Platform module): a save that had it, at level 2, gets back
+    // the 460 scrap spent on it and the next module in its place, and loading it a second time changes nothing more.
+    await page.evaluate(() => localStorage.setItem('swarmfall.v1', JSON.stringify({ scrap: 7, up: { sentry: 2, dmg: 1 }, mods: ['dmg', 'hull', 'shield', 'rate', 'speed', 'drone', 'sentry'] })));
     await page.reload(); await page.waitForTimeout(500);
+    const gone = () => page.evaluate(() => { const s = window.__swarmfall, m = s.meta; return { scrap: m.scrap, mods: m.mods.join(), up: JSON.stringify(m.up), sold: s.SHOP.some(x => /sentry|satellite/i.test(x.id + x.n + x.d)), sats: s.sats.length, booster: !!s.UP.find(u => u.id === 'sentry') }; });
+    const g1 = await gone(); await page.reload(); await page.waitForTimeout(500); const g2 = await gone();
+    check(g1.scrap === 467 && g1.mods === 'dmg,hull,shield,rate,speed,drone,scrap' && g1.up === '{"dmg":1}' && JSON.stringify(g1) === JSON.stringify(g2), 'a save that had the Sentry Platform module: its scrap comes back, the next module takes its place, and only once', JSON.stringify(g1));
+    check(!g1.sold && g1.sats === 1 && g1.booster, 'the station sells no satellite; the Sentry Satellite booster remains');
+    await page.evaluate(() => localStorage.removeItem('swarmfall.v1')); await page.reload(); await page.waitForTimeout(500);
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await waitFor(x => x.state === 'play');
-    const sg = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, out = {}, t0 = performance.now(), light = s.sats[0], heavy = s.sats[1]; G.wave = 3; s.nextWave(); G.flights = 0;   // no reinforcements: this scene counts on the formation it built
+    const sg = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall, G = s.G, P = s.P, out = {}, t0 = performance.now(), light = s.sats[0]; G.wave = 3; s.nextWave(); G.flights = 0;   // no reinforcements: this scene counts on the formation it built
       let step = 0, at = 0, sum0 = 0, seen3 = 0, lasT = null, other = null, laneHp = 0, otherHp = 0, killAt = 0;
       const hpSum = () => G.enemies.reduce((a, e) => a + (e.dead ? 0 : e.hp), 0), since = () => G.time - at, go = n => { step = n; at = G.time; };
       const ball = o => G.eb.push({ x: o.x, y: o.y - 1, vx: 0, vy: 1, r: 4.5, kind: 0, turn: 0, dead: false });
@@ -512,8 +520,7 @@ const GROUPS = {
         else if (step === 2 && since() > 0.3) { out.tookHit = light.on && light.hp === out.hp - 1 && !G.eb.length; ball(light); go(3); }   // a shot hits it and is stopped
         else if (step === 3 && since() > 0.3) { out.destroyed = !light.on; out.rest = Math.round(light.cool); light.cool = 0.05; go(4); }   // its last health: shot down
         else if (step === 4 && light.on) { light.t = 0.03; go(5); }
-        else if (step === 5 && since() > 0.3) { out.ranOut = !light.on; G.up.sentry = 0; s.meta.up.sentry = 1; s.recalc(); heavy.cool = 0.05; seen3 = 0; go(6); }   // now the station module's
-        else if (step === 6 && heavy.on && since() > 2.5) { out.heavyHp = heavy.hp; out.heavyLife = heavy.t > 10; out.twoBarrels = seen3 === 2; out.lightStaysAway = !light.on; s.meta.up.sentry = 0; s.recalc(); heavy.t = 0.03; go(7); }
+        else if (step === 5 && since() > 0.3) { out.ranOut = !light.on; G.up.sentry = 0; s.recalc(); go(7); }
         else if (step === 7 && since() > 0.5) { P.x = P.target = 180; G.up.beam = 1; s.recalc(); P.lasT = 0.05; go(8); }   // the Laser Drone
         else if (step === 8) {   // with everything sitting in the formation it has nothing to aim at: it only takes enemies in flight
           if (P.las) out.tookSitter = true;
@@ -545,7 +552,6 @@ const GROUPS = {
     check(sg.ahead === 150 && sg.life && sg.hp === 2 && sg.oneBarrel && sg.hurtSwarm >= 2, 'Sentry Satellite: set down ahead of the ship, it fires at the swarm by itself', sg.hurtSwarm + ' enemies destroyed or damaged in 3 seconds · ' + JSON.stringify(sg));
     check(sg.tookHit && sg.destroyed && sg.rest === 9, 'Sentry Satellite: it stops an enemy shot, takes the damage, and is shot down when its health is gone');
     check(sg.ranOut === true, 'Sentry Satellite: it runs out when its time is up');
-    check(sg.heavyHp === 5 && sg.heavyLife && sg.twoBarrels && sg.lightStaysAway, 'Sentry Platform (station module): a tougher satellite with twin guns that lasts longer', 'health ' + sg.heavyHp);
     check(!sg.tookSitter && sg.locked === true && sg.stayed === true && sg.burning === true && sg.killedIn > 0.3 && sg.killedIn < 5 && sg.otherUntouched === true && sg.idleAgain === true && sg.lockedNext === true && sg.laserRest >= 1.95 && sg.laserRest < 2.4, 'Laser Drone: it leaves enemies in the formation alone; one in flight it locks onto, sets alight and holds until destroyed; after two seconds\' rest it takes the next to leave', JSON.stringify({ tookSitter: !!sg.tookSitter, locked: sg.locked, stayed: sg.stayed, burning: sg.burning, killedIn: sg.killedIn, otherUntouched: sg.otherUntouched, idleAgain: sg.idleAgain, lockedNext: sg.lockedNext, rest: sg.laserRest, timeout: sg.laserTimeout }));
     check(sg.tookLeaper === true && sg.letGo === true, 'Laser Drone: it takes a latcher on its way in, and lets go of one that has clamped onto the ship', JSON.stringify({ tookLeaper: sg.tookLeaper, letGo: sg.letGo, timeout: sg.latcherTimeout }));
     check(sg.tookMissile === true && sg.missileGone === true && sg.missileIn < 1.5, 'Laser Drone: it locks onto a missile and burns it out of the air', JSON.stringify({ took: sg.tookMissile, gone: sg.missileGone, seconds: sg.missileIn }));
@@ -967,20 +973,20 @@ const GROUPS = {
     check(await page.isHidden('#scrDebug'), 'test bench: stays hidden from ordinary taps on the title');
     await page.waitForTimeout(3200); for (let i = 0; i < 5; i++) await tapLogo();
     check(await page.isVisible('#scrDebug'), 'test bench: five taps on the title within three seconds open it');
-    await page.tap('#dbgClear'); await page.tap('#dbgModNone'); await page.tap('#dbgMod [data-id="sentry"]'); await page.tap('#dbgMod [data-id="sentry"]'); await page.tap('#dbgMod [data-id="hull"]'); await page.tap('#dbgBoss [data-w="12"]'); await page.tap('#dbgUps [data-id="gas"]'); await page.tap('#dbgUps [data-id="flame"]'); await page.tap('#dbgUps [data-id="flame"]');
+    await page.tap('#dbgClear'); await page.tap('#dbgModNone'); await page.tap('#dbgMod [data-id="rate"]'); await page.tap('#dbgMod [data-id="rate"]'); await page.tap('#dbgMod [data-id="hull"]'); await page.tap('#dbgBoss [data-w="12"]'); await page.tap('#dbgUps [data-id="gas"]'); await page.tap('#dbgUps [data-id="flame"]'); await page.tap('#dbgUps [data-id="flame"]');
     if ((await page.textContent('#dbgGod')).endsWith('off')) await page.tap('#dbgGod');
     const bench = await page.evaluate(() => ({ all: window.__swarmfall.UP.filter(u => u.id !== 'patch').length, wave: document.getElementById('dbgWave').textContent, god: document.getElementById('dbgGod').textContent, on: [...document.querySelectorAll('#dbgUps .chip.on')].map(c => c.textContent), mods: [...document.querySelectorAll('#dbgMod .chip.on')].map(c => c.textContent), offered: [...document.querySelectorAll('#dbgUps .chip')].map(c => c.textContent) }));
     check(bench.wave === 'Wave 12 · Fracture Cube' && bench.on.join() === 'Flame Cloud2,Confusion Gas1' && bench.god.endsWith('on'), 'test bench: a wave, boosters with levels and "cannot be hit" can be chosen', JSON.stringify(bench.on));
-    check(bench.mods.join() === 'Reinforced Hull1,Sentry Platform2' && bench.offered.includes('Sentry Satellite') && bench.offered.includes('Laser Drone') && bench.offered.includes('Burst Thrusters') && bench.offered.length === bench.all, 'test bench: station modules can be chosen for the test, and every booster is offered', bench.offered.length + ' boosters · modules: ' + bench.mods.join(', '));
+    check(bench.mods.join() === 'Feed Mechanism2,Reinforced Hull1' && bench.offered.includes('Sentry Satellite') && bench.offered.includes('Laser Drone') && bench.offered.includes('Burst Thrusters') && bench.offered.length === bench.all, 'test bench: station modules can be chosen for the test, and every booster is offered', bench.offered.length + ' boosters · modules: ' + bench.mods.join(', '));
     if (OUT) await page.screenshot({ path: path.join(OUT, '16-test-bench.png') });
     await page.tap('#dbgGo'); await waitFor(x => x.state === 'play', 15000);
     await page.waitForFunction(() => window.__swarmfall.G.boss, null, { timeout: 20000 });
     const run = await page.evaluate(() => { const s = window.__swarmfall; s.P.inv = 0; s.G.eb.push({ x: s.P.x, y: s.P.y - 3, vx: 0, vy: 5, r: 6, kind: 0, turn: 0, dead: false });
-      return { wave: s.G.wave, boss: s.G.boss.type, up: JSON.stringify(s.G.up), gas: s.S.gas, flame: s.S.flame, test: s.G.test, platform: s.S.platform, maxHp: s.S.maxHp, shield: s.S.shield }; });
+      return { wave: s.G.wave, boss: s.G.boss.type, up: JSON.stringify(s.G.up), gas: s.S.gas, flame: s.S.flame, test: s.G.test, rate: s.S.rate, maxHp: s.S.maxHp, shield: s.S.shield }; });
     await page.waitForTimeout(500);
     const hitless = await page.evaluate(() => { const s = window.__swarmfall; return s.P.alive && s.P.hp === s.S.maxHp && s.G.state === 'play'; });
     check(run.wave === 12 && run.boss === 'cube' && run.gas === 1 && run.flame === 2 && run.test && hitless, 'test run: starts on the chosen wave with the chosen boosters, and the ship cannot be hit', JSON.stringify(run) + ' unhurt ' + hitless);
-    check(run.platform === 2 && run.maxHp === 2 && run.shield === 0, 'test run: uses the station modules chosen on the bench, not the save\'s', 'Sentry Platform ' + run.platform + ', hull ' + run.maxHp + ', shield ' + run.shield);
+    check(Math.abs(run.rate - 2.75 * 1.12) < 0.01 && run.maxHp === 2 && run.shield === 0, 'test run: uses the station modules chosen on the bench, not the save\'s', 'fire rate ' + run.rate.toFixed(2) + ' (Feed Mechanism 2), hull ' + run.maxHp + ', shield ' + run.shield);
     await page.evaluate(() => { window.__swarmfall.G.run.scrap += 80; });
     for (let i = 0; i < 40 && (await st()).state !== 'station'; i++) { await page.evaluate(() => { const s = window.__swarmfall; s.G.eb.length = 0; s.G.em.length = 0; for (const e of s.G.enemies) if (e.def.boss) s.G.pb.push({ x: e.x, y: e.y, vx: 0, vy: 0, dmg: 1e7, pierce: 0, rico: 0, crit: false, kind: 0, hit: null, dead: false }); }); await page.waitForTimeout(700); }
     s = await st(); const note = await page.textContent('#stNote');
