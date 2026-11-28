@@ -767,24 +767,26 @@ const GROUPS = {
     const blast = await page.evaluate(async () => { const w = window.__swarmfall, { G, P, S } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); G.up = { cluster: 1 }; w.recalc(); P.clusterT = 99; await T.wait(0.3);
       const near = T.held('wasp', 195 + C.r - 10, 300), far = T.held('wasp', 195, 300 - (C.r + C.throw * 1.15 + C.shardSpeed * C.shardLife + 60));
       const c = T.bombAt(195, 300, 1); await T.burst(c); out.near = T.took(near); out.want = S.dmg * C.dmg[0];
-      const flying = w.lets.filter(b => b.on); out.lets = flying.length; let maxOut = 0, shards = 0, shardFar = 0; const t0 = G.time;
-      await T.wait(C.fly + 0.1, () => { for (const b of flying) maxOut = Math.max(maxOut, Math.hypot(b.x - 195, b.y - 300)); const n = G.pb.filter(q => q.kind === 4).length; shards = Math.max(shards, n); });
+      const flying = w.lets.filter(b => b.on); out.lets = flying.length; let maxOut = 0, shards = 0, shardFar = 0; const t0 = G.time, wentAt = flying.map(() => 0);
+      await T.wait(C.fly + C.lets[0] * C.stagger + 0.1, () => { flying.forEach((b, i) => { maxOut = Math.max(maxOut, Math.hypot(b.x - 195, b.y - 300)); if (!b.on && !wentAt[i]) wentAt[i] = G.time - t0; }); const n = G.pb.filter(q => q.kind === 4).length; shards = Math.max(shards, n); });
+      wentAt.sort((a, b) => a - b); out.first = +wentAt[0].toFixed(2); out.gaps = wentAt.slice(1).map((t, i) => +(t - wentAt[i]).toFixed(3));
       out.thrown = Math.round(maxOut); out.letsGone = w.lets.every(b => !b.on && !b.mesh.visible); out.shards = shards;
       await T.wait(C.shardLife + 0.15, () => { for (const q of G.pb) if (q.kind === 4) shardFar = Math.max(shardFar, Math.hypot(q.x - 195, q.y - 300)); }); out.shardFar = Math.round(shardFar); out.shardsGone = G.pb.filter(q => q.kind === 4).length; out.far = T.took(far); return out; });
     check(blast.near >= blast.want && blast.far === 0, 'its blast damages an enemy close by (' + blast.want + ' at level 1, or more if a small bomb or shrapnel found it too) and nothing reaches one far off', JSON.stringify({ near: blast.near, far: blast.far }));
     check(blast.lets === C.lets[0] && blast.thrown >= C.throw * 0.8 && blast.thrown <= C.throw * 1.2 && blast.letsGone, 'it throws out ' + C.lets[0] + ' small bombs, which fly about ' + C.throw + ' units and burst', JSON.stringify({ lets: blast.lets, thrown: blast.thrown }));
+    check(blast.first >= C.fly - 0.1 && blast.gaps.length === C.lets[0] - 1 && blast.gaps.every(g => g > C.stagger * 0.5 && g < C.stagger * 1.6), 'the small bombs go off one after another, a moment apart (' + C.stagger + ' s), not all at once', JSON.stringify({ first: blast.first, gaps: blast.gaps }));
     check(blast.shards > C.shards[0] && blast.shards <= C.lets[0] * C.shards[0] && blast.shardsGone === 0 && blast.shardFar < C.throw * 1.15 + C.shardSpeed * C.shardLife + 30, 'each small bomb bursts into shrapnel, which flies a short way and is gone', JSON.stringify({ shards: blast.shards, furthest: blast.shardFar, left: blast.shardsGone }));
     // 3. a small bomb's own blast, and a piece of shrapnel, each do their damage
     const parts = await page.evaluate(async () => { const w = window.__swarmfall, { G, P, S } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); await T.wait(0.3);
       const c = T.bombAt(195, 300, 1); await T.burst(c); const b = w.lets.find(b => b.on), e1 = T.held('wasp', b.tx, b.ty); e1.hp0 = e1.hp;   // set down where one small bomb will burst (out of the first blast's way: that is over)
-      await T.wait(C.fly + 0.05); out.letDmg = T.took(e1); out.letWant = S.dmg * C.letDmg[0]; e1.dead = true; w.scene.remove(e1.g);
+      await T.wait(b.dur + 0.04); out.letDmg = T.took(e1); out.letWant = S.dmg * C.letDmg[0]; e1.dead = true; w.scene.remove(e1.g);
       G.pb.length = 0; const e2 = T.held('wasp', 100, 400); G.pb.push({ x: 100, y: 440, vx: 0, vy: -C.shardSpeed, dmg: S.dmg * C.shardDmg, pierce: 0, rico: 0, crit: false, kind: 4, hit: null, life: C.shardLife, dead: false }); const h0 = w.CLUS.shardHits;
       await T.wait(0.3); out.shardDmg = T.took(e2); out.shardWant = S.dmg * C.shardDmg; out.shardGone = G.pb.length === 0; out.counted = w.CLUS.shardHits - h0; return out; });
-    check(parts.letDmg >= parts.letWant && parts.letDmg <= parts.letWant + C.shards[0] * parts.shardWant, 'a small bomb\'s blast damages what it bursts beside (which may take its shrapnel too)', JSON.stringify({ took: parts.letDmg, blast: parts.letWant }));
+    check(parts.letDmg >= parts.letWant && parts.letDmg <= parts.letWant + C.lets[0] * C.shards[0] * parts.shardWant, 'a small bomb\'s blast damages what it bursts beside (which may take shrapnel too)', JSON.stringify({ took: parts.letDmg, blast: parts.letWant }));
     check(parts.shardDmg === parts.shardWant && parts.shardGone && parts.counted === 1, 'a piece of shrapnel damages the first enemy it hits (' + parts.shardWant + ') and is spent', JSON.stringify(parts));
     // 4. levels: more small bombs and more shrapnel; a missile in the blast is destroyed; a latcher clamped onto the ship is not touched
     const more = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); await T.wait(0.3);
-      const c = T.bombAt(195, 300, 3); await T.burst(c); out.lets3 = w.lets.filter(b => b.on).length; let shards = 0; await T.wait(C.fly + 0.1, () => { shards = Math.max(shards, G.pb.filter(q => q.kind === 4).length); }); out.shards3 = shards; await T.wait(C.shardLife + 0.1);
+      const c = T.bombAt(195, 300, 3); await T.burst(c); out.lets3 = w.lets.filter(b => b.on).length; let shards = 0; await T.wait(C.fly + C.lets[2] * C.stagger + 0.1, () => { shards = Math.max(shards, G.pb.filter(q => q.kind === 4).length); }); out.shards3 = shards; await T.wait(C.shardLife + 0.1);
       T.field(); await T.wait(0.3); w.fireMissile(195 + 20, 300); const m = G.em[0]; const L = w.spawnEnemy('latcher', null, null, { x: 195 + 10, y: 310 }); L.state = 'latch'; L.side = 1; L.fuse = 9; L.hx = 205; L.hy = 310; L.hp0 = L.hp; T.hold.push(L);
       const mx = m.x, my = m.y, c2 = T.bombAt(195, 300, 1); await new Promise(res => (function f() { if (!m.dead) { m.x = mx; m.y = my; } if (!c2.on) return res(); requestAnimationFrame(f); })()); out.missile = m.dead === true;
       G.pb.length = 0; for (const b of w.lets) { b.on = false; b.mesh.visible = false; } out.latcher = T.took(L); L.dead = true; w.scene.remove(L.g); return out; });
@@ -793,7 +795,7 @@ const GROUPS = {
     // 5. its fuse: it bursts early beside an enemy in flight; and against a boss, which takes its damage; none in the simulation
     const fz = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); T.x = 195; P.x = 195; await T.wait(0.3);
       const flyer = T.held('wasp', 195, P.y - 220); w.launchCluster(195, 80, 1); const c = w.clusters.find(c => c.on); await T.burst(c); out.short = Math.round(Math.hypot(c.x - c.tx, c.y - c.ty)); out.fromFlyer = Math.round(Math.hypot(c.x - flyer.x, c.y - flyer.y)); out.flyerHurt = T.took(flyer) > 0;
-      await T.wait(C.fly + C.shardLife + 0.3); T.field(5); T.guard.dead = true; w.scene.remove(T.guard.g); T.guard = null; T.hold = []; G.up = {}; w.recalc(); w.nextWave(); await T.wait(3.6);
+      await T.wait(C.fly + C.lets[0] * C.stagger + C.shardLife + 0.3); T.field(5); T.guard.dead = true; w.scene.remove(T.guard.g); T.guard = null; T.hold = []; G.up = {}; w.recalc(); w.nextWave(); await T.wait(3.6);
       const boss = G.enemies.find(e => e.def.boss); out.boss = !!boss; if (boss) { const left = () => G.enemies.reduce((a, e) => a + (e.def.boss && !e.dead ? e.hp : 0), 0), hp0 = left(); w.launchCluster(boss.x, boss.y, 1); const c2 = w.clusters.find(c => c.on); c2.x = boss.x; c2.y = boss.y + boss.rad + 30; await T.burst(c2);
         out.atEdge = Math.round(Math.hypot(c2.x - boss.x, c2.y - boss.y) - boss.rad); out.bossLost = Math.round(hp0 - left()); }
       G.up = { cluster: 2 }; G.sim = true; w.recalc(); out.inSim = w.S.cluster; G.sim = false; w.recalc(); out.after = w.S.cluster; return out; });

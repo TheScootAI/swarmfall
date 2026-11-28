@@ -519,7 +519,12 @@ const SFX = {
   arc() { noise(0.14, 0.2, 3600, 0.004); tone('sawtooth', 980, 240, 0.13, 0.09); tone('square', 1900, 700, 0.07, 0.05, 0.02); },   // the Arc Caster: a short dry crackle
   orb() { tone('sine', 210, 520, 0.32, 0.1); noise(0.22, 0.07, 3200, 0.02); },   // a ball of lightning leaving the ship: a soft rising hum
   zap() { if (limited('z', 120)) { noise(0.06, 0.09, 4400, 0.003); tone('square', 1700, 620, 0.05, 0.035); } },   // one of its arcs: a tick of static, never more than eight a second
-  pop() { if (limited('k', 70)) { noise(0.09, 0.13, 900, 0.004); tone('triangle', 260, 90, 0.11, 0.09); } },   // one of a Cluster Bomb's small bombs going off: a soft pop, never more than fourteen a second
+  // A Cluster Bomb. The owner: "Every explosion needs it's own sound and be staggered VERY slightly. Trying to mimic the
+  // explosion of cluster bombs in helldivers 2." The first blast is a low thump, heavier than an ordinary boom. Then each
+  // small bomb has a crack of its own: none is dropped (they are spaced out by CLUSTER.stagger, not rate-limited), and k
+  // shifts each one's pitch so that no two in a salvo sound alike.
+  cluster() { noise(0.34, 0.34, 1300, 0.006); tone('sine', 150, 42, 0.36, 0.34); tone('square', 92, 40, 0.18, 0.07); },
+  pop(k = 1) { noise(0.13, 0.2, 1900 * k, 0.003); tone('triangle', 300 * k, 80, 0.13, 0.15); },
   emp() { tone('sine', 190, 42, 0.7, 0.3); noise(0.5, 0.18, 2600, 0.008); tone('square', 1500, 160, 0.4, 0.06, 0.02); },   // the EMP Bomb going off: a low thump and a falling fizz
   dash(fwd) { noise(0.16, 0.14, 1100, 0.008); tone('sine', fwd ? 300 : 620, fwd ? 620 : 300, 0.14, 0.1); },   // Burst Thrusters: a short soft rush, rising for forward and falling for back
   shuttle() { tone('sine', 500, 760, 0.18, 0.2); tone('sine', 760, 1000, 0.18, 0.2, 0.16); },
@@ -1196,7 +1201,8 @@ const EMP = { every: [9, 8, 7], r: [100, 120, 140], stun: [3, 4, 5], speed: 110,
 // r, dmg: the first blast's reach, and its damage × a shot's. lets: how many small bombs it throws out. throw: how far
 // they fly, in `fly` seconds. letR, letDmg: a small bomb's own blast. shards: pieces of shrapnel each small bomb
 // throws. shardDmg: each piece, × a shot's. shardSpeed, shardLife: how fast a piece flies, and for how long.
-const CLUSTER = { every: [10, 9, 8], speed: 110, fuse: 16, clear: 50, r: 55, dmg: [2.5, 3, 3.5], lets: [4, 5, 6], throw: 70, fly: 0.55,
+// stagger: the small bombs go off one after another, in no order, this many seconds apart (the owner: "staggered VERY slightly").
+const CLUSTER = { every: [10, 9, 8], speed: 110, fuse: 16, clear: 50, r: 55, dmg: [2.5, 3, 3.5], lets: [4, 5, 6], throw: 70, fly: 0.55, stagger: 0.07,
   letR: 30, letDmg: [1, 1.25, 1.5], shards: [6, 7, 8], shardDmg: 0.5, shardSpeed: 260, shardLife: 0.45 };
 // Ball Lightning, by level. The owner: "a ball of lightning that travels up and arcs to enemies doing damage as well
 // including missles and bosses". every: seconds between balls. speed: how fast it climbs, straight up from where the
@@ -2412,9 +2418,9 @@ function updateEmps(dt) {
 // bombs, which fly a little way and burst in their turn, each with a small blast and a spray of shrapnel: short-lived
 // shots (kind 4) that damage the first thing they hit. Bosses and missiles are fair game; a latcher clamped onto the
 // ship is not (that one has to be shaken off). CLUS counts what it does, for the tests and for tuning.
-const clusters = [], lets = [], CLUS = { bombs: 0, kills: 0, shardHits: 0 };
+const clusters = [], lets = [], letOrder = [0, 0, 0, 0, 0, 0], CLUS = { bombs: 0, kills: 0, shardHits: 0 };
 for (let i = 0; i < 2; i++) { const mesh = part(geo.ico, M.cluster, 8, 8, 8); mesh.visible = false; scene.add(mesh); clusters.push({ on: false, lv: 1, x: 0, y: 0, tx: 0, ty: 0, t: 0, mesh }); }
-for (let i = 0; i < 12; i++) { const mesh = part(geo.oct, M.cluster, 3.5, 3.5, 3.5); mesh.visible = false; scene.add(mesh); lets.push({ on: false, lv: 1, x: 0, y: 0, x0: 0, y0: 0, tx: 0, ty: 0, t: 0, mesh }); }
+for (let i = 0; i < 12; i++) { const mesh = part(geo.oct, M.cluster, 3.5, 3.5, 3.5); mesh.visible = false; scene.add(mesh); lets.push({ on: false, lv: 1, x: 0, y: 0, x0: 0, y0: 0, tx: 0, ty: 0, t: 0, dur: 0, mesh }); }
 const clusterOk = e => !e.dead && !e.holo && e.state !== 'latch' && e.z > -60;
 function launchCluster(tx, ty, lv) {
   let c = null; for (const o of clusters) if (!o.on) { c = o; break; }
@@ -2437,20 +2443,22 @@ function updateClusters(dt) {
     if (Math.random() < 0.7) burst(c.x + rand(-4, 4), c.y + rand(2, 9), SEEKER_RGB, 1, 45, 0.3);
     if (!go) continue;
     c.on = false; c.mesh.visible = false; blastAt(c.x, c.y, C.r, S.dmg * C.dmg[c.lv - 1]);
-    ringFx(c.x, c.y, 6, C.r, 0xff9a4d, 0.4); ringFx(c.x, c.y, 4, C.r * 0.5, 0xffffff, 0.25); burst(c.x, c.y, SEEKER_RGB, 30, 230, 0.5); flash(c.x, c.y, 300000); shake(4); SFX.boom();
-    const n = C.lets[c.lv - 1], a0 = rand(TAU); let k = 0;   // the small bombs, thrown out evenly all round
+    ringFx(c.x, c.y, 6, C.r, 0xff9a4d, 0.4); ringFx(c.x, c.y, 4, C.r * 0.5, 0xffffff, 0.25); burst(c.x, c.y, SEEKER_RGB, 30, 230, 0.5); flash(c.x, c.y, 300000); shake(4); SFX.cluster();
+    const n = C.lets[c.lv - 1], a0 = rand(TAU); let k = 0;   // the small bombs, thrown out evenly all round; they go off one after another, in an order drawn afresh each time
+    for (let i = 0; i < n; i++) letOrder[i] = i;
+    for (let i = n - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0, t = letOrder[i]; letOrder[i] = letOrder[j]; letOrder[j] = t; }
     for (const b of lets) { if (b.on) continue; if (k >= n) break;
-      const a = a0 + k * TAU / n, far = C.throw * rand(0.85, 1.15); k++;
+      const a = a0 + k * TAU / n, far = C.throw * rand(0.85, 1.15); b.dur = C.fly + letOrder[k] * C.stagger; k++;
       b.on = true; b.lv = c.lv; b.t = 0; b.x = b.x0 = c.x; b.y = b.y0 = c.y; b.tx = clamp(c.x + Math.cos(a) * far, 8, W - 8); b.ty = c.y + Math.sin(a) * far; b.mesh.visible = true; }
   }
   for (const b of lets) {
     if (!b.on) continue;
-    b.t += dt; const u = Math.min(1, b.t / C.fly), e = 1 - (1 - u) * (1 - u);   // thrown hard, slowing as it goes
+    b.t += dt; const u = Math.min(1, b.t / b.dur), e = 1 - (1 - u) * (1 - u);   // thrown hard, slowing as it goes
     b.x = lerp(b.x0, b.tx, e); b.y = lerp(b.y0, b.ty, e); b.mesh.position.set(TX(b.x), TY(b.y), 2); b.mesh.rotation.z += 14 * dt;
     if (Math.random() < 0.5) burst(b.x, b.y, SEEKER_RGB, 1, 25, 0.2);
     if (u < 1) continue;
     b.on = false; b.mesh.visible = false; blastAt(b.x, b.y, C.letR, S.dmg * C.letDmg[b.lv - 1]);
-    ringFx(b.x, b.y, 4, C.letR, 0xff9a4d, 0.3); burst(b.x, b.y, SEEKER_RGB, 10, 150, 0.35); flash(b.x, b.y, 90000); SFX.pop();
+    ringFx(b.x, b.y, 4, C.letR, 0xff9a4d, 0.3); burst(b.x, b.y, SEEKER_RGB, 10, 150, 0.35); flash(b.x, b.y, 90000); shake(1.5); SFX.pop(rand(0.75, 1.3));
     const n = C.shards[b.lv - 1], a0 = rand(TAU);   // its shrapnel
     for (let k = 0; k < n && G.pb.length < PB_MAX; k++) { const a = a0 + k * TAU / n;
       G.pb.push({ x: b.x, y: b.y, vx: Math.cos(a) * C.shardSpeed, vy: Math.sin(a) * C.shardSpeed, dmg: S.dmg * C.shardDmg, pierce: 0, rico: 0, crit: false, kind: 4, hit: null, life: C.shardLife, dead: false }); }
