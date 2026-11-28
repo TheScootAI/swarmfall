@@ -739,6 +739,69 @@ const GROUPS = {
     check(ms.boss && ms.bossEmp === 0 && ms.inSim === 0 && ms.after === 2, 'a boss is not touched by it, and the bare ship of the training simulation has none', JSON.stringify({ boss: ms.boss, bossEmp: ms.bossEmp, inSim: ms.inSim }));
     await page.context().close();
   },
+  // The Cluster Bomb: a slow bomb whose blast throws out small bombs, which burst into shrapnel.
+  cluster: async () => {
+    const { page, st, waitFor, shot } = await open(); let s;
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'play', 20000);
+    // Helpers in the page, as in the emp group. field(): everything cleared but a guard, far off, that keeps the wave going.
+    await page.evaluate(() => { const w = window.__swarmfall, { G, P } = w, T = window.__t = { x: 195 };
+      T.field = wave => { for (const e of G.enemies) { e.dead = true; w.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.eb.length = 0; G.em.length = 0; G.pb.length = 0; G.wave = wave || 3;
+        for (const c of w.clusters) { c.on = false; c.mesh.visible = false; } for (const b of w.lets) { b.on = false; b.mesh.visible = false; }
+        T.guard = w.spawnEnemy('mite', null, null, { x: 20, y: 30 }); T.guard.hp = T.guard.maxHp = 1e12; T.hold = [T.guard]; T.guard.hx = 20; T.guard.hy = 30; P.clusterT = 99; };
+      T.held = (type, x, y) => { const e = w.spawnEnemy(type, null, null, { x, y }); w.launchDive(e); e.x = e.hx = x; e.y = e.hy = y; e.vx = e.vy = 0; e.hp = e.maxHp = e.hp0 = 1e9; T.hold.push(e); return e; };
+      T.took = e => Math.round((e.hp0 - e.hp) * 100) / 100;
+      T.wait = (secs, each) => new Promise(res => { const t0 = G.time; (function f() { if (each) each(); if (G.time - t0 >= secs) return res(); requestAnimationFrame(f); })(); });
+      T.bombAt = (x, y, lv) => { w.launchCluster(x, y, lv); const c = w.clusters.find(c => c.on); c.x = x; c.y = y + 1; return c; };   // a bomb already where it is going: it bursts on the next frame
+      T.burst = c => new Promise(res => { const t0 = performance.now(); (function f() { if (!c.on || performance.now() - t0 > 15000) return res(); requestAnimationFrame(f); })(); });
+      (function f() { G.diveT = 99; G.shootT = 99; G.eb.length = 0; P.fireT = 9; P.inv = 9; P.target = T.x; if (T.guard) T.guard.hp = 1e12;
+        if (T.hold) for (const e of T.hold) if (!e.dead) { e.x = e.hx; e.y = e.hy; e.vx = e.vy = 0; if (e.state === 'latch') e.fuse = 9; }
+        requestAnimationFrame(f); })(); });
+    const C = await page.evaluate(() => window.__swarmfall.CLUSTER);
+    // 1. the booster sends a bomb out by itself, at its slow pace; without it, none
+    const auto = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {}; T.field(); T.held('wasp', 195, 120); G.up = {}; w.recalc(); P.clusterT = 0.2; await T.wait(1.2); out.none = w.clusters.some(c => c.on);
+      G.up = { cluster: 1 }; w.recalc(); P.clusterT = 0.2; await T.wait(0.4); const c = w.clusters.find(c => c.on); out.sent = !!c; if (!c) return out; out.next = +P.clusterT.toFixed(1); const x0 = c.x, y0 = c.y, t0 = G.time; await T.wait(1);
+      out.speed = Math.round(Math.hypot(c.x - x0, c.y - y0) / (G.time - t0)); out.ahead = Math.round(P.y - c.y); out.shown = c.mesh.visible; out.toward = Math.abs(c.tx - 195) < 30 && c.ty < 200; return out; });
+    check(auto.none === false && auto.sent && auto.toward && auto.next > C.every[0] - 1, 'Cluster Bomb: with the booster the ship sends one out at the enemy and waits for the next; without it, none', JSON.stringify(auto));
+    check(auto.shown && auto.speed >= C.speed - 4 && auto.speed <= C.speed + 4, 'the bomb travels at the EMP Bomb\'s slow pace and can be seen going', 'speed ' + auto.speed);
+    // 2. its blast damages what is close and not what is far; then it throws out small bombs, which fly out, burst and throw shrapnel that does not fly far
+    const blast = await page.evaluate(async () => { const w = window.__swarmfall, { G, P, S } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); G.up = { cluster: 1 }; w.recalc(); P.clusterT = 99; await T.wait(0.3);
+      const near = T.held('wasp', 195 + C.r - 10, 300), far = T.held('wasp', 195, 300 - (C.r + C.throw * 1.15 + C.shardSpeed * C.shardLife + 60));
+      const c = T.bombAt(195, 300, 1); await T.burst(c); out.near = T.took(near); out.want = S.dmg * C.dmg[0];
+      const flying = w.lets.filter(b => b.on); out.lets = flying.length; let maxOut = 0, shards = 0, shardFar = 0; const t0 = G.time;
+      await T.wait(C.fly + 0.1, () => { for (const b of flying) maxOut = Math.max(maxOut, Math.hypot(b.x - 195, b.y - 300)); const n = G.pb.filter(q => q.kind === 4).length; shards = Math.max(shards, n); });
+      out.thrown = Math.round(maxOut); out.letsGone = w.lets.every(b => !b.on && !b.mesh.visible); out.shards = shards;
+      await T.wait(C.shardLife + 0.15, () => { for (const q of G.pb) if (q.kind === 4) shardFar = Math.max(shardFar, Math.hypot(q.x - 195, q.y - 300)); }); out.shardFar = Math.round(shardFar); out.shardsGone = G.pb.filter(q => q.kind === 4).length; out.far = T.took(far); return out; });
+    check(blast.near >= blast.want && blast.far === 0, 'its blast damages an enemy close by (' + blast.want + ' at level 1, or more if a small bomb or shrapnel found it too) and nothing reaches one far off', JSON.stringify({ near: blast.near, far: blast.far }));
+    check(blast.lets === C.lets[0] && blast.thrown >= C.throw * 0.8 && blast.thrown <= C.throw * 1.2 && blast.letsGone, 'it throws out ' + C.lets[0] + ' small bombs, which fly about ' + C.throw + ' units and burst', JSON.stringify({ lets: blast.lets, thrown: blast.thrown }));
+    check(blast.shards > C.shards[0] && blast.shards <= C.lets[0] * C.shards[0] && blast.shardsGone === 0 && blast.shardFar < C.throw * 1.15 + C.shardSpeed * C.shardLife + 30, 'each small bomb bursts into shrapnel, which flies a short way and is gone', JSON.stringify({ shards: blast.shards, furthest: blast.shardFar, left: blast.shardsGone }));
+    // 3. a small bomb's own blast, and a piece of shrapnel, each do their damage
+    const parts = await page.evaluate(async () => { const w = window.__swarmfall, { G, P, S } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); await T.wait(0.3);
+      const c = T.bombAt(195, 300, 1); await T.burst(c); const b = w.lets.find(b => b.on), e1 = T.held('wasp', b.tx, b.ty); e1.hp0 = e1.hp;   // set down where one small bomb will burst (out of the first blast's way: that is over)
+      await T.wait(C.fly + 0.05); out.letDmg = T.took(e1); out.letWant = S.dmg * C.letDmg[0]; e1.dead = true; w.scene.remove(e1.g);
+      G.pb.length = 0; const e2 = T.held('wasp', 100, 400); G.pb.push({ x: 100, y: 440, vx: 0, vy: -C.shardSpeed, dmg: S.dmg * C.shardDmg, pierce: 0, rico: 0, crit: false, kind: 4, hit: null, life: C.shardLife, dead: false }); const h0 = w.CLUS.shardHits;
+      await T.wait(0.3); out.shardDmg = T.took(e2); out.shardWant = S.dmg * C.shardDmg; out.shardGone = G.pb.length === 0; out.counted = w.CLUS.shardHits - h0; return out; });
+    check(parts.letDmg >= parts.letWant && parts.letDmg <= parts.letWant + 4 * parts.shardWant, 'a small bomb\'s blast damages what it bursts beside', JSON.stringify({ took: parts.letDmg, blast: parts.letWant }));
+    check(parts.shardDmg === parts.shardWant && parts.shardGone && parts.counted === 1, 'a piece of shrapnel damages the first enemy it hits (' + parts.shardWant + ') and is spent', JSON.stringify(parts));
+    // 4. levels: more small bombs and more shrapnel; a missile in the blast is destroyed; a latcher clamped onto the ship is not touched
+    const more = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); await T.wait(0.3);
+      const c = T.bombAt(195, 300, 3); await T.burst(c); out.lets3 = w.lets.filter(b => b.on).length; let shards = 0; await T.wait(C.fly + 0.1, () => { shards = Math.max(shards, G.pb.filter(q => q.kind === 4).length); }); out.shards3 = shards; await T.wait(C.shardLife + 0.1);
+      T.field(); await T.wait(0.3); w.fireMissile(195 + 20, 300); const m = G.em[0]; const L = w.spawnEnemy('latcher', null, null, { x: 195 + 10, y: 310 }); L.state = 'latch'; L.side = 1; L.fuse = 9; L.hx = 205; L.hy = 310; L.hp0 = L.hp; T.hold.push(L);
+      const mx = m.x, my = m.y, c2 = T.bombAt(195, 300, 1); await new Promise(res => (function f() { if (!m.dead) { m.x = mx; m.y = my; } if (!c2.on) return res(); requestAnimationFrame(f); })()); out.missile = m.dead === true;
+      G.pb.length = 0; for (const b of w.lets) { b.on = false; b.mesh.visible = false; } out.latcher = T.took(L); L.dead = true; w.scene.remove(L.g); return out; });
+    check(more.lets3 === C.lets[2] && more.shards3 > C.lets[0] * C.shards[0], 'level 3 throws ' + C.lets[2] + ' small bombs and more shrapnel', JSON.stringify({ lets: more.lets3, shards: more.shards3 }));
+    check(more.missile && more.latcher === 0, 'its blast destroys a missile, and does not touch a latcher clamped onto the ship', JSON.stringify({ missile: more.missile, latcher: more.latcher }));
+    // 5. its fuse: it bursts early beside an enemy in flight; and against a boss, which takes its damage; none in the simulation
+    const fz = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); T.x = 195; P.x = 195; await T.wait(0.3);
+      const flyer = T.held('wasp', 195, P.y - 220); w.launchCluster(195, 80, 1); const c = w.clusters.find(c => c.on); await T.burst(c); out.short = Math.round(Math.hypot(c.x - c.tx, c.y - c.ty)); out.fromFlyer = Math.round(Math.hypot(c.x - flyer.x, c.y - flyer.y)); out.flyerHurt = T.took(flyer) > 0;
+      await T.wait(C.fly + C.shardLife + 0.3); T.field(5); T.guard.dead = true; w.scene.remove(T.guard.g); T.guard = null; T.hold = []; G.up = {}; w.recalc(); w.nextWave(); await T.wait(3.6);
+      const boss = G.enemies.find(e => e.def.boss); out.boss = !!boss; if (boss) { const left = () => G.enemies.reduce((a, e) => a + (e.def.boss && !e.dead ? e.hp : 0), 0), hp0 = left(); w.launchCluster(boss.x, boss.y, 1); const c2 = w.clusters.find(c => c.on); c2.x = boss.x; c2.y = boss.y + boss.rad + 30; await T.burst(c2);
+        out.atEdge = Math.round(Math.hypot(c2.x - boss.x, c2.y - boss.y) - boss.rad); out.bossLost = Math.round(hp0 - left()); }
+      G.up = { cluster: 2 }; G.sim = true; w.recalc(); out.inSim = w.S.cluster; G.sim = false; w.recalc(); out.after = w.S.cluster; return out; });
+    check(fz.short > 100 && fz.fromFlyer <= C.fuse + 6 && fz.flyerHurt, 'it bursts early beside an enemy in flight that it passes (within ' + C.fuse + ' units) and damages it', JSON.stringify({ short: fz.short, fromFlyer: fz.fromFlyer }));
+    check(fz.boss && fz.atEdge <= 4 && fz.bossLost > 0, 'it bursts against a boss, and the boss loses health', JSON.stringify({ boss: fz.boss, atEdge: fz.atEdge, lost: fz.bossLost }));
+    check(fz.inSim === 0 && fz.after === 2, 'the bare ship of the training simulation has none');
+    await page.context().close();
+  },
   // Ball Lightning: a ball that climbs the field and arcs to what it passes.
   orb: async () => {
     const { page, st, waitFor, shot } = await open(); let s;
@@ -779,10 +842,11 @@ const GROUPS = {
       const L = w.spawnEnemy('latcher', null, null, { x: P.x + 10, y: P.y }); L.state = 'latch'; L.side = 1; L.fuse = 9; L.hx = P.x + 10; L.hy = P.y; L.hp0 = L.hp; T.hold.push(L);
       const other = T.held('mite', T.x + 30, P.y - 120); w.launchOrb(1); await T.pass(P.y - 260); out.latcher = T.took(L); out.other = T.took(other); L.dead = true; w.scene.remove(L.g); return out; });
     check(lat.latcher === 0 && lat.other > 0, 'it never strikes a latcher that has clamped onto the ship', JSON.stringify(lat));
-    // 5. level 1 strikes one thing at a time; level 3 two
-    const two = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {};
-      for (const lv of [1, 3]) { T.field(); T.hold = []; await T.wait(0.3); const a = T.held('wasp', T.x - 40, P.y - 200), b = T.held('wasp', T.x + 45, P.y - 200); let first = null;
-        w.launchOrb(lv); await T.pass(P.y - 330, () => { if (first === null && (T.took(a) > 0 || T.took(b) > 0)) first = (T.took(a) > 0 ? 1 : 0) + (T.took(b) > 0 ? 1 : 0); }); out['lv' + lv] = first; out['each' + lv] = Math.max(T.took(a), T.took(b)) > 0; }
+    // 5. level 1 strikes one thing at a time; level 3 two. (Counted as the most struck in any one frame of the whole pass. An
+    // earlier version looked only at the first arc, which now and then came in the instant when just one of the two was in reach.)
+    const two = await page.evaluate(async () => { const w = window.__swarmfall, { G, P, S } = w, T = window.__t, out = {};
+      for (const lv of [1, 3]) { T.field(); T.hold = []; await T.wait(0.3); const a = T.held('wasp', T.x - 42, P.y - 200), b = T.held('wasp', T.x + 42, P.y - 200), each = S.dmg * w.ORB.dmg[lv - 1]; let most = 0, was = 0;
+        w.launchOrb(lv); await T.pass(P.y - 330, () => { const now = Math.round((T.took(a) + T.took(b)) / each); most = Math.max(most, now - was); was = now; }); out['lv' + lv] = most; out['strikes' + lv] = was; }
       return out; });
     check(two.lv1 === 1 && two.lv3 === 2, 'one arc strikes one enemy at level 1 and two at level 3', JSON.stringify(two));
     // 6. a boss is struck too; and the bare ship of the training simulation has none
@@ -982,7 +1046,7 @@ const GROUPS = {
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
-      for (const id of ['dash', 'arc', 'emp', 'orb', 'twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
+      for (const id of ['dash', 'arc', 'emp', 'orb', 'cluster', 'twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
       s.recalc(); s.G.wave = 15; s.nextWave(); s.S.maxHp = 9; s.P.hp = 9;
       const seen = { kills: 0, maxShots: 0, maxMissiles: 0, splits: 0, beams: 0, waves: new Set() }; const t0 = performance.now(); let k0 = s.G.run.kills;
       (function f() { const G = s.G;
@@ -1166,6 +1230,7 @@ const ABOUT = {
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
   sim: 'the simulation after a boss: the wavy scenes in and out, the grid and no station, bare ship only, harmless, a perfect score on every stage, the reward, pause, the result card and the touch that carries on, a part score in a real run on a short phone',
+  cluster: 'the Cluster Bomb: sent out slowly, its blast, the small bombs it throws, their shrapnel, levels, missiles, a clamped latcher, its fuse, bosses',
   orb: 'Ball Lightning: sent up by itself, climbs straight, arcs to enemies, missiles and bosses in its reach, never a clamped latcher, two at a time at level 3',
   emp: 'the EMP Bomb: sent out slowly, bursts where it is going or beside an enemy in flight, its slow ring knocks out what it reaches (no steering, no fire), for how long, in the formation, missiles, latchers, bosses',
   arc: 'the Arc Caster: short reach, the chain from enemy to enemy, its damage, what it will not strike',

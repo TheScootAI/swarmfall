@@ -57,6 +57,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `SCRAP_RATE`: one number that scales every enemy's scrap chance (bosses pay in full).
 - `BLAST`: Volatile Payload's reach and strength by level.
 - `SPLIT`: Split Barrel by level: how many extra shots, and on which volleys.
+- `CLUSTER`: the Cluster Bomb by level: how often, its blast, how many small bombs it throws and how far, their blast, and their shrapnel.
 - `ORB`: Ball Lightning by level: how often a ball leaves, how fast it climbs, how often and how far it arcs, how many it strikes at once and how hard.
 - `EMP`: the EMP Bomb by level: how often, how far its ring spreads, how long an enemy stays knocked out; and how fast the bomb travels, how near an enemy in flight sets it off, and how long the ring takes to spread.
 - `ARC`: the Arc Caster by level: how often it strikes, how far it reaches, how many enemies the bolt jumps through and how hard it hits.
