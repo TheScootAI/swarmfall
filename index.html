@@ -517,6 +517,8 @@ const SFX = {
   launch() { noise(1.3, 0.45, 500); tone('sawtooth', 70, 240, 1.2, 0.25); },
   dock() { tone('square', 110, 80, 0.12, 0.35); tone('square', 90, 60, 0.16, 0.35, 0.18); noise(0.2, 0.3, 600); },
   arc() { noise(0.14, 0.2, 3600, 0.004); tone('sawtooth', 980, 240, 0.13, 0.09); tone('square', 1900, 700, 0.07, 0.05, 0.02); },   // the Arc Caster: a short dry crackle
+  orb() { tone('sine', 210, 520, 0.32, 0.1); noise(0.22, 0.07, 3200, 0.02); },   // a ball of lightning leaving the ship: a soft rising hum
+  zap() { if (limited('z', 120)) { noise(0.06, 0.09, 4400, 0.003); tone('square', 1700, 620, 0.05, 0.035); } },   // one of its arcs: a tick of static, never more than eight a second
   emp() { tone('sine', 190, 46, 0.4, 0.3); noise(0.26, 0.2, 2600, 0.008); tone('square', 1500, 180, 0.22, 0.06, 0.02); },   // the EMP Bomb going off: a low thump and a falling fizz
   dash(fwd) { noise(0.16, 0.14, 1100, 0.008); tone('sine', fwd ? 300 : 620, fwd ? 620 : 300, 0.14, 0.1); },   // Burst Thrusters: a short soft rush, rising for forward and falling for back
   shuttle() { tone('sine', 500, 760, 0.18, 0.2); tone('sine', 760, 1000, 0.18, 0.2, 0.16); },
@@ -593,7 +595,7 @@ const M = {
   hull: pbr(0xe9ecff, 0x1a1f44, 0.6, 0.3), wing: pbr(0x5fe8ff, 0x0b3d4a, 0.5, 0.35), canopy: glowing(basic(0x9ff3ff)), flame: glowMat(0xffb36b, 0.9),
   foe: foeMat(), craft: foeMat(0.65, 0.3, 0.2), foeGlow: glowing(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })),   // every ordinary enemy's body and its lights: the colours are on the model's corners (see kit())
   holo: holoMat(0x8fdcff), holoShip: holoMat(0x8ff0ff, 1.7),   // the simulation: targets and the ship's projection, made of light. They glow: no more than sixteen targets are out at once, and each is small
-  fuse: glowing(basic(ENEMY_RED)), empBomb: glowing(basic(0xbfe9ff)),   // the EMP Bomb on its way out: pale blue-white, like the lightning
+  fuse: glowing(basic(ENEMY_RED)), empBomb: glowing(basic(0xbfe9ff)), orb: glowing(basic(0xeaf8ff)), orbShell: addMat(0x6fb8ff, 0.4),   // the EMP Bomb on its way out: pale blue-white, like the lightning
   
   
   
@@ -740,7 +742,7 @@ function ringFx(x, y, r0, r1, color, ttl = 0.35) {
 }
 const zapMat = new THREE.LineBasicMaterial({ color: 0xbfe9ff, transparent: true, blending: THREE.AdditiveBlending, fog: false });
 const ZAP_PTS = 11;   // an arc joins at most 3 enemies: 2 jagged spans of 5 points, plus the end
-for (let i = 0; i < 12; i++) {   // enough for an Arc Caster's bolt (up to six lines) and an Arc Coil's at once
+for (let i = 0; i < 18; i++) {   // enough for an Arc Caster's bolt (up to six lines), an Arc Coil's and two balls of lightning at once
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ZAP_PTS * 3), 3));
   const line = new THREE.Line(g, zapMat); line.visible = false; line.frustumCulled = false; line.layers.enable(GLOW); scene.add(line); zaps.push({ line, t: 0 });
 }
@@ -1186,6 +1188,11 @@ const GAS_RGB = [0.45, 1, 0.6], FLAME_RGB = [1, 0.6, 0.15];
 // many sitting enemies one enemy in flight is worth when it chooses where to burst.
 // It is aimed (empAim): lobbed blindly ahead, as the clouds are, it knocked out less than one enemy a bomb in play.
 const EMP = { every: [9, 8, 7], r: [100, 120, 140], stun: [3, 4, 5], fly: 0.55, wave: 0.4, clear: 50, flying: 3 };
+// Ball Lightning, by level. The owner: "a ball of lightning that travels up and arcs to enemies doing damage as well
+// including missles and bosses". every: seconds between balls. speed: how fast it climbs, straight up from where the
+// ship was. zap: seconds between its arcs. arcs: how many things one arc strikes at once. reach: how far it arcs (to a
+// boss, measured from its edge). dmg: each strike, × a shot's damage; a missile it strikes is destroyed.
+const ORB = { every: [7, 6.5, 6], speed: 110, zap: [0.4, 0.36, 0.36], arcs: [1, 1, 2], reach: [95, 105, 115], dmg: [1, 1.25, 1.25] };
 // The sentry satellite: a gun the ship leaves behind it (the Sentry Satellite booster). Each list is by level 1, 2, 3.
 // life: seconds it lasts. hp: enemy shots it can take (a missile counts as 2; an enemy that flies into it destroys
 // it). rate: volleys a second. dmg: each shot, × your shot damage. shots: barrels. rest: seconds after one is gone
@@ -1244,6 +1251,7 @@ const UP = [
   { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing locks a thin laser onto an enemy or a missile in flight and burns it up.' },
   { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
   { id: 'arc', c: 'w', n: 'Arc Caster', r: 2, max: 3, d: 'Lightning strikes the nearest enemy close to your ship, then jumps on through the ones beside it. Short reach. More levels: more enemies, further, faster.' },
+  { id: 'orb', c: 'w', n: 'Ball Lightning', r: 2, max: 3, d: 'Send a ball of lightning slowly up the field. It arcs to whatever it passes: enemies, missiles and bosses. More levels: further and harder, then two arcs at a time.' },
   { id: 'emp', c: 's', n: 'EMP Bomb', r: 2, max: 3, d: 'Lob a bomb ahead of your ship. Its blast ring knocks out every enemy it reaches: they cannot fire or steer, and drift the way they were going.' },
   { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
   { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
@@ -1296,7 +1304,7 @@ const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [],
   form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, repairs: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), dy: 0, bPhase: 0, bT: 0, bTo: 0, vx: 0, hp: 3, inv: 0, fireT: 0, volley: 0,   // dy: how far off its home row a burst has the ship (up the screen is negative); bPhase: 0 home, 1 going, 2 holding, 3 drifting back
-  shieldUp: false, shieldT: 0, droneT: 0, missT: 0, arcT: 1, empT: 2.5, target: null, alive: true };
+  shieldUp: false, shieldT: 0, droneT: 0, missT: 0, arcT: 1, empT: 2.5, orbT: 2, target: null, alive: true };
 const S = {};   // derived player stats
 const ulv = id => G.up[id] || 0, boostLevel = ulv;
 function recalc() {
@@ -1311,7 +1319,7 @@ function recalc() {
   S.maxHp = Math.max(1, 1 + Math.min(HULL_UPGRADES, mlv('hull') + ulv('plate')) - od);   // a new ship has 1 hull: one hit ends the run until hull is added
   S.rate = 2.75 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
   S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
-  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.arc = ulv('arc'); S.emp = ulv('emp'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame'); S.sentry = ulv('sentry'); S.beam = ulv('beam');
+  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.arc = ulv('arc'); S.emp = ulv('emp'); S.orb = ulv('orb'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame'); S.sentry = ulv('sentry'); S.beam = ulv('beam');
   S.ebMul = 1 - 0.2 * ulv('slow');
   S.scrapMul = (1 + 0.2 * mlv('scrap')) * (1 + 0.5 * ulv('scav'));
   S.magnet = 42 + 22 * mlv('magnet') + 60 * ulv('magnet');
@@ -1450,7 +1458,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, lit: 0, holo: false, path: null, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, emp: 0, empTag: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, lit: 0, holo: false, path: null, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, emp: 0, empTag: 0, orbTag: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) {
@@ -2158,6 +2166,7 @@ function updatePlayer(dt) {
   if (S.missile > 0) { P.missT -= dt; if (P.missT <= 0 && nearest(P.x, P.y, null, 900)) { P.missT = 1.7 / S.missile; shot(P.x, P.y - 10, rand(-0.6, 0.6), 1, 2.5); } }
   P.gasT = cloudTimer(0, S.gas, P.gasT, dt); P.flameT = cloudTimer(1, S.flame, P.flameT, dt);
   if (S.emp > 0 && (P.empT -= dt) <= 0) P.empT = empAim(S.emp) && launchEmp(EMP_AT.x, EMP_AT.y, S.emp) ? EMP.every[Math.min(3, S.emp) - 1] : 0.3;   // nothing to use it on, or both bombs out: try again shortly
+  if (S.orb > 0 && (P.orbT -= dt) <= 0) P.orbT = G.state === 'play' && (G.enemies.length || G.em.length) && launchOrb(S.orb) ? ORB.every[Math.min(3, S.orb) - 1] : 0.3;   // nothing to use it on, or every ball out: try again shortly
   updateLaser(dt); updateArc(dt);
 }
 // ---- sentry satellites ----
@@ -2354,6 +2363,54 @@ function updateEmps(dt) {
     for (const e of G.enemies) if (!e.dead && e.empTag !== c.id && !e.def.boss && !e.holo && e.state !== 'latch' && e.z > -60 && (e.x - c.x) ** 2 + (e.y - c.y) ** 2 <= r2) { e.empTag = c.id; empHit(e, secs); }
     for (const m of G.em) if (!m.dead && m.empTag !== c.id && (m.x - c.x) ** 2 + (m.y - c.y) ** 2 <= r2) { m.empTag = c.id; m.emp = secs; burst(m.x, m.y, HIT_RGB, 5, 90, 0.3); }
     if (c.t >= EMP.wave) c.on = false;
+  }
+}
+// ---- Ball Lightning (numbers in ORB) ----
+// A ball leaves the ship and climbs straight up the field at its own slow pace. Every moment or so it arcs to the
+// nearest things in its reach: an enemy or a boss is damaged, a missile destroyed. It is not aimed and does not stop:
+// what it does depends on what it passes, so where the ship is when it lets one go matters.
+// Never a latcher clamped onto the ship (that one has to be shaken off), and never a hologram.
+const orbs = [], orbPts = [null, null], orbAt = { x: 0, y: 0 }, orbEnd = { x: 0, y: 0 }, ORBS = { hits: 0, kills: 0, boss: 0 };   // ORBS: counted for the tests and for tuning
+let orbSerial = 0;
+for (let i = 0; i < 3; i++) {
+  const g = new THREE.Group(), shell = part(geo.ico, M.orbShell, 10, 10, 10); g.add(part(geo.sph, M.orb, 5.5, 5.5, 5.5), shell); g.visible = false; scene.add(g);
+  orbs.push({ on: false, lv: 1, x: 0, y: 0, zapT: 0, crT: 0, mesh: g, shell });
+}
+function launchOrb(lv) {
+  let c = null; for (const o of orbs) if (!o.on) { c = o; break; }
+  if (!c) return false;
+  c.on = true; c.lv = Math.min(3, lv); c.x = P.x; c.y = P.y - 20; c.zapT = 0.15; c.crT = 0; c.mesh.visible = true; SFX.orb();
+  return true;
+}
+function clearOrbs() { for (const c of orbs) { c.on = false; c.mesh.visible = false; } }
+function orbZap(c) {   // one arc: it strikes the nearest thing in reach, then (at higher levels) the next nearest
+  const lv = c.lv, R = ORB.reach[lv - 1], id = ++orbSerial; let n = 0;
+  for (let k = 0; k < ORB.arcs[lv - 1]; k++) {
+    let best = null, bd = R, missile = false;
+    for (const e of G.enemies) {
+      if (e.dead || e.orbTag === id || e.z < -60 || e.state === 'latch' || e.holo) continue;
+      const d = Math.hypot(e.x - c.x, e.y - c.y) - (e.def.boss ? e.rad : 0); if (d < bd) { bd = d; best = e; }
+    }
+    for (const m of G.em) { if (m.dead) continue; const d = Math.hypot(m.x - c.x, m.y - c.y); if (d < bd) { bd = d; best = m; missile = true; } }
+    if (!best) break;
+    orbAt.x = c.x; orbAt.y = c.y; orbPts[0] = orbAt; orbPts[1] = best; zapFx(orbPts, 0.2); zapFx(orbPts, 0.2); burst(best.x, best.y, HIT_RGB, 5, 130, 0.28);
+    if (missile) popMissile(best, false); else { best.orbTag = id; damageEnemy(best, S.dmg * ORB.dmg[lv - 1]); }
+    n++; ORBS.hits++; if (best.dead) ORBS.kills++; if (!missile && best.def.boss) ORBS.boss++;
+  }
+  if (n) { flash(c.x, c.y, 50000); SFX.zap(); }
+  return n;
+}
+function updateOrbs(dt) {
+  if (!(dt > 0)) return;   // the game is held (an introduction): the balls hang still
+  for (const c of orbs) {
+    if (!c.on) continue;
+    c.y -= ORB.speed * dt;
+    if (c.y < -30) { c.on = false; c.mesh.visible = false; continue; }   // off the top of the field
+    c.zapT -= dt; if (c.zapT <= 0) c.zapT = orbZap(c) ? ORB.zap[c.lv - 1] : 0.08;   // nothing in reach: it looks again almost at once
+    // its look: a bright core in a restless shell, shedding sparks and short threads of lightning
+    const k = 9 * (1 + rand(-0.25, 0.25)); c.shell.scale.set(k, k, k); c.shell.rotation.set(rand(TAU), rand(TAU), 0); c.mesh.position.set(TX(c.x), TY(c.y), 2);
+    if (Math.random() < 0.6) burst(c.x + rand(-6, 6), c.y + rand(-6, 6), HIT_RGB, 1, 55, 0.25);
+    c.crT -= dt; if (c.crT <= 0) { c.crT = 0.08; const a = rand(TAU), d = rand(16, 24); orbAt.x = c.x; orbAt.y = c.y; orbEnd.x = c.x + Math.cos(a) * d; orbEnd.y = c.y + Math.sin(a) * d; orbPts[0] = orbAt; orbPts[1] = orbEnd; zapFx(orbPts, 0.1); }
   }
 }
 function clearClouds() { for (const c of clouds) { c.on = false; c.mesh.visible = false; } }
@@ -2613,7 +2670,7 @@ function clearedToast() {
 function updateGame(dt) {
   if (G.state === 'dying') dt *= 0.45;
   G.waveT += dt;
-  updatePlayer(dt); updateClouds(dt); updateEmps(dt); updateSats(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt); introScan(dt);
+  updatePlayer(dt); updateClouds(dt); updateEmps(dt); updateOrbs(dt); updateSats(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt); introScan(dt);
   sweepDead(G.enemies);
   if (G.boss) { const f = Math.round(clamp(bossLeft() / G.bossMax, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
   if (G.state === 'play') reinforce();
@@ -2645,7 +2702,7 @@ const WARP = { k: 0, was: -1 };   // how wavy the screen is, from 0 to 1. The sc
 function dockedBelow() { ST.on = true; ST.y = H * 0.4; P.x = W / 2; P.y = ST.y + DOCK_BOTTOM; P.vx = 0; }   // where the docking scene leaves the ship: at the station's lower port
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function startCut(kind, done) {
-  FIN.on = FIN.toast = false; clearClouds(); clearEmps(); clearSats(); P.las = null;   // a cloud, satellite or beam would hang frozen through the scene
+  FIN.on = FIN.toast = false; clearClouds(); clearEmps(); clearOrbs(); clearSats(); P.las = null;   // a cloud, satellite or beam would hang frozen through the scene
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
   P.dy = 0; P.bPhase = 0;   // a scene takes the ship from wherever a burst had it
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
@@ -2727,7 +2784,7 @@ function startSim() {
   G.state = 'sim'; G.sim = true; recalc();   // the bare ship
   SIMS.lineHits.fill(0);
   Object.assign(SIMS, { on: true, wait: true, waitT: 0, lines: 0, hits: 0, total: stage.length * SIM.n, ended: false, shield: P.shieldUp, reward: 0, perfect: false, owed: 0, leaving: false });
-  P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearEmps(); clearSats(); G.pb.length = 0;
+  P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearEmps(); clearOrbs(); clearSats(); G.pb.length = 0;
   ST.on = false; P.x = W / 2; P.y = shipY(); P.dy = 0; P.bPhase = 0; P.vx = 0; P.target = null; WARP.k = 1; simScene(true);
   ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.userData.wasGlow = m.layers.isEnabled(GLOW); m.material = M.holoShip; m.layers.enable(GLOW); } });
   G.queue = []; G.waveT = 0;
@@ -2997,7 +3054,7 @@ function toggleMute() {
 }
 
 function resetField() {
-  FIN.on = FIN.toast = false; clearClouds(); clearEmps(); clearSats(); introEnd(); simOver(); WARP.k = 0;
+  FIN.on = FIN.toast = false; clearClouds(); clearEmps(); clearOrbs(); clearSats(); introEnd(); simOver(); WARP.k = 0;
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; G.flights = 0; clearBoss();
@@ -3023,7 +3080,7 @@ function startRun(test, drill) {   // drill: a test run that goes straight into 
   G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
   G.run = { scrap: 0, kills: 0, banked: 0 }; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
-  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, volley: 0, dy: 0, bPhase: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, arcT: 1, empT: 2.5, lasT: 1, las: null, target: null, alive: true });
+  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, volley: 0, dy: 0, bPhase: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, arcT: 1, empT: 2.5, orbT: 2, lasT: 1, las: null, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
   Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
@@ -3090,7 +3147,7 @@ function togglePause() {
 }
 function endRun() {
   testMods = null;   // the screens after a run show the real station again
-  clearSats(); clearClouds(); clearEmps(); simOver(); WARP.k = 0;   // a run ended from the pause screen in the middle of the simulation: the grid and the ship of light must not stay behind
+  clearSats(); clearClouds(); clearEmps(); clearOrbs(); simOver(); WARP.k = 0;   // a run ended from the pause screen in the middle of the simulation: the grid and the ship of light must not stay behind
   const test = G.test, bonus = test ? 0 : Math.max(0, G.wave - 1) * 3, got = test ? 0 : unbanked() + bonus, best = !test && G.wave > meta.best;
   if (!test) { meta.scrap += got; meta.runs++; if (best) meta.best = G.wave; save(); }   // a test run leaves the save alone
   G.state = 'dead';
@@ -3512,7 +3569,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, BURST, ARC, EMP, launchEmp, emps, burstGo, shipHit, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, simYAt, shipY, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, BURST, ARC, EMP, launchEmp, emps, ORB, ORBS, orbs, launchOrb, burstGo, shipHit, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, simYAt, shipY, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>

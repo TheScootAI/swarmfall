@@ -723,6 +723,63 @@ const GROUPS = {
     check(ms.boss && ms.bossEmp === 0 && ms.inSim === 0 && ms.after === 2, 'a boss is not touched by it, and the bare ship of the training simulation has none', JSON.stringify({ boss: ms.boss, bossEmp: ms.bossEmp, inSim: ms.inSim }));
     await page.context().close();
   },
+  // Ball Lightning: a ball that climbs the field and arcs to what it passes.
+  orb: async () => {
+    const { page, st, waitFor, shot } = await open(); let s;
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'play', 20000);
+    // Helpers in the page, as in the emp group. field(): everything cleared but a guard that keeps the wave going, and the ship set well to one side of it.
+    await page.evaluate(() => { const w = window.__swarmfall, { G, P } = w, T = window.__t = { x: 180 };
+      T.field = wave => { for (const e of G.enemies) { e.dead = true; w.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.eb.length = 0; G.em.length = 0; G.wave = wave || 3; for (const c of w.orbs) { c.on = false; c.mesh.visible = false; }
+        T.guard = w.spawnEnemy('mite', 7, 0); T.guard.hp = T.guard.maxHp = 1e12; P.orbT = 99; T.x = T.guard.x > 195 ? 110 : 280; P.x = T.x; };
+      T.held = (type, x, y) => { const e = w.spawnEnemy(type, null, null, { x, y }); w.launchDive(e); e.x = e.hx = x; e.y = e.hy = y; e.vx = e.vy = 0; e.hp = e.maxHp = e.hp0 = 1e9; (T.hold || (T.hold = [])).push(e); return e; };
+      T.took = e => Math.round((e.hp0 - e.hp) * 100) / 100;
+      T.wait = (secs, each) => new Promise(res => { const t0 = G.time; (function f() { if (each) each(); if (G.time - t0 >= secs) return res(); requestAnimationFrame(f); })(); });
+      T.pass = (y, each) => new Promise(res => { const t0 = performance.now(); (function f() { if (each) each(); const c = w.orbs.find(c => c.on); if (!c || c.y < y || performance.now() - t0 > 20000) return res(); requestAnimationFrame(f); })(); });   // until the ball has climbed past y (or gone)
+      (function f() { G.diveT = 99; G.shootT = 99; G.eb.length = 0; P.fireT = 9; P.inv = 9; P.target = T.x; if (T.guard) T.guard.hp = 1e12;
+        if (T.hold) for (const e of T.hold) if (!e.dead) { e.x = e.hx; e.y = e.hy; e.vx = e.vy = 0; if (e.state === 'latch') e.fuse = 9; }
+        if (T.pinM) for (const m of T.pinM) if (!m.dead) { m.x = m.hx; m.y = m.hy; }
+        requestAnimationFrame(f); })(); });
+    const O = await page.evaluate(() => window.__swarmfall.ORB);
+    // 1. the booster sends a ball up by itself, straight and at its own pace; without it, none
+    const auto = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {}; T.field(); G.up = {}; w.recalc(); P.orbT = 0.2; await T.wait(1.2); out.none = w.orbs.some(c => c.on);
+      G.up = { orb: 1 }; w.recalc(); P.orbT = 0.2; await T.wait(0.5); const c = w.orbs.find(c => c.on); out.sent = !!c; if (!c) return out;
+      out.next = +P.orbT.toFixed(1); const x0 = c.x, y0 = c.y, t0 = G.time; out.fromShip = Math.abs(x0 - P.x) < 2 && y0 < P.y; T.x = T.x > 195 ? T.x - 60 : T.x + 60; await T.wait(1.5);
+      out.speed = Math.round((y0 - c.y) / (G.time - t0)); out.straight = c.x === x0; out.shown = c.mesh.visible; await T.pass(-100); out.gone = !c.on && !c.mesh.visible; return out; });
+    check(auto.none === false && auto.sent && auto.fromShip && auto.next > O.every[0] - 1, 'Ball Lightning: with the booster the ship sends a ball up and waits for the next; without it, none', JSON.stringify(auto));
+    check(auto.speed >= O.speed - 4 && auto.speed <= O.speed + 4 && auto.straight && auto.shown && auto.gone, 'the ball climbs straight up at its own pace, whatever the ship does, and is gone off the top', 'speed ' + auto.speed + ' (' + O.speed + ')');
+    // 2. it arcs to an enemy within its reach as it passes, several times, for a shot's damage each; one beyond its reach is not touched
+    const hit = await page.evaluate(async () => { const w = window.__swarmfall, { G, P, S } = w, T = window.__t, out = {}; T.field(); G.up = { orb: 1 }; w.recalc(); T.hold = []; await T.wait(0.3);
+      const R = w.ORB.reach[0], near = T.held('wasp', T.x + 60, P.y - 250), far = T.held('wasp', T.x + (T.x > 195 ? -1 : 1) * (R + 50), P.y - 250), h0 = w.ORBS.hits;
+      w.launchOrb(1); let lines = 0; await T.pass(P.y - 250 - R - 30, () => { lines = Math.max(lines, w.scene.children.filter(o => o.isLine && o.visible).length); });
+      out.near = T.took(near); out.far = T.took(far); out.each = S.dmg * w.ORB.dmg[0]; out.strikes = out.near / out.each; out.counted = w.ORBS.hits - h0; out.lines = lines; return out; });
+    check(hit.strikes >= 2 && hit.strikes <= 6 && Number.isInteger(hit.strikes) && hit.counted === hit.strikes && hit.far === 0 && hit.lines > 0, 'it arcs to an enemy in its reach as it passes (' + hit.strikes + ' times, ' + hit.each + ' damage each, lightning drawn) and not to one beyond it', JSON.stringify(hit));
+    // 3. a missile it passes is destroyed; one out of reach flies on
+    const ms = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {}; T.field(); T.hold = []; await T.wait(0.3);
+      const R = w.ORB.reach[0]; w.fireMissile(T.x + 40, P.y - 260); w.fireMissile(T.x + (T.x > 195 ? -1 : 1) * (R + 60), P.y - 260); const [m, other] = G.em; for (const q of [m, other]) { q.hx = q.x; q.hy = q.y; } T.pinM = [m, other];
+      w.launchOrb(1); await T.pass(P.y - 260 - R - 30); out.popped = m.dead === true; out.otherLives = !other.dead; T.pinM = null; other.dead = true; return out; });
+    check(ms.popped && ms.otherLives, 'it destroys a missile in its reach and leaves one beyond it', JSON.stringify(ms));
+    // 4. a latcher clamped onto the ship is never struck (the ball leaves from right beside it), and does not keep the ball from striking another
+    const lat = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {}; T.field(); T.hold = []; await T.wait(0.3);
+      const L = w.spawnEnemy('latcher', null, null, { x: P.x + 10, y: P.y }); L.state = 'latch'; L.side = 1; L.fuse = 9; L.hx = P.x + 10; L.hy = P.y; L.hp0 = L.hp; T.hold.push(L);
+      const other = T.held('mite', T.x + 30, P.y - 120); w.launchOrb(1); await T.pass(P.y - 260); out.latcher = T.took(L); out.other = T.took(other); L.dead = true; w.scene.remove(L.g); return out; });
+    check(lat.latcher === 0 && lat.other > 0, 'it never strikes a latcher that has clamped onto the ship', JSON.stringify(lat));
+    // 5. level 1 strikes one thing at a time; level 3 two
+    const two = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {};
+      for (const lv of [1, 3]) { T.field(); T.hold = []; await T.wait(0.3); const a = T.held('wasp', T.x - 40, P.y - 200), b = T.held('wasp', T.x + 45, P.y - 200); let first = null;
+        w.launchOrb(lv); await T.pass(P.y - 330, () => { if (first === null && (T.took(a) > 0 || T.took(b) > 0)) first = (T.took(a) > 0 ? 1 : 0) + (T.took(b) > 0 ? 1 : 0); }); out['lv' + lv] = first; out['each' + lv] = Math.max(T.took(a), T.took(b)) > 0; }
+      return out; });
+    check(two.lv1 === 1 && two.lv3 === 2, 'one arc strikes one enemy at level 1 and two at level 3', JSON.stringify(two));
+    // 6. a boss is struck too; and the bare ship of the training simulation has none
+    const boss = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {}; T.field(5); T.hold = []; G.up = {}; w.recalc(); w.nextWave(); T.guard = null; await T.wait(3.6);
+      const b = G.enemies.find(e => e.def.boss); out.boss = !!b; if (!b) return out;
+      const left = () => G.enemies.reduce((a, e) => a + (e.def.boss && !e.dead ? e.hp : 0), 0), hp0 = left(), n0 = w.ORBS.boss;
+      for (let i = 0; i < 3 && w.ORBS.boss === n0; i++) { T.x = P.x = b.x; w.launchOrb(1); await T.pass(-20, () => { T.x = b.x; }); }   // the ship keeps under it; its own gun is held
+      out.struck = w.ORBS.boss - n0; out.lost = Math.round(hp0 - left());
+      G.up = { orb: 2 }; G.sim = true; w.recalc(); out.inSim = w.S.orb; G.sim = false; w.recalc(); out.after = w.S.orb; return out; });
+    check(boss.boss && boss.struck > 0 && boss.lost > 0, 'it arcs to a boss as well, and the boss loses health', JSON.stringify(boss));
+    check(boss.inSim === 0 && boss.after === 2, 'the bare ship of the training simulation has none');
+    await page.context().close();
+  },
   // The Arc Caster: short-range lightning from the ship that jumps from enemy to enemy.
   arc: async () => {
     const { page, st, waitFor, shot } = await open(); let s;
@@ -909,7 +966,7 @@ const GROUPS = {
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
-      for (const id of ['dash', 'arc', 'emp', 'twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
+      for (const id of ['dash', 'arc', 'emp', 'orb', 'twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
       s.recalc(); s.G.wave = 15; s.nextWave(); s.S.maxHp = 9; s.P.hp = 9;
       const seen = { kills: 0, maxShots: 0, maxMissiles: 0, splits: 0, beams: 0, waves: new Set() }; const t0 = performance.now(); let k0 = s.G.run.kills;
       (function f() { const G = s.G;
@@ -1093,6 +1150,7 @@ const ABOUT = {
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
   sim: 'the simulation after a boss: the wavy scenes in and out, the grid and no station, bare ship only, harmless, a perfect score on every stage, the reward, pause, the result card and the touch that carries on, a part score in a real run on a short phone',
+  orb: 'Ball Lightning: sent up by itself, climbs straight, arcs to enemies, missiles and bosses in its reach, never a clamped latcher, two at a time at level 3',
   emp: 'the EMP Bomb: lobbed ahead, its ring knocks out what it reaches (no steering, no fire), for how long, in the formation, missiles, latchers, bosses',
   arc: 'the Arc Caster: short reach, the chain from enemy to enemy, its damage, what it will not strike',
   burst: 'Burst Thrusters: a flick up or down, what does not count as one, the drift home, the hit shape, the keys',
