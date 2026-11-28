@@ -6,7 +6,7 @@ Enemy formations fly in, hold, and dive at you. You launch from a space station.
 
 ## Play
 
-Open `index.html` in a browser, or serve the folder with any static host (GitHub Pages works as is). The game has no build step. three.js r187 and its post-processing add-ons are bundled into `vendor/three.min.js`, so it also runs straight from disk with no network.
+Open `index.html` in a browser, or serve the folder with any static host (GitHub Pages works as is). The game has no build step. three.js r187 and its post-processing add-ons are bundled into `vendor/three.min.js`, so it also runs straight from disk with no network. The live GitHub Pages copy (and only that copy) counts visits with [GoatCounter](https://www.goatcounter.com), which uses no cookies and keeps no personal data.
 
 - **Touch:** drag anywhere to steer. The ship fires on its own.
 - **Mouse:** the ship follows the cursor.
