@@ -197,7 +197,7 @@ Passing tests cannot see colour or layout. After a change to rendering or UI, sa
 
 ## Publishing
 
-1. Commit and push to `main`. GitHub Pages redeploys within a minute.
+1. Commit and push to `main`. GitHub Pages redeploys within a minute. **Go back and check that the deployment ended in success** (the `pages build and deployment` run for that commit), not only that it started: twice a run was reported as under way and had failed seconds later, and the owner found the live site two merges behind. That failure was a link named `tools/node_modules` committed from a second working copy (Pages cannot pack a link that points nowhere); never link that folder inside the repository, and the ignore rule now covers a link as well as a folder.
 2. Rebuild and republish the game artifact: `node tools/artifact.js <dir>/swarmfall.html`, then publish that file to the game artifact URL above with `root` set to `<dir>` and `files` mapping `vendor/three.min.js` (the script writes it beside the page).
 3. If enemies, their timings or their numbers changed, update `artifacts/enemy-guide/index.html` and republish it with its `img/` files to the guide URL. Re-render the pictures with `node tools/portraits.js` if a model changed.
 4. If a booster or station module changed (`UP`, `SHOP`, `UNLOCK_ORDER`, `START_MODS`, the odds in `rollCards()`, or what one does in `recalc()` and elsewhere), update its note in `tools/upgrade-guide.js` if its numbers changed, run `node tools/upgrade-guide.js`, and republish `artifacts/upgrade-guide/index.html` to the upgrade guide URL.
