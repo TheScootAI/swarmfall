@@ -667,6 +667,51 @@ const GROUPS = {
     check(s.state === 'station' && after.meta - before.meta === before.run - before.banked + r3.reward + r3.lines * V.line, 'a key carries on too, and the station banks what the simulation paid with the rest of the run\'s scrap', JSON.stringify({ before, after }));
     await page.context().close();
   },
+  // Burst Thrusters: a flick of the thumb up or down lunges the ship forward or drops it back, and it drifts home.
+  burst: async () => {
+    const { page, st, waitFor } = await open(); let s;
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut');
+    // Touches are sent as a phone sends them: pointer events on the playfield. Each stroke is a list of [x, y, ms after the touch began].
+    const stroke = pts => page.evaluate(pts => new Promise(res => { const el = document.getElementById('stage'), ev = (type, x, y) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, pointerType: 'touch', clientX: x, clientY: y }));
+      let i = 0; const t0 = performance.now(); ev('pointerdown', pts[0][0], pts[0][1]);
+      (function f() { while (i + 1 < pts.length && performance.now() - t0 >= pts[i + 1][2]) { i++; ev('pointermove', pts[i][0], pts[i][1]); } if (i + 1 >= pts.length) { ev('pointerup', pts[i][0], pts[i][1]); return res(); } setTimeout(f, 4); })(); }), pts);
+    const up = [[195, 620, 0], [195, 600, 30], [196, 575, 60], [197, 548, 90]], down = [[195, 560, 0], [195, 580, 30], [194, 606, 60], [194, 632, 90]];
+    const slanted = [[120, 640, 0], [150, 610, 30], [180, 580, 60], [210, 550, 90], [240, 520, 120]];                                             // steering up and across: as much sideways as up
+    const shake = [[195, 620, 0], [255, 610, 45], [300, 618, 90], [240, 628, 135], [150, 616, 180], [100, 624, 225], [170, 632, 270], [260, 614, 315]];   // the latcher shake: wide and fast, bowing up and down as the thumb pivots
+    const slow = [[195, 640, 0], [195, 620, 200], [195, 600, 400], [195, 580, 600], [195, 560, 800]];                                               // a slow slide up
+    const dy = () => page.evaluate(() => { const w = window.__swarmfall; return { dy: +w.P.dy.toFixed(1), phase: w.P.bPhase, state: w.G.state }; });
+    const far = (ms, sign) => page.evaluate(([ms, sign]) => new Promise(res => { const w = window.__swarmfall, t0 = performance.now(); let best = 0, home = null;
+      (function f() { const d = w.P.dy * sign; if (d > best) best = d; if (best > 5 && w.P.bPhase === 0 && home === null) home = Math.round(performance.now() - t0); if (performance.now() - t0 > ms || home !== null) return res({ best: +best.toFixed(1), home }); requestAnimationFrame(f); })(); }), [ms, sign]);
+    // a cutscene (the launch): the booster fitted, a flick does nothing
+    await page.evaluate(() => { const w = window.__swarmfall; w.G.up.dash = 1; w.recalc(); });
+    await stroke(up); const inCut = await dy(); check(inCut.state === 'cut' && inCut.dy === 0 && inCut.phase === 0, 'Burst Thrusters: a flick during a cutscene does nothing', JSON.stringify(inCut));
+    await waitFor(x => x.state === 'play', 20000);
+    await page.evaluate(() => { const w = window.__swarmfall, G = w.G; for (const e of G.enemies) { e.dead = true; w.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; const g = w.spawnEnemy('mite', 0, 0); g.hp = g.maxHp = 1e12; window.__tick = setInterval(() => { G.diveT = 99; G.shootT = 99; G.eb.length = 0; w.P.inv = 9; g.hp = 1e12; }, 50); });
+    // without the booster nothing happens
+    await page.evaluate(() => { const w = window.__swarmfall; w.G.up = {}; w.recalc(); });
+    await stroke(up); await page.waitForTimeout(150); const none = await dy(); check(none.dy === 0 && none.phase === 0, 'without the booster a flick does nothing', JSON.stringify(none));
+    await page.evaluate(() => { const w = window.__swarmfall; w.G.up.dash = 1; w.recalc(); });
+    // strokes that are not flicks
+    const not = {}; for (const [name, pts] of [['slanted', slanted], ['shake', shake], ['slow', slow]]) { const w = far(pts[pts.length - 1][2] + 250, 1), w2 = far(pts[pts.length - 1][2] + 250, -1); await stroke(pts); not[name] = Math.max((await w).best, (await w2).best); await page.waitForTimeout(100); }
+    check(not.slanted === 0 && not.shake === 0 && not.slow === 0, 'steering on a slant, the wide shake that throws a latcher off, and a slow slide never set it off', JSON.stringify(not));
+    // a real flick up: forward, held, then home; a second flick while it is out is ignored
+    const B = await page.evaluate(() => window.__swarmfall.BURST);
+    let w1 = far(5000, -1); await stroke(up); await page.waitForTimeout(120);
+    const hit = await page.evaluate(() => { const w = window.__swarmfall, P = w.P; return { dy: +P.dy.toFixed(1), atHome: w.shipHit(P.x, w.shipY(), 4), atShip: w.shipHit(P.x, P.y, 4), again: w.burstGo(1) }; });
+    const f1 = await w1;
+    check(Math.abs(f1.best - B.fwd) < 1 && f1.home !== null && f1.home > 600 && f1.home < 4000, 'a flick up bursts the ship forward by its reach, and it drifts home by itself', JSON.stringify({ reach: B.fwd, went: f1.best, homeAfterMs: f1.home }));
+    check(hit.dy < -30 && hit.atHome === false && hit.atShip === true && hit.again === false, 'while it is forward the ship can be hit where it is and not where it was, and a second burst waits until it is home', JSON.stringify(hit));
+    w1 = far(5000, 1); await stroke(down); const f2 = await w1;
+    check(Math.abs(f2.best - B.back) < 1 && f2.home !== null, 'a flick down drops it back, by less, and it drifts home', JSON.stringify({ reach: B.back, went: f2.best, homeAfterMs: f2.home }));
+    w1 = far(5000, -1); await page.keyboard.press('ArrowUp'); const f3 = await w1; check(Math.abs(f3.best - B.fwd) < 1, 'the up key does the same', JSON.stringify(f3));
+    // not in the training simulation (the bare ship), and a restart in mid-burst starts at home
+    const sim = await page.evaluate(() => { const w = window.__swarmfall; w.G.sim = true; w.recalc(); const b = w.S.burst; w.G.sim = false; w.recalc(); return { inSim: b, after: w.S.burst }; });
+    check(sim.inSim === 0 && sim.after === 1, 'the bare ship of the training simulation has no burst', JSON.stringify(sim));
+    await stroke(up); await page.waitForTimeout(100); const mid = await dy();
+    await page.evaluate(() => { clearInterval(window.__tick); document.getElementById('btnPause').click(); document.getElementById('btnRestart').click(); }); await page.waitForTimeout(200);
+    const fresh = await dy(); check(mid.dy < -20 && fresh.dy === 0 && fresh.phase === 0, 'a run restarted in mid-burst starts with the ship at home', JSON.stringify({ mid, fresh }));
+    await page.context().close();
+  },
   // The latcher: clamps onto the ship, goes off after 1.5 seconds, and is thrown off by flicks or by a slam into the edge.
   latcher: async () => {
     const { page, st, waitFor, clearWave, playTo, shot } = await open(); let s;
@@ -769,7 +814,7 @@ const GROUPS = {
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
-      for (const id of ['twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
+      for (const id of ['dash', 'twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
       s.recalc(); s.G.wave = 15; s.nextWave(); s.S.maxHp = 9; s.P.hp = 9;
       const seen = { kills: 0, maxShots: 0, maxMissiles: 0, splits: 0, beams: 0, waves: new Set() }; const t0 = performance.now(); let k0 = s.G.run.kills;
       (function f() { const G = s.G;
@@ -953,6 +998,7 @@ const ABOUT = {
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
   sim: 'the simulation after a boss: the wavy scenes in and out, the grid and no station, bare ship only, harmless, a perfect score on every stage, the reward, pause, the result card and the touch that carries on, a part score in a real run on a short phone',
+  burst: 'Burst Thrusters: a flick up or down, what does not count as one, the drift home, the hit shape, the keys',
   latcher: 'the latcher: leaping by itself, clamping on, going off, shaken off, slammed off; the shield; no harm by touch',
   stress: 'Volatile Payload in a full formation; the hull cap; Split Barrel\'s three levels; every booster at once on late waves; pause; the Graphics button',
   gfx: 'every effect on; the automatic step-down',

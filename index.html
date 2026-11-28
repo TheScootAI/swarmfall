@@ -516,6 +516,7 @@ const SFX = {
   deny() { tone('square', 160, 120, 0.12, 0.2); },
   launch() { noise(1.3, 0.45, 500); tone('sawtooth', 70, 240, 1.2, 0.25); },
   dock() { tone('square', 110, 80, 0.12, 0.35); tone('square', 90, 60, 0.16, 0.35, 0.18); noise(0.2, 0.3, 600); },
+  dash(fwd) { noise(0.16, 0.14, 1100, 0.008); tone('sine', fwd ? 300 : 620, fwd ? 620 : 300, 0.14, 0.1); },   // Burst Thrusters: a short soft rush, rising for forward and falling for back
   shuttle() { tone('sine', 500, 760, 0.18, 0.2); tone('sine', 760, 1000, 0.18, 0.2, 0.16); },
 };
 const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
@@ -1082,6 +1083,12 @@ const BLAST = { chance: 0.25, r: [40, 45, 50], dmg: [0.5, 0.6, 0.75] };
 // bullet every third shot", then (changed from three bullets on every other shot) "level 2 is still 2 bullets but
 // every shot", then "every shot with three bullets".
 const SPLIT = [null, { every: 3, add: 1 }, { every: 1, add: 1 }, { every: 1, add: 2 }];
+// Burst Thrusters. fwd, back: how far the ship lunges up the screen and how far it drops back (back keeps it on the
+// screen). out: seconds to get there; hold: seconds it stays; home: how quickly it then drifts back (a share of what
+// is left, each second); near: how close to home counts as home, when the next burst is allowed. flick: the thumb
+// movement that sets one off: at least `px` up or down within `ms`, and no more than `slant` times that sideways, so
+// that steering on a slant, and the wide side-to-side shake that throws a latcher off, never do.
+const BURST = { fwd: 60, back: 40, out: 0.14, hold: 0.2, home: 2.4, near: 1.5, flick: { px: 34, ms: 160, slant: 0.6 } };
 // A boss's sweep across the top (bossSway): its pace and its reach are each a share of the boss's own, drawn afresh
 // every `every` seconds; `turn` is the chance it also turns back; `ease` is how quickly it takes up the new ones.
 const SWAY = { pace: [0.6, 1.4], reach: [0.55, 1], every: [1.6, 3.6], turn: 0.3, ease: 1.2 };
@@ -1207,6 +1214,7 @@ const UP = [
   { id: 'thrust', c: 's', n: 'Side Thrusters', r: 0, max: 4, d: '+15% steering speed.' },
   { id: 'plate', c: 'a', n: 'Hull Plate', r: 0, max: HULL_UPGRADES, d: '+1 max hull, so you can take 1 more hit. Repairs 1 now.', ok: () => mlv('hull') + ulv('plate') < HULL_UPGRADES },
   { id: 'velocity', c: 'w', n: 'Rail Coils', r: 0, max: 4, d: '+25% shot speed and +10% damage.' },
+  { id: 'dash', c: 's', n: 'Burst Thrusters', r: 1, max: 1, d: 'Flick your thumb up to burst forward, or down to drop back. The ship drifts home by itself. (Keys: up and down.)' },
   { id: 'magnet', c: 's', n: 'Tractor Field', r: 0, max: 3, d: 'Pull scrap in from much farther away.' },
   { id: 'patch', c: 'a', n: 'Patch Kit', r: 0, max: 99, d: 'Repair 2 hull now.', ok: () => P.hp < S.maxHp },
   { id: 'twin', c: 'w', n: 'Split Barrel', r: 1, max: 3, d: ['Every 3rd volley fires 1 extra shot.', 'Every volley fires 1 extra shot.', 'Every volley fires 2 extra shots.'] },   // a booster whose levels differ says what the next level does (numbers in SPLIT)
@@ -1266,7 +1274,8 @@ const nextMod = () => UNLOCK_ORDER.find(id => !meta.mods.includes(id));
 const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [], eb: [], em: [], picks: [], queue: [], blastQ: [], up: {}, run: { scrap: 0, kills: 0, banked: 0 },
   form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, repairs: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
-const P = { x: W / 2, y: shipY(), vx: 0, hp: 3, inv: 0, fireT: 0, volley: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
+const P = { x: W / 2, y: shipY(), dy: 0, bPhase: 0, bT: 0, bTo: 0, vx: 0, hp: 3, inv: 0, fireT: 0, volley: 0,   // dy: how far off its home row a burst has the ship (up the screen is negative); bPhase: 0 home, 1 going, 2 holding, 3 drifting back
+  shieldUp: false, shieldT: 0, droneT: 0, missT: 0, target: null, alive: true };
 const S = {};   // derived player stats
 const ulv = id => G.up[id] || 0, boostLevel = ulv;
 function recalc() {
@@ -1277,7 +1286,7 @@ function recalc() {
   S.dmg = 10 * (1 + 0.1 * mlv('dmg')) * (1 + 0.25 * ulv('heavy')) * (1 + 0.1 * ulv('velocity')) * (1 + 0.2 * od);
   S.shotSpeed = 366 * (1 + 0.08 * mlv('speed')) * (1 + 0.25 * ulv('velocity'));
   S.shots = 1 + mlv('twin'); S.split = Math.min(SPLIT.length - 1, ulv('twin')); S.pierce = ulv('pierce'); S.rico = ulv('rico');
-  S.move = 240 * (1 + 0.15 * ulv('thrust'));
+  S.move = 240 * (1 + 0.15 * ulv('thrust')); S.burst = ulv('dash');
   S.maxHp = Math.max(1, 1 + Math.min(HULL_UPGRADES, mlv('hull') + ulv('plate')) - od);   // a new ship has 1 hull: one hit ends the run until hull is added
   S.rate = 2.75 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
   S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
@@ -2087,8 +2096,22 @@ function shot(x, y, ang, kind, dmgMul) {
   const sp = kind === 1 ? 300 : S.shotSpeed, crit = kind !== 1 && Math.random() < S.crit;
   G.pb.push({ x, y, vx: Math.sin(ang) * sp, vy: -Math.cos(ang) * sp, dmg: S.dmg * dmgMul * (crit ? 2.5 : 1), pierce: kind === 0 ? S.pierce : 0, rico: kind === 0 ? S.rico : 0, crit, kind, hit: null, dead: false });
 }
+// Burst Thrusters: the ship lunges forward (dir -1) or drops back (dir 1) and then drifts home by itself. One burst at
+// a time: the next is allowed once it is home again. Not during an introduction, and never in the training simulation
+// (the bare ship has no boosters). The owner: "a booster that gives you the ability to burst forward or backward some
+// and then it will float back to its home position."
+function burstGo(dir) {
+  if (!S.burst || P.bPhase || !P.alive || IN.on || (G.state !== 'play' && G.state !== 'clear')) return false;
+  P.bPhase = 1; P.bT = 0; P.bTo = dir < 0 ? -BURST.fwd : BURST.back; SFX.dash(dir < 0);
+  burst(P.x, P.y + (dir < 0 ? 20 : -16), THRUST_RGB, 12, 150, 0.35); return true;
+}
+function burstStep(dt) {
+  if (P.bPhase === 1) { P.bT += dt; const k = Math.min(1, P.bT / BURST.out); P.dy = P.bTo * (1 - (1 - k) * (1 - k)); if (k >= 1) { P.bPhase = 2; P.bT = 0; } }
+  else if (P.bPhase === 2) { P.bT += dt; if (P.bT >= BURST.hold) P.bPhase = 3; }
+  else if (P.bPhase === 3) { P.dy -= P.dy * Math.min(1, BURST.home * dt); if (Math.abs(P.dy) < BURST.near) { P.dy = 0; P.bPhase = 0; if (P.alive && G.state === 'play') ringFx(P.x, P.y, 5, 20, 0x9ff3ff, 0.22); } }   // home: a small ring says the thrusters are ready again
+}
 function updatePlayer(dt) {
-  P.y = shipY();
+  burstStep(dt); P.y = shipY() + P.dy;
   if (!P.alive) return;
   const dir = (keys.arrowright || keys.d ? 1 : 0) - (keys.arrowleft || keys.a ? 1 : 0);
   const x0 = P.x;
@@ -2513,6 +2536,7 @@ function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DO
 function startCut(kind, done) {
   FIN.on = FIN.toast = false; clearClouds(); clearSats(); P.las = null;   // a cloud, satellite or beam would hang frozen through the scene
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
+  P.dy = 0; P.bPhase = 0;   // a scene takes the ship from wherever a burst had it
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
   else if (kind === 'dock') { ST.on = true; toast('DOCKING'); }
   else if (kind === 'simIn' || kind === 'simOut') SFX.warp(kind === 'simIn');
@@ -2593,7 +2617,7 @@ function startSim() {
   SIMS.lineHits.fill(0);
   Object.assign(SIMS, { on: true, wait: true, waitT: 0, lines: 0, hits: 0, total: stage.length * SIM.n, ended: false, shield: P.shieldUp, reward: 0, perfect: false, owed: 0, leaving: false });
   P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearSats(); G.pb.length = 0;
-  ST.on = false; P.x = W / 2; P.y = shipY(); P.vx = 0; P.target = null; WARP.k = 1; simScene(true);
+  ST.on = false; P.x = W / 2; P.y = shipY(); P.dy = 0; P.bPhase = 0; P.vx = 0; P.target = null; WARP.k = 1; simScene(true);
   ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.userData.wasGlow = m.layers.isEnabled(GLOW); m.material = M.holoShip; m.layers.enable(GLOW); } });
   G.queue = []; G.waveT = 0;
   show(null); $('hud').hidden = false; drawHud(); simTally();
@@ -2717,7 +2741,7 @@ function syncScene(dt) {
   ship.position.set(TX(P.x), TY(P.y) + Math.sin(G.time * 3) * 1.2, 0);
   ship.rotation.y = clamp(P.vx / 420, -0.7, 0.7);
   if (P.alive) ship.visible = P.inv <= 0 || G.state === 'cut' || Math.floor(G.time * 14) % 2 === 0;   // no hit-blink during cutscenes
-  flame.scale.y = 12 + Math.sin(G.time * 40) * 3;
+  flame.scale.y = 12 + Math.sin(G.time * 40) * 3 + (P.bPhase && P.bPhase < 3 && P.bTo < 0 ? 14 : 0);   // a long flame while it bursts forward
   shieldMesh.visible = P.shieldUp; M.shield.uniforms.time.value = G.time;
   if (SIMS.on) { const t = G.time; M.holo.uniforms.time.value = M.holoShip.uniforms.time.value = gridMat.uniforms.time.value = t; M.holoShip.uniforms.power.value = 0.9 + Math.sin(t * 31) * 0.1; M.holo.uniforms.power.value = GFX.q ? 1 : 1.6; }   // the ship of light flickers a little; with the effects off the targets have no halo, so they are brighter
   // lights: a cool glow that travels with the ship, and the fading flash of the last explosion
@@ -2888,7 +2912,7 @@ function startRun(test, drill) {   // drill: a test run that goes straight into 
   G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
   G.run = { scrap: 0, kills: 0, banked: 0 }; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
-  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, volley: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 1, las: null, target: null, alive: true });
+  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, volley: 0, dy: 0, bPhase: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, lasT: 1, las: null, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
   Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
@@ -3299,6 +3323,7 @@ addEventListener('keydown', e => {
   if (typing(e)) return;               // letters typed into the feedback box are not game keys
   audioInit(); const k = e.key.toLowerCase();
   if (k === 'arrowleft' || k === 'arrowright' || k === 'a' || k === 'd') { keys[k] = true; if (inPlay()) e.preventDefault(); }
+  else if ((k === 'arrowup' || k === 'arrowdown' || k === 'w' || k === 's') && inPlay()) { e.preventDefault(); if (!e.repeat) burstGo(k === 'arrowup' || k === 'w' ? -1 : 1); }   // Burst Thrusters; the arrows must not scroll the page
   else if (G.state === 'cut') { /* a cutscene always plays out */ }
   else if (IN.on) { if (k === ' ' || k === 'enter') e.preventDefault(); introDone(); }   // any key carries on from an introduction
   else if (SIMS.wait && G.state === 'sim') { if (k === ' ' || k === 'enter') e.preventDefault(); simBegin(); }   // any key starts the simulation's round
@@ -3319,7 +3344,7 @@ addEventListener('pointerdown', e => {
   if (SIMS.ended && G.state === 'sim') { if (!(e.target.closest && e.target.closest('button, #fb'))) simTap(false); return; }   // the simulation's result: a fresh touch carries on, and steers nothing
   if (G.state === 'cut' && !(e.target.closest && e.target.closest('button, #fb'))) return;   // a touch during a cutscene does nothing: it neither skips the scene nor steers
   if (!inPlay() || (e.target.closest && e.target.closest('button, #fb'))) return;
-  if (e.pointerType === 'mouse') P.target = worldX(e.clientX); else drag = { id: e.pointerId, sx: e.clientX, tx: P.x };
+  if (e.pointerType === 'mouse') P.target = worldX(e.clientX); else drag = { id: e.pointerId, sx: e.clientX, tx: P.x, fx: e.clientX, fy: e.clientY, ft: e.timeStamp };   // fx, fy, ft: where and when the watch for a flick last began
 });
 addEventListener('pointermove', e => {
   if (!inPlay()) return;
@@ -3328,6 +3353,10 @@ addEventListener('pointermove', e => {
     const raw = drag.tx + (e.clientX - drag.sx) * unitsPerPx * 1.35, t = clamp(raw, 14, W - 14);
     if (t !== raw) { drag.sx = e.clientX; drag.tx = t; }   // re-anchor at the wall so reversing responds at once
     P.target = t;
+    // A flick up or down (Burst Thrusters): far enough, fast enough, and much more up-and-down than sideways (BURST.flick).
+    const F = BURST.flick, fy = e.clientY - drag.fy, fx = e.clientX - drag.fx;
+    if (e.timeStamp - drag.ft > F.ms) { drag.fx = e.clientX; drag.fy = e.clientY; drag.ft = e.timeStamp; }   // too slow to be a flick: start the watch again from here
+    else if (Math.abs(fy) >= F.px && Math.abs(fx) <= Math.abs(fy) * F.slant) { burstGo(fy < 0 ? -1 : 1); drag.fx = e.clientX; drag.fy = e.clientY; drag.ft = e.timeStamp; }
   }
 });
 const endDrag = e => { if (drag && drag.id === e.pointerId) drag = null; if (SIMS.leaving) SIMS.lifted = true; };
@@ -3372,7 +3401,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, simYAt, shipY, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, BURST, burstGo, shipHit, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, simYAt, shipY, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
