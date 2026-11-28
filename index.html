@@ -591,12 +591,12 @@ const M = {
   foe: foeMat(), craft: foeMat(0.65, 0.3, 0.2), foeGlow: glowing(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })),   // every ordinary enemy's body and its lights: the colours are on the model's corners (see kit())
   holo: holoMat(0x8fdcff), holoShip: holoMat(0x8ff0ff, 1.7),   // the simulation: targets and the ship's projection, made of light. They glow: no more than sixteen targets are out at once, and each is small
   fuse: glowing(basic(ENEMY_RED)),
-  splitA: pbr(0xff7a3c, 0x4a1c08), splitB: pbr(0xffd23c, 0x4a3a08),
-  beetle: pbr(0x2ed6b5, 0x06382f, 0.7, 0.3), shell: pbr(0x127a6b, 0x03201b, 0.7, 0.35),
-  trip: pbr(0x3d7bff, 0x0c1f66),
-  lancer: pbr(0xff3355, 0x5a0a18), lancerShell: pbr(0x3a1638, 0x12061a, 0.7, 0.35), beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: addMat(0xffffff, 0.95),   // no halo on the white core: blurred, it would turn the red beam pink
+  
+  
+  
+  beamAim: glowMat(0xff4a5e, 0.5), beamOn: glowMat(ENEMY_RED, 0.85), beamCore: addMat(0xffffff, 0.95),   // no halo on the white core: blurred, it would turn the red beam pink
  
-  siegeCore: glowing(basic(0xfff1c0)), eye: basic(0xffffff), elite: basic(ENEMY_RED), flash: basic(0xffffff), coreRing: pbr(0x2a2f66, 0x0a0c22, 0.8, 0.3),
+  siegeCore: glowing(basic(0xfff1c0)), eye: basic(0xffffff), elite: basic(ENEMY_RED), flash: basic(0xffffff), 
   scrap: pbr(0xffd257, 0x9a6a00, 0.9, 0.25), heart: pbr(0x35f06e, 0x0c6a2c, 0.3, 0.4), halo: glowMat(0x5fe8ff, 0.85), haloRepair: glowMat(0x4dff8a, 0.85),   // a pickup's ring: blue round scrap, green round a repair cross, so the two are told apart at a glance
   drone: pbr(0xc7b0ff, 0x2a1a5a), laserOn: glowMat(0xffd23f, 0.5), laserCore: addMat(0xfff3c4, 0.9),
   // the shield: an energy bubble that is bright at its rim, with bands rising through it
@@ -833,23 +833,17 @@ const stLights = [[0, 59, 5], [0, -59, 5], [-118, 0, 2], [118, 0, 2]].map(([x, y
 station.visible = false; scene.add(station);
 // The booster shuttle (it comes on the waves in SHUTTLE): a small ship of the station's own make. The group
 // carries its position and heading; shBody inside it banks into the turn.
-const shuttle = new THREE.Group(), shBody = new THREE.Group();
-shBody.add(
-  part(geo.cyl, stM.hull, 5.5, 22, 4.6),                       // fuselage
-  part(geo.cone, stM.hull, 5.5, 11, 4.6, 0, 16.5),             // nose
-  part(geo.oct, M.canopy, 2.6, 5, 2.2, 0, 9, 3.8),             // cockpit, lit like the ship's own
-  part(geo.box, stM.panel, 11.6, 3, 9.4, 0, 2.5),              // a blue band round the hull
-  part(geo.box, stM.panel, 11.6, 1.2, 9.4, 0, -2),
-  part(geo.box, stM.dark, 2, 10, 7, 0, -8.5, 3.6),             // tail fin
-  part(geo.cyl, stM.dark, 3.6, 5, 3.6, 0, -12.5));             // main engine bell
+const shuttle = new THREE.Group(), shBody = new THREE.Group(), SH_KIT = (() => { const HL = 0xcfd6ff, MID = 0x9aa4d8, DK = 0x4a5490, PN = 0x2a56d8, body = [], glow = [];
+  body.push(['cyl', HL, 5.5, 22, 4.6], ['cone', HL, 5.5, 11, 4.6, 0, 16.5], ['box', PN, 11.6, 3, 9.4, 0, 2.5], ['box', PN, 11.6, 1.2, 9.4, 0, -2],   // fuselage, nose, and two blue bands round the hull
+    ['box', DK, 5.6, 7, 1.6, 0, 9.4, 3.2], ['box', MID, 8.4, 8.6, 2, 0, 3, 5.2], ['box', DK, 2, 10, 7, 0, -8.5, 3.6], ['cyl', DK, 3.6, 5, 3.6, 0, -12.5], ['cyl', MID, 4.2, 1.4, 4.2, 0, -10.4],   // cockpit frame, the cradle the crate rides in, tail fin, engine bell and its collar
+    ['box', MID, 1, 7, 1, 2.6, -7.5, 8.2]);                                                                                                         // an aerial on the fin
+  for (const sd of [-1, 1]) body.push(['box', DK, 18, 6.5, 1.6, sd * 12, -4.5, 0, sd * -0.5], ['box', PN, 10, 2, 1.9, sd * 13.5, -2.6, 0.3, sd * -0.5], ['box', MID, 6, 4.4, 2.6, sd * 6.4, -1.4, 0.4, sd * -0.5],   // swept wing, its stripe, and the fairing at its root
+    ['cyl', HL, 2.5, 11, 2.5, sd * 20, -8.5], ['cone', HL, 2.5, 4.5, 2.5, sd * 20, -0.8], ['cyl', DK, 1.9, 2.5, 1.9, sd * 20, -14.5], ['cyl', PN, 2.8, 1.6, 2.8, sd * 20, -6]);                                  // wingtip engine, its nose, its bell and a blue ring
+  glow.push(['oct', 0x9ff3ff, 2.6, 5, 2.2, 0, 9, 3.8]);   // cockpit, lit like the ship's own
+  return { body, glow }; })();
+shBody.add(kitMesh('shuttle', SH_KIT.body, M.craft), kitMesh('shuttle-glow', SH_KIT.glow, M.foeGlow));
 const shFlames = [part(geo.cone, M.flame, 3.3, 11, 3.3, 0, -19.5, 0, Math.PI)], shLights = [];
 for (const sd of [-1, 1]) {
-  shBody.add(
-    part(geo.box, stM.dark, 18, 6.5, 1.6, sd * 12, -4.5, 0, sd * -0.5),       // swept wing
-    part(geo.box, stM.panel, 10, 2, 1.9, sd * 13.5, -2.6, 0.3, sd * -0.5),    // its stripe
-    part(geo.cyl, stM.hull, 2.5, 11, 2.5, sd * 20, -8.5),                     // wingtip engine
-    part(geo.cone, stM.hull, 2.5, 4.5, 2.5, sd * 20, -0.8),
-    part(geo.cyl, stM.dark, 1.9, 2.5, 1.9, sd * 20, -14.5));
   shFlames.push(part(geo.cone, M.flame, 1.9, 7, 1.9, sd * 20, -19, 0, Math.PI));
   shLights.push(part(geo.sph, stM.light, 1.2, 1.2, 1.2, sd * 22.8, -5, 1.4));   // running lights: blue, like everything on your side
 }
@@ -1304,7 +1298,6 @@ const turnToward = (cur, want, maxStep) => cur + clamp(wrapAngle(want - cur), -m
 // never pulls an array out from under the loop that called it.
 function sweepDead(a) { let j = 0; for (const x of a) if (!x.dead) a[j++] = x; a.length = j; }
 const FORM_DX = 38, FORM_DY = 34;   // formation spacing between columns and rows
-const bossBody = {};                // Hive Core body materials, one per tint
 const WARDEN_EYE = 26;              // how far below the Beam Warden's centre its beams start
 const FOE = (() => {
   const P = Math.PI, H = P / 2, T = P * 2, ring3 = k => H + k * T / 3, pods = [0, 1, 2];
@@ -1355,33 +1348,72 @@ const FOE = (() => {
         ['oct', 0xb9c3ea, 1.2, 1.2, 1.2, -5.4, 0.4, 3.9], ['oct', 0xb9c3ea, 1.2, 1.2, 1.2, 5.4, 0.4, 3.9]] },
   };
 })();
+// A colour made darker (k below 0) or paler (k above 0): for the Hive Core, whose colour is not fixed.
+const shade = (c, k) => { const t = k < 0 ? 0 : 255, a = Math.abs(k), f = v => Math.round(v + (t - v) * a); return f(c >> 16 & 255) << 16 | f(c >> 8 & 255) << 8 | f(c & 255); };
+// The bosses. Each is built on an enemy the player has met, so each is that enemy's kit writ large, with more to it.
+// Their moving parts (a ring, a pair of wing cases, a spinning cluster) are kits of their own.
+const BOSSKIT = (() => {
+  const P = Math.PI, H = P / 2, T = P * 2, ring3 = k => H + k * T / 3, pods = [0, 1, 2], out = {};
+  // the Siege Beetle: the beetle's body, collar, head, horns and six legs; its eyes; and one wing case (the same shape serves both sides)
+  out.siege = { body: [['ico', 0x2ed6b5, 30, 26, 21], ['box', 0x0a3f38, 37, 8, 13, 0, -15, 11], ['ico', 0x0a3f38, 14, 10.5, 12, 0, -25, 6],
+      ['cone', 0x0a3f38, 3.2, 11, 3.2, -7, -33.4, 6, P - 0.3], ['cone', 0x0a3f38, 3.2, 11, 3.2, 7, -33.4, 6, P + 0.3],
+      ['box', 0x0a3f38, 9, 3.2, 3.2, -30.4, -9, 0, 0.35], ['box', 0x0a3f38, 9, 3.2, 3.2, 30.4, -9, 0, -0.35], ['box', 0x0a3f38, 9, 3.2, 3.2, -31.6, 4, 0], ['box', 0x0a3f38, 9, 3.2, 3.2, 31.6, 4, 0],
+      ['box', 0x0a3f38, 9, 3.2, 3.2, -30.4, 17, 0, -0.35], ['box', 0x0a3f38, 9, 3.2, 3.2, 30.4, 17, 0, 0.35], ['box', 0x127a6b, 20, 5, 6, 0, 24, 6]],
+    glow: [['oct', 0xd9fff6, 3, 3, 3, -5.6, -26, 15], ['oct', 0xd9fff6, 3, 3, 3, 5.6, -26, 15]],
+    shell: [['box', 0x127a6b, 27, 25, 16], ['box', 0x0c5a4f, 3.4, 26, 3, -7, 0, 7.2], ['box', 0x0c5a4f, 3.4, 26, 3, 7, 0, 7.2], ['oct', 0x9af5e1, 3, 6, 2.6, 0, 5, 9.2], ['oct', 0x9af5e1, 2.4, 4.4, 2.2, 0, -6, 9],
+      ['box', 0x0a3f38, 27.8, 2.4, 16.6, 0, -12, 0], ['box', 0x0a3f38, 27.8, 2.4, 16.6, 0, 12, 0]] };
+  // one core of the Triad: three great pods round a hub, pale at their tips, with a bright heart; and the spoke that ties it to the other two
+  out.triad = { body: [...pods.map(k => ['cone', 0x3d7bff, 8.8, 16, 8.8, Math.cos(ring3(k)) * 10.4, Math.sin(ring3(k)) * 10.4, 0, ring3(k) - H]),
+      ...pods.map(k => ['oct', 0xa9c6ff, 2.4, 2.4, 2.4, Math.cos(ring3(k)) * 17.6, Math.sin(ring3(k)) * 17.6, 0.6]),
+      ...pods.map(k => ['box', 0x16307a, 3.4, 9.6, 4, Math.cos(ring3(k) + P / 3) * 5.6, Math.sin(ring3(k) + P / 3) * 5.6, 0, ring3(k) + P / 3 - H]), ['torus', 0x16307a, 6.4, 6.4, 5]],
+    glow: [['ico', 0xdfeaff, 3.4, 3.4, 3.4, 0, 0, 2.4]],
+    spoke: [['box', 0x2a2f66, TRIAD.orbit, 3, 3, -TRIAD.orbit / 2, 0, -3], ['box', 0x16307a, 5, 6, 5, -TRIAD.orbit * 0.5, 0, -3], ['box', 0x16307a, 4, 5, 4.4, -TRIAD.orbit * 0.25, 0, -3], ['box', 0x16307a, 4, 5, 4.4, -TRIAD.orbit * 0.75, 0, -3]] };
+  // the Fracture Cube: the splitter's two crystals, each crossed by the dark bands it will break along, plated and studded, with a hot seam between
+  out.cube = { body: [['box', 0xff7a3c, 34, 34, 34, -15, 0, 0, P / 4], ['box', 0xffd23c, 34, 34, 34, 15, 0, 0, P / 4],
+      ['box', 0x2a2f66, 35.5, 7, 35.5, -15, 0, 0, P / 4], ['box', 0x2a2f66, 7, 35.5, 35.5, 15, 0, 0, P / 4],
+      ['box', 0xc9531e, 12, 9, 2.4, -22, 7.2, 17, P / 4], ['box', 0xc9531e, 12, 9, 2.4, -8, -7.2, 17, P / 4], ['box', 0xd9a81c, 9, 12, 2.4, 22, -7.2, 17, P / 4], ['box', 0xd9a81c, 9, 12, 2.4, 8, 7.2, 17, P / 4],
+      ['oct', 0xffc9a8, 3.4, 3.4, 3.4, -31, 0, 8], ['oct', 0xfff0b0, 3.4, 3.4, 3.4, 31, 0, 8], ['oct', 0xffc9a8, 3, 3, 3, -15, 17, 12], ['oct', 0xffc9a8, 3, 3, 3, -15, -17, 12], ['oct', 0xfff0b0, 3, 3, 3, 15, 17, 12], ['oct', 0xfff0b0, 3, 3, 3, 15, -17, 12]],
+    glow: [['oct', 0xfff1c0, 2.6, 15, 2.6, 0, 0, 15], ['ico', 0xfff1c0, 4.2, 4.2, 3.4, 0, 0, 21]] };
+  // the Beam Warden: the lancer's crystal between its rails, bridged, clamped and pronged; and the ring it rides in, set with studs
+  out.warden = { body: [['oct', 0xff3355, 17, 30, 17], ['oct', 0xff9aa8, 6, 15, 5.4, 0, 2, 11.8],
+      ['box', 0x3a1638, 8, 36, 9, -21, 1, 0], ['box', 0x3a1638, 8, 36, 9, 21, 1, 0], ['box', 0x3a1638, 36, 5.4, 8, 0, 18, -2],
+      ['box', 0x1c0a1e, 11, 4, 10.6, -21, 11, 0.4], ['box', 0x1c0a1e, 11, 4, 10.6, 21, 11, 0.4], ['box', 0x1c0a1e, 11, 4, 10.6, -21, -9, 0.4], ['box', 0x1c0a1e, 11, 4, 10.6, 21, -9, 0.4],
+      ['cone', 0x1c0a1e, 4, 9.4, 4, -21, -21.6, 0, P], ['cone', 0x1c0a1e, 4, 9.4, 4, 21, -21.6, 0, P], ['box', 0x1c0a1e, 9, 3.4, 6, 0, -19, 6]],
+    ring: [['hoop', 0x2a2f66, 38, 38, 38], ...[0, 1, 2, 3, 4, 5].map(k => ['oct', 0x6a3a68, 3.6, 3.6, 3.6, Math.cos(k * T / 6) * 38, Math.sin(k * T / 6) * 38, 0])] };
+  return out;
+})();
+const hives = {};
+function hiveKit(tint) {
+  if (hives[tint]) return hives[tint];
+  const D = shade(tint, -0.62), L = shade(tint, 0.55), H = Math.PI / 2, body = [['ico', tint, 30, 30, 26]], ring = [['hoop', 0x2a2f66, 46, 46, 46]];
+  body.push(['cyl', D, 11, 5, 11, 0, 27.5, 0], ['cyl', D, 11, 5, 11, 0, -27.5, 0], ['cyl', D, 11, 5, 11, 27.5, 0, 0, H], ['cyl', D, 11, 5, 11, -27.5, 0, 0, H], ['cyl', D, 11, 5, 11, 0, 0, 24, 0, H], ['cyl', D, 11, 5, 11, 0, 0, -24, 0, H]);   // six dark cells, one on each side
+  for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) body.push(['oct', L, 4, 4, 4, x * 16.5, y * 16.5, z * 14.5]);   // pale studs between them
+  for (let i = 0; i < 4; i++) { const a = i * TAU / 4, b = a + TAU / 8; ring.push(['oct', tint, 8, 8, 8, Math.cos(a) * 46, Math.sin(a) * 46], ['box', 0x2a2f66, 11, 5.5, 5.5, Math.cos(b) * 46, Math.sin(b) * 46, 0, b + H], ['oct', L, 2.2, 2.2, 2.2, Math.cos(b) * 46, Math.sin(b) * 46, 3.4]); }   // four launch bays, and a lit hatch between each pair
+  return hives[tint] = { body, ring };
+}
 function buildEnemy(type, tint) {
   const g = new THREE.Group(), add = (...a) => { const m = part(...a); g.add(m); return m; };
   if (FOE[type]) { const f = FOE[type]; g.add(kitMesh(type, f.body, M.foe)); if (f.glow) g.add(kitMesh(type + '-glow', f.glow, M.foeGlow));
     if (type === 'lancer') g.userData.eye = add(geo.sph, M.eye, 3, 3, 3, 0, -13, 4); else if (type === 'latcher') g.userData.fuse = add(geo.sph, M.fuse, 2.6, 2.6, 2.6, 0, 1, 7);
   }
-  else if (type === 'siege') {   // the Siege Beetle: a great beetle. Its two shell halves slide apart to show the bright core it hides
-    const body = new THREE.Group(); body.add(part(geo.ico, M.beetle, 30, 26, 22), part(geo.oct, M.eye, 4, 4, 4, -11, -12, 18), part(geo.oct, M.eye, 4, 4, 4, 11, -12, 18));
-    const core = part(geo.sph, M.siegeCore, 11, 11, 8, 0, 9, 12), shL = part(geo.box, M.shell, 27, 13, 18, -13.5, 9, 10), shR = part(geo.box, M.shell, 27, 13, 18, 13.5, 9, 10);
-    body.add(core, shL, shR); g.add(body); Object.assign(g.userData, { body, core, shL, shR });
+  else if (type === 'siege') {   // the Siege Beetle: a great beetle. Its two wing cases slide apart to show the bright core it hides
+    const body = new THREE.Group(), B = BOSSKIT.siege; body.add(kitMesh('siege', B.body, M.foe), kitMesh('siege-glow', B.glow, M.foeGlow));
+    const core = part(geo.sph, M.siegeCore, 11, 11, 8, 0, 9, 12), shL = kitMesh('siege-case', B.shell, M.foe), shR = kitMesh('siege-case', B.shell, M.foe);
+    shL.position.set(-13.5, 9, 10); shR.position.set(13.5, 9, 10); body.add(core, shL, shR); g.add(body); Object.assign(g.userData, { body, core, shL, shR });
   } else if (type === 'triad') {   // one core of the Triad: a large triplet on a spoke that reaches back to the centre they share
-    const spin = new THREE.Group(); for (let k = 0; k < 3; k++) { const a = Math.PI / 2 + k * TAU / 3; spin.add(part(geo.cone, M.trip, 9, 16, 9, Math.cos(a) * 10, Math.sin(a) * 10, 0, a - Math.PI / 2)); }
-    spin.add(part(geo.ico, M.eye, 5.5, 5.5, 5.5)); g.add(spin, part(geo.box, M.coreRing, TRIAD.orbit, 3, 3, -TRIAD.orbit / 2, 0, -3)); g.userData.spin = spin;
+    const spin = new THREE.Group(), B = BOSSKIT.triad; spin.add(kitMesh('triad', B.body, M.foe), kitMesh('triad-glow', B.glow, M.foeGlow));
+    g.add(spin, kitMesh('triad-spoke', B.spoke, M.foe)); g.userData.spin = spin;
   }
   else if (type === 'cube') {   // the Fracture Cube: a giant splitter. Halves and quarters are the same model, scaled down
-    add(geo.box, M.splitA, 34, 34, 34, -15, 0, 0, Math.PI / 4); add(geo.box, M.splitB, 34, 34, 34, 15, 0, 0, Math.PI / 4);
-    add(geo.box, M.coreRing, 35.5, 7, 35.5, -15, 0, 0, Math.PI / 4); add(geo.box, M.coreRing, 7, 35.5, 35.5, 15, 0, 0, Math.PI / 4);   // dark bands: the lines it will break along
-    add(geo.ico, M.eye, 8, 8, 6, 0, 0, 22);
+    g.add(kitMesh('cube', BOSSKIT.cube.body, M.foe), kitMesh('cube-glow', BOSSKIT.cube.glow, M.foeGlow));
   } else if (type === 'warden') {   // the Beam Warden: a great lancer inside a ring. The group itself never turns, so its beams stay true
-    const body = new THREE.Group(); body.add(part(geo.oct, M.lancer, 17, 30, 17), part(geo.box, M.lancerShell, 8, 34, 9, -21, 2), part(geo.box, M.lancerShell, 8, 34, 9, 21, 2));
-    const ring = part(geo.hoop, M.coreRing, 38, 38, 38); g.add(body, ring); g.userData.body = body; g.userData.ring = ring;
+    const body = new THREE.Group(), B = BOSSKIT.warden; body.add(kitMesh('warden', B.body, M.foe));
+    const ring = kitMesh('warden-ring', B.ring, M.foe); g.add(body, ring); g.userData.body = body; g.userData.ring = ring;
     g.userData.eye = add(geo.sph, M.eye, 5, 5, 5, 0, -WARDEN_EYE, 8);
-  } else {
-    const body = bossBody[tint] || (bossBody[tint] = pbr(tint, 0x2a0a20, 0.6, 0.3)), dark = M.coreRing;
-    g.userData.core = add(geo.ico, body, 30, 30, 26);
-    const ring = new THREE.Group(); ring.add(part(geo.hoop, dark, 46, 46, 46));
-    for (let i = 0; i < 4; i++) ring.add(part(geo.oct, body, 8, 8, 8, Math.cos(i * TAU / 4) * 46, Math.sin(i * TAU / 4) * 46));
-    g.add(ring); g.userData.ring = ring; add(geo.sph, M.eye, 9, 9, 6, 0, -4, 24);
+  } else {   // the Hive Core: a tumbling body set with dark cells, inside a turning ring of launch bays. Its colour changes each time it comes round
+    const B = hiveKit(tint), ring = new THREE.Group();
+    g.userData.core = kitMesh('hive-' + tint, B.body, M.foe); g.add(g.userData.core);
+    ring.add(kitMesh('hive-ring-' + tint, B.ring, M.foe)); g.add(ring); g.userData.ring = ring; add(geo.sph, M.eye, 9, 9, 6, 0, -4, 24);
   }
   return g;
 }
