@@ -2395,7 +2395,7 @@ function orbZap(c) {   // one arc: it strikes the nearest thing in reach, then (
     if (!best) break;
     orbAt.x = c.x; orbAt.y = c.y; orbPts[0] = orbAt; orbPts[1] = best; zapFx(orbPts, 0.2); zapFx(orbPts, 0.2); burst(best.x, best.y, HIT_RGB, 5, 130, 0.28);
     if (missile) popMissile(best, false); else { best.orbTag = id; damageEnemy(best, S.dmg * ORB.dmg[lv - 1]); }
-    n++; ORBS.hits++; if (best.dead) ORBS.kills++; if (!missile && best.def.boss) ORBS.boss++;
+    n++; ORBS.hits++; if (!missile) { if (best.dead) ORBS.kills++; if (best.def.boss) ORBS.boss++; }
   }
   if (n) { flash(c.x, c.y, 50000); SFX.zap(); }
   return n;
