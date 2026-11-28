@@ -115,7 +115,9 @@ const GROUPS = {
     s = await waitFor(x => x.state === 'station'); check(s.state === 'station' && s.mods === 'dmg,hull,shield', 'docked: Aegis Generator fitted', s.mods);
     check(s.scrap >= 120, 'docking banks the run\'s scrap', 'scrap ' + s.scrap);
     await shot('05-station');
-    const hp0 = await page.evaluate(() => window.__swarmfall.S.maxHp);
+    // (The run takes the first booster offered at each shuttle. When that was Hull Plate both times the ship was already at its
+    // two hull upgrades, the module could add nothing, and this check failed about one run in a great many: so they are set aside.)
+    const hp0 = await page.evaluate(() => { const s = window.__swarmfall; delete s.G.up.plate; s.recalc(); return s.S.maxHp; });
     await page.locator('#shop .item', { hasText: 'Reinforced Hull' }).locator('button').tap();
     check(await page.evaluate(() => window.__swarmfall.S.maxHp) === hp0 + 1, 'a module bought while docked applies at once');
     await page.tap('#btnUndock'); s = await waitFor(x => x.state === 'draft');
