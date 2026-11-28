@@ -57,6 +57,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `SCRAP_RATE`: one number that scales every enemy's scrap chance (bosses pay in full).
 - `BLAST`: Volatile Payload's reach and strength by level.
 - `SPLIT`: Split Barrel by level: how many extra shots, and on which volleys.
+- `EMP`: the EMP Bomb by level: how often, how far its ring spreads, how long an enemy stays knocked out.
 - `ARC`: the Arc Caster by level: how often it strikes, how far it reaches, how many enemies the bolt jumps through and how hard it hits.
 - `BURST`: Burst Thrusters: how far the ship lunges and drops back, how it drifts home, and what counts as a flick.
 - `SWAY`: how a boss's sweep across the top varies its pace, its reach and its direction.

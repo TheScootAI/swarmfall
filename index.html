@@ -517,6 +517,7 @@ const SFX = {
   launch() { noise(1.3, 0.45, 500); tone('sawtooth', 70, 240, 1.2, 0.25); },
   dock() { tone('square', 110, 80, 0.12, 0.35); tone('square', 90, 60, 0.16, 0.35, 0.18); noise(0.2, 0.3, 600); },
   arc() { noise(0.14, 0.2, 3600, 0.004); tone('sawtooth', 980, 240, 0.13, 0.09); tone('square', 1900, 700, 0.07, 0.05, 0.02); },   // the Arc Caster: a short dry crackle
+  emp() { tone('sine', 190, 46, 0.4, 0.3); noise(0.26, 0.2, 2600, 0.008); tone('square', 1500, 180, 0.22, 0.06, 0.02); },   // the EMP Bomb going off: a low thump and a falling fizz
   dash(fwd) { noise(0.16, 0.14, 1100, 0.008); tone('sine', fwd ? 300 : 620, fwd ? 620 : 300, 0.14, 0.1); },   // Burst Thrusters: a short soft rush, rising for forward and falling for back
   shuttle() { tone('sine', 500, 760, 0.18, 0.2); tone('sine', 760, 1000, 0.18, 0.2, 0.16); },
 };
@@ -592,7 +593,7 @@ const M = {
   hull: pbr(0xe9ecff, 0x1a1f44, 0.6, 0.3), wing: pbr(0x5fe8ff, 0x0b3d4a, 0.5, 0.35), canopy: glowing(basic(0x9ff3ff)), flame: glowMat(0xffb36b, 0.9),
   foe: foeMat(), craft: foeMat(0.65, 0.3, 0.2), foeGlow: glowing(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })),   // every ordinary enemy's body and its lights: the colours are on the model's corners (see kit())
   holo: holoMat(0x8fdcff), holoShip: holoMat(0x8ff0ff, 1.7),   // the simulation: targets and the ship's projection, made of light. They glow: no more than sixteen targets are out at once, and each is small
-  fuse: glowing(basic(ENEMY_RED)),
+  fuse: glowing(basic(ENEMY_RED)), empBomb: glowing(basic(0xbfe9ff)),   // the EMP Bomb on its way out: pale blue-white, like the lightning
   
   
   
@@ -1179,6 +1180,13 @@ const CLOUD = { every: [7, 5.5, 4], r: 46, rMore: 8, fly: 0.8, hang: 4.5,
   near: 150, far: 270, side: 70, conf: 5, confRest: 3, ramSpeed: 300, ramShare: 0.5, ramBoss: 0.03,
   burn: 3, burnShare: 0.06, burnMore: 0.03, burnBoss: 0.125, burnFloor: 0.1 };
 const GAS_RGB = [0.45, 1, 0.6], FLAME_RGB = [1, 0.6, 0.15];
+// The EMP Bomb, by level. The owner: "It goes out and detonates sending out a circular wave that disables ships hit by
+// it to lose ability to shoot and steer so they just drift in the direction they were headed." every: seconds between
+// bombs. r: how far its ring spreads. stun: seconds an enemy it reaches stays knocked out. fly: seconds it takes to get
+// where it is going. wave: seconds the ring takes to spread. clear: the nearest to the ship it will burst. flying: how
+// many sitting enemies one enemy in flight is worth when it chooses where to burst.
+// It is aimed (empAim): lobbed blindly ahead, as the clouds are, it knocked out less than one enemy a bomb in play.
+const EMP = { every: [9, 8, 7], r: [100, 120, 140], stun: [3, 4, 5], fly: 0.55, wave: 0.4, clear: 50, flying: 3 };
 // Sentry satellites: guns the ship leaves behind it. light is the Sentry Satellite booster's, heavy the Sentry
 // Platform station module's; both can be out at once. Each list is by level 1, 2, 3.
 // life: seconds it lasts. hp: enemy shots it can take (a missile counts as 2; an enemy that flies into it destroys
@@ -1239,6 +1247,7 @@ const UP = [
   { id: 'beam', c: 's', n: 'Laser Drone', r: 2, max: 3, d: 'A drone at your wing locks a thin laser onto an enemy or a missile in flight and burns it up.' },
   { id: 'missile', c: 's', n: 'Seeker Pod', r: 2, max: 3, d: 'Launch homing missiles that deal 2.5× damage in a small blast.' },
   { id: 'arc', c: 'w', n: 'Arc Caster', r: 2, max: 3, d: 'Lightning strikes the nearest enemy close to your ship, then jumps on through the ones beside it. Short reach. More levels: more enemies, further, faster.' },
+  { id: 'emp', c: 's', n: 'EMP Bomb', r: 2, max: 3, d: 'Lob a bomb ahead of your ship. Its blast ring knocks out every enemy it reaches: they cannot fire or steer, and drift the way they were going.' },
   { id: 'chain', c: 's', n: 'Arc Coil', r: 2, max: 3, d: 'Hits have a 20% chance to arc lightning to 2 nearby enemies.' },
   { id: 'over', c: 'w', n: 'Overdrive', r: 2, max: 2, d: '+40% fire rate and +20% damage, but −1 max hull.', ok: () => S.maxHp > 1 },
   { id: 'slow', c: 'h', n: 'Time Dilation', r: 2, max: 2, d: 'Enemy shots travel 20% slower.' },
@@ -1285,7 +1294,7 @@ const G = { state: 'title', prev: 'play', time: 0, wave: 0, enemies: [], pb: [],
   form: { cols: 6, rows: 3, top: 96, shape: null, size: 1 }, flights: 0, repairs: 0, waveT: 0, diveT: 0, shootT: 0, clearT: 0, dieT: 0, rerolls: 0, revive: 0, alarmT: 0, boss: null, bossMax: 1, bossDown: false, speed: 1, test: false, god: false, cards: [], cut: null, draftKind: 'wave', newMod: null };
 const shipY = () => H - 70, dockY = () => H - 79;   // the ship's flying height, and the station's when the ship sits on it
 const P = { x: W / 2, y: shipY(), dy: 0, bPhase: 0, bT: 0, bTo: 0, vx: 0, hp: 3, inv: 0, fireT: 0, volley: 0,   // dy: how far off its home row a burst has the ship (up the screen is negative); bPhase: 0 home, 1 going, 2 holding, 3 drifting back
-  shieldUp: false, shieldT: 0, droneT: 0, missT: 0, arcT: 1, target: null, alive: true };
+  shieldUp: false, shieldT: 0, droneT: 0, missT: 0, arcT: 1, empT: 2.5, target: null, alive: true };
 const S = {};   // derived player stats
 const ulv = id => G.up[id] || 0, boostLevel = ulv;
 function recalc() {
@@ -1300,7 +1309,7 @@ function recalc() {
   S.maxHp = Math.max(1, 1 + Math.min(HULL_UPGRADES, mlv('hull') + ulv('plate')) - od);   // a new ship has 1 hull: one hit ends the run until hull is added
   S.rate = 2.75 * (1 + 0.06 * mlv('rate')) * (1 + 0.2 * ulv('rapid')) * (1 + 0.4 * od);
   S.crit = 0.15 * ulv('crit'); S.shield = mlv('shield') + ulv('shield'); S.shieldCD = Math.max(4, 15 - 3.5 * (S.shield - 1) - 2 * mlv('charge'));
-  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.arc = ulv('arc'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame'); S.sentry = ulv('sentry'); S.platform = mlv('sentry'); S.beam = ulv('beam');
+  S.drones = Math.min(3, mlv('drone') + ulv('drone')); S.blast = ulv('blast'); S.missile = mlv('missile') + ulv('missile'); S.chain = ulv('chain'); S.arc = ulv('arc'); S.emp = ulv('emp'); S.nova = ulv('nova'); S.gas = ulv('gas'); S.flame = ulv('flame'); S.sentry = ulv('sentry'); S.platform = mlv('sentry'); S.beam = ulv('beam');
   S.ebMul = 1 - 0.2 * ulv('slow');
   S.scrapMul = (1 + 0.2 * mlv('scrap')) * (1 + 0.5 * ulv('scav'));
   S.magnet = 42 + 22 * mlv('magnet') + 60 * ulv('magnet');
@@ -1439,7 +1448,7 @@ function buildEnemy(type, tint) {
 function spawnEnemy(type, c, r, o = {}) {
   const def = ET[type], n = G.wave;
   const hpMul = o.boss ? 1 : (1 + 0.05 * (n - 1)) * Math.pow(1.3, Math.floor(n / 12));
-  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, lit: 0, holo: false, path: null, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
+  const e = { type, def, c, r, x: o.x || 0, y: o.y || 0, z: 0, vx: 0, vy: 0, state: 'form', t: 0, u: 0, flash: 0, elite: !!o.elite, lead: null, off: 0, lit: 0, holo: false, path: null, side: 0, fuse: 0, tick: 0, flank: 1, hookT: 0, asideLeft: 0, asideDir: 0, diag: 0, leap: rand(LATCH.wait[0], LATCH.wait[1]), rad: def.r, ph: rand(TAU), dead: false, shots: 0, shootT: 0, emp: 0, empTag: 0, burn: 0, burnT: 0, burnLv: 1, conf: 0, confRest: 0, ramAt: null };
   e.hp = e.maxHp = def.hp * hpMul * (e.elite ? ELITE.hp : 1) * (o.hpMul || 1);
   e.g = buildEnemy(type, o.tint);
   if (e.elite) {
@@ -1503,7 +1512,7 @@ function sendEscort(lead, n) {
   let sent = 0;
   for (let i = 0; i < n; i++) {
     let best = null, bd = 1e9;
-    for (const m of G.enemies) { if (m.dead || m.state !== 'form' || m.type !== 'mite' || m.c == null) continue; const d = (m.x - lead.x) ** 2 + (m.y - lead.y) ** 2; if (d < bd) { bd = d; best = m; } }
+    for (const m of G.enemies) { if (m.dead || m.state !== 'form' || m.type !== 'mite' || m.c == null || m.emp > 0) continue; const d = (m.x - lead.x) ** 2 + (m.y - lead.y) ** 2; if (d < bd) { bd = d; best = m; } }
     if (!best) break;
     startDive(best); best.lead = lead; best.off = (i - (n - 1) / 2) * ESCORT.gap; sent++;
   }
@@ -1529,7 +1538,7 @@ const fireDart = (x, y, ang) => fireE(x, y, ang, ebSpeed() * 1.4, 3.4, 1);
 // a missile: starts slow, speeds up and turns toward the ship until it has gone past. Player shots destroy it.
 function fireMissile(x, y) {
   if (G.em.length >= EM_MAX) return;
-  G.em.push({ x, y, vx: rand(-25, 25), vy: 55, t: 0, dead: false }); SFX.missile();   // the first one a player meets is introduced like a new enemy (INTRO_TEXT)
+  G.em.push({ x, y, vx: rand(-25, 25), vy: 55, t: 0, emp: 0, empTag: 0, dead: false }); SFX.missile();   // the first one a player meets is introduced like a new enemy (INTRO_TEXT)
 }
 function popMissile(m, big) { m.dead = true; burst(m.x, m.y, ENEMY_RED_RGB, big ? 12 : 8, big ? 150 : 90, big ? 0.4 : 0.35); }
 function updateMissiles(dt) {
@@ -1540,7 +1549,8 @@ function updateMissiles(dt) {
     if (m.dead) continue;
     m.t += dt;
     const sp = Math.min(205, 60 + 120 * m.t) * S.ebMul, cur = Math.atan2(m.vy, m.vx);
-    const a = P.alive && m.y < P.y - 8 ? turnToward(cur, Math.atan2(P.y - m.y, P.x - m.x), 1.8 * dt) : cur;   // stops turning once level with the ship
+    if (m.emp > 0) m.emp -= dt;   // knocked out by an EMP: it flies straight on
+    const a = P.alive && m.y < P.y - 8 && !(m.emp > 0) ? turnToward(cur, Math.atan2(P.y - m.y, P.x - m.x), 1.8 * dt) : cur;   // stops turning once level with the ship
     m.vx = Math.cos(a) * sp; m.vy = Math.sin(a) * sp; m.x += m.vx * dt; m.y += m.vy * dt;
     if (Math.random() < 0.7) burst(m.x - m.vx * 0.04, m.y - m.vy * 0.04, ENEMY_RED_RGB, 1, 18, 0.3);
     if (P.alive && shipHit(m.x, m.y, 4)) { popMissile(m, true); hitPlayer(); }
@@ -1570,7 +1580,8 @@ function updateLancer(e, dt) {
 function updateDive(e, dt) {
   e.t += dt;
   const sp = e.def.speed * (1 + Math.min(0.5, G.wave * 0.02)) * (e.pace || 1), steer = e.y < H * 0.58;
-  if (e.type === 'beetle') {
+  if (e.emp > 0) { /* knocked out by an EMP: no steering and no fire. It keeps the heading and the pace it had */ }
+  else if (e.type === 'beetle') {
     if (e.shots > 0 && e.y >= H * 0.38) {
       e.vy += (6 - e.vy) * Math.min(1, 4 * dt); e.vx += -e.vx * Math.min(1, 3 * dt); e.shootT -= dt;
       if (e.shootT <= 0) {
@@ -2144,6 +2155,7 @@ function updatePlayer(dt) {
   }
   if (S.missile > 0) { P.missT -= dt; if (P.missT <= 0 && nearest(P.x, P.y, null, 900)) { P.missT = 1.7 / S.missile; shot(P.x, P.y - 10, rand(-0.6, 0.6), 1, 2.5); } }
   P.gasT = cloudTimer(0, S.gas, P.gasT, dt); P.flameT = cloudTimer(1, S.flame, P.flameT, dt);
+  if (S.emp > 0 && (P.empT -= dt) <= 0) P.empT = empAim(S.emp) && launchEmp(EMP_AT.x, EMP_AT.y, S.emp) ? EMP.every[Math.min(3, S.emp) - 1] : 0.3;   // nothing to use it on, or both bombs out: try again shortly
   updateLaser(dt); updateArc(dt);
 }
 // ---- sentry satellites ----
@@ -2285,6 +2297,62 @@ function cloudTimer(kind, lv, left, dt) {
   if (!G.enemies.length) return 0.3;   // nothing on the field: try again shortly
   const C = CLOUD;
   return launchCloud(kind, clamp(P.x + rand(-C.side, C.side), 40, W - 40), P.y - rand(C.near, C.far), lv) ? C.every[Math.min(lv, 3) - 1] : 0.3;   // all four clouds in use: try again shortly
+}
+// ---- the EMP Bomb (numbers in EMP) ----
+// A bomb is lobbed ahead of the ship, bursts, and a ring spreads from it. Every enemy the ring reaches is knocked out
+// for a while (e.emp): it cannot fire or steer and keeps the heading it had; one sitting in the formation cannot be
+// picked to fire or dive. Its lights go out and it sparks until it comes round. Missiles the ring reaches fly straight
+// on. Bosses are too big for it, and a latcher already clamped onto the ship is untouched.
+const emps = []; let empSerial = 0;
+for (let i = 0; i < 2; i++) { const mesh = part(geo.oct, M.empBomb, 5, 7, 5); mesh.visible = false; scene.add(mesh); emps.push({ on: false, burst: false, lv: 1, id: 0, x: 0, y: 0, x0: 0, y0: 0, tx: 0, ty: 0, t: 0, r: 0, mesh }); }
+function launchEmp(tx, ty, lv) {
+  let c = null; for (const o of emps) if (!o.on) { c = o; break; }
+  if (!c) return false;
+  c.on = true; c.burst = false; c.lv = Math.min(3, lv); c.id = ++empSerial; c.x = c.x0 = P.x; c.y = c.y0 = P.y - 18; c.tx = tx; c.ty = ty; c.t = 0; c.r = 0; c.mesh.visible = true; SFX.puff();
+  return true;
+}
+// Where the next bomb goes: wherever its ring will catch the most. Each enemy is tried as the middle of the burst (one
+// in flight, at the place it will have reached when the bomb gets there), and the one with the most around it wins.
+// An enemy in flight counts for EMP.flying sitting ones, since those are the ones coming at the ship. Never a boss,
+// never one already knocked out, and never so low that the burst would be down among the ship's rows.
+const EMP_AT = { x: 0, y: 0 };
+const empOk = e => !e.dead && !e.def.boss && !e.holo && e.state !== 'latch' && e.z > -60 && !(e.emp > 0);
+const empFly = e => e.state === 'dive' || e.state === 'ram';
+function empAim(lv) {
+  const reach = (EMP.r[Math.min(3, lv) - 1] * 0.85) ** 2, top = P.y - EMP.clear; let best = -1, bd = 0;
+  for (const a of G.enemies) {
+    if (!empOk(a)) continue;
+    const af = empFly(a), ax = a.x + (af ? a.vx * EMP.fly : 0), ay = a.y + (af ? a.vy * EMP.fly : 0); if (ay > top) continue;
+    let score = 0;
+    for (const b of G.enemies) { if (!empOk(b)) continue; const bf = empFly(b), dx = b.x + (bf ? b.vx * EMP.fly : 0) - ax, dy = b.y + (bf ? b.vy * EMP.fly : 0) - ay; if (dx * dx + dy * dy <= reach) score += bf ? EMP.flying : 1; }
+    const d = (ax - P.x) ** 2 + (ay - P.y) ** 2;
+    if (score > best || (score === best && d < bd)) { best = score; bd = d; EMP_AT.x = clamp(ax, 20, W - 20); EMP_AT.y = ay; }
+  }
+  return best > 0;
+}
+function clearEmps() { for (const c of emps) { c.on = false; c.mesh.visible = false; } }
+function empHit(e, secs) {   // an enemy knocked out
+  if (!(e.emp > 0)) for (const m of e.meshes) if (m.userData.base.userData.glow) m.visible = false;   // its lights go out
+  e.emp = Math.max(e.emp, secs); burst(e.x, e.y, HIT_RGB, 8, 120, 0.35);
+}
+function empEnd(e) { e.emp = 0; for (const m of e.meshes) if (m.userData.base.userData.glow) m.visible = true; }
+function updateEmps(dt) {
+  for (const c of emps) {
+    if (!c.on) continue;
+    c.t += dt;
+    if (!c.burst) {   // on its way out
+      const u = Math.min(1, c.t / EMP.fly), k = 1 - (1 - u) * (1 - u);
+      c.x = lerp(c.x0, c.tx, k); c.y = lerp(c.y0, c.ty, k); c.mesh.position.set(TX(c.x), TY(c.y), 2); c.mesh.rotation.z += 9 * dt; c.mesh.rotation.y += 5 * dt;
+      if (u >= 1) { c.burst = true; c.t = 0; c.mesh.visible = false; const R = EMP.r[c.lv - 1];
+        ringFx(c.x, c.y, 6, R, 0xbfe9ff, EMP.wave); ringFx(c.x, c.y, 4, R * 0.6, 0xffffff, EMP.wave * 0.7); flash(c.x, c.y, 260000); burst(c.x, c.y, HIT_RGB, 22, 220, 0.45); shake(3); SFX.emp(); }
+      continue;
+    }
+    c.r = EMP.r[c.lv - 1] * Math.min(1, c.t / EMP.wave);   // the ring spreads: whatever it has reached is knocked out
+    const r2 = c.r * c.r, secs = EMP.stun[c.lv - 1];
+    for (const e of G.enemies) if (!e.dead && e.empTag !== c.id && !e.def.boss && !e.holo && e.state !== 'latch' && e.z > -60 && (e.x - c.x) ** 2 + (e.y - c.y) ** 2 <= r2) { e.empTag = c.id; empHit(e, secs); }
+    for (const m of G.em) if (!m.dead && m.empTag !== c.id && (m.x - c.x) ** 2 + (m.y - c.y) ** 2 <= r2) { m.empTag = c.id; m.emp = secs; burst(m.x, m.y, HIT_RGB, 5, 90, 0.3); }
+    if (c.t >= EMP.wave) c.on = false;
+  }
 }
 function clearClouds() { for (const c of clouds) { c.on = false; c.mesh.visible = false; } }
 function updateClouds(dt) {
@@ -2439,28 +2507,32 @@ function updateEnemies(dt) {
     if (e.dead) continue;
     if (e.flash > 0) { e.flash -= dt; if (e.flash <= 0) restoreMats(e); }
     if ((e.burn > 0 || e.confRest > 0) && inPlay()) afflicted(e, dt);   // not on the ship-lost screen, where the swarm still drifts
+    if (e.emp > 0) { e.emp -= dt; if (e.emp <= 0) empEnd(e); else if (Math.random() < 6 * dt) burst(e.x + rand(-1, 1) * e.rad, e.y + rand(-1, 1) * e.rad, HIT_RGB, 1, 40, 0.3); }   // knocked out: a spark now and then until it comes round
     if (e.state === 'enter') {
       e.u += dt / e.dur; const u = Math.min(1, e.u), s = slotPos(e), m = 1 - u;
       const w0 = m * m * m, w1 = 3 * m * m * u, w2 = 3 * m * u * u, w3 = u * u * u;
       const nx = w0 * e.p0.x + w1 * e.p1.x + w2 * e.p2.x + w3 * s.x; e.vx = (nx - e.x) / Math.max(dt, 0.001); e.x = nx;
       e.y = w0 * e.p0.y + w1 * e.p1.y + w2 * e.p2.y + w3 * s.y; e.z = e.z0 * (1 - smooth(Math.min(1, u / 0.55)));
       if (u >= 1) { e.state = 'form'; e.vx = 0; e.leap = rand(LATCH.wait[0], LATCH.wait[1]); }
-    } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0; if (e.laser) updateLancer(e, dt); else formed.push(e);
-      if (e.def.latch && G.state === 'play' && P.alive && (e.leap -= dt) <= 0) { launchDive(e); SFX.leap(); } }   // a latcher does not wait to be picked: it leaps on its own
+    } else if (e.state === 'form') { const s = slotPos(e); e.x = s.x; e.y = s.y; e.z = 0; e.vx = 0;
+      if (e.emp > 0) { if (e.laser) { e.laser.phase = 'idle'; e.laser.t = Math.max(e.laser.t, 1); } }   // knocked out in its place: it is not picked to fire or to dive, a lancer's beam goes out, a latcher does not leap
+      else { if (e.laser) updateLancer(e, dt); else formed.push(e);
+        if (e.def.latch && G.state === 'play' && P.alive && (e.leap -= dt) <= 0) { launchDive(e); SFX.leap(); } } }   // a latcher does not wait to be picked: it leaps on its own
     else if (e.state === 'dive') { updateDive(e, dt); diving++; }
-    else if (e.state === 'ram') { updateRam(e, dt); if (e.dead) continue; }
+    else if (e.state === 'ram') { if (e.emp > 0) { e.x = clamp(e.x + e.vx * dt, 12, W - 12); e.y += e.vy * dt; } else updateRam(e, dt); if (e.dead) continue; }
     else if (e.state === 'latch') { updateLatch(e, dt); if (e.dead) continue; latched++; }
     else if (e.state === 'sim') { updateHolo(e, dt); if (e.dead) continue; }
     else updateBoss(e, dt);
     if (P.alive && e.state !== 'latch' && !e.holo && e.z > -25 && shipHit(e.x, e.y, e.rad - 2)) {
-      if (e.def.latch) latchOn(e);   // a latcher never hurts by touching: it clamps on, or (no room, or the ship is blinking) flies on by
+      if (e.def.latch) { if (!(e.emp > 0)) latchOn(e); }   // a latcher never hurts by touching: it clamps on, or (no room, the ship is blinking, or an EMP has knocked it out) flies on by
       else { hitPlayer(); if (!e.def.boss) damageEnemy(e, 40); }
     }
     if (e.dead) continue;
     // model
     const g = e.g; g.position.set(TX(e.x), TY(e.y), e.z);
     const tilt = clamp(-e.vx / 320, -0.6, 0.6), t = G.time + e.ph;
-    if (e.laser) {
+    if (e.emp > 0 && !e.laser) g.rotation.z += (e.ph > Math.PI ? 0.9 : -0.9) * dt;   // knocked out: it stops what it was doing and turns slowly, adrift
+    else if (e.laser) {
       const L = e.laser, len = (H + 60 - e.y) / g.scale.y, eye = g.userData.eye, on = e.state === 'form' && L.phase !== 'idle';
       g.rotation.set(0, Math.sin(t * 1.3) * 0.25, 0); e.beam.visible = on; e.core.visible = on && L.phase === 'fire';
       if (on) {
@@ -2539,7 +2611,7 @@ function clearedToast() {
 function updateGame(dt) {
   if (G.state === 'dying') dt *= 0.45;
   G.waveT += dt;
-  updatePlayer(dt); updateClouds(dt); updateSats(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt); introScan(dt);
+  updatePlayer(dt); updateClouds(dt); updateEmps(dt); updateSats(dt); updateEnemies(dt); updateShots(dt); updatePicks(dt); introScan(dt);
   sweepDead(G.enemies);
   if (G.boss) { const f = Math.round(clamp(bossLeft() / G.bossMax, 0, 1) * 400) / 400; if (f !== bossFrac) { bossFrac = f; $('bossbar').firstElementChild.style.transform = 'scaleX(' + f + ')'; } }
   if (G.state === 'play') reinforce();
@@ -2571,7 +2643,7 @@ const WARP = { k: 0, was: -1 };   // how wavy the screen is, from 0 to 1. The sc
 function dockedBelow() { ST.on = true; ST.y = H * 0.4; P.x = W / 2; P.y = ST.y + DOCK_BOTTOM; P.vx = 0; }   // where the docking scene leaves the ship: at the station's lower port
 function dockPose() { ST.on = true; ST.y = dockY(); P.x = W / 2; P.y = ST.y - DOCK_TOP; P.vx = 0; }   // docked on top, ready to leave
 function startCut(kind, done) {
-  FIN.on = FIN.toast = false; clearClouds(); clearSats(); P.las = null;   // a cloud, satellite or beam would hang frozen through the scene
+  FIN.on = FIN.toast = false; clearClouds(); clearEmps(); clearSats(); P.las = null;   // a cloud, satellite or beam would hang frozen through the scene
   G.state = 'cut'; G.cut = { kind, t: 0, dur: CUTS[kind].dur, done, x0: P.x, y0: P.y, fx: false }; P.target = null; drag = null; show(null);
   P.dy = 0; P.bPhase = 0;   // a scene takes the ship from wherever a burst had it
   if (kind === 'launch') { dockPose(); SH.on = false; toast('LAUNCH'); }
@@ -2653,7 +2725,7 @@ function startSim() {
   G.state = 'sim'; G.sim = true; recalc();   // the bare ship
   SIMS.lineHits.fill(0);
   Object.assign(SIMS, { on: true, wait: true, waitT: 0, lines: 0, hits: 0, total: stage.length * SIM.n, ended: false, shield: P.shieldUp, reward: 0, perfect: false, owed: 0, leaving: false });
-  P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearSats(); G.pb.length = 0;
+  P.shieldUp = false; P.inv = 0; P.fireT = 1.2; P.las = null; clearClouds(); clearEmps(); clearSats(); G.pb.length = 0;
   ST.on = false; P.x = W / 2; P.y = shipY(); P.dy = 0; P.bPhase = 0; P.vx = 0; P.target = null; WARP.k = 1; simScene(true);
   ship.traverse(m => { if (m.isMesh && m !== shieldMesh && m !== flame) { m.userData.real = m.material; m.userData.wasGlow = m.layers.isEnabled(GLOW); m.material = M.holoShip; m.layers.enable(GLOW); } });
   G.queue = []; G.waveT = 0;
@@ -2923,7 +2995,7 @@ function toggleMute() {
 }
 
 function resetField() {
-  FIN.on = FIN.toast = false; clearClouds(); clearSats(); introEnd(); simOver(); WARP.k = 0;
+  FIN.on = FIN.toast = false; clearClouds(); clearEmps(); clearSats(); introEnd(); simOver(); WARP.k = 0;
   for (const e of G.enemies) scene.remove(e.g);
   for (const p of G.picks) scene.remove(p.mesh);
   G.enemies = []; G.picks = []; G.pb = []; G.eb = []; G.em = []; G.queue = []; G.blastQ = []; G.flights = 0; clearBoss();
@@ -2949,7 +3021,7 @@ function startRun(test, drill) {   // drill: a test run that goes straight into 
   G.up = {}; if (test) for (const u of UP) { const lv = Math.min(u.max, DBG.up[u.id] | 0); if (lv > 0 && u.id !== 'patch') G.up[u.id] = lv; }
   G.run = { scrap: 0, kills: 0, banked: 0 }; G.wave = test ? DBG.wave - 1 : 0; G.rerolls = mlv('reroll'); G.revive = mlv('revive'); G.time = G.time % 1000;
   recalc();
-  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, volley: 0, dy: 0, bPhase: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, arcT: 1, lasT: 1, las: null, target: null, alive: true });
+  Object.assign(P, { x: W / 2, vx: 0, hp: S.maxHp, inv: 1, fireT: 0.4, volley: 0, dy: 0, bPhase: 0, shieldUp: false, shieldT: 0, droneT: 0, missT: 1, gasT: 2, flameT: 3, arcT: 1, empT: 2.5, lasT: 1, las: null, target: null, alive: true });
   ship.visible = true; $('hud').hidden = false; drawHud();
   Object.assign(SHK, { x: P.x, dir: 0, run: 0, v: 0, n: 0, any: false, off: false, edge: false });
   dockPose();   // every run begins docked at the station
@@ -3016,7 +3088,7 @@ function togglePause() {
 }
 function endRun() {
   testMods = null;   // the screens after a run show the real station again
-  clearSats(); clearClouds(); simOver(); WARP.k = 0;   // a run ended from the pause screen in the middle of the simulation: the grid and the ship of light must not stay behind
+  clearSats(); clearClouds(); clearEmps(); simOver(); WARP.k = 0;   // a run ended from the pause screen in the middle of the simulation: the grid and the ship of light must not stay behind
   const test = G.test, bonus = test ? 0 : Math.max(0, G.wave - 1) * 3, got = test ? 0 : unbanked() + bonus, best = !test && G.wave > meta.best;
   if (!test) { meta.scrap += got; meta.runs++; if (best) meta.best = G.wave; save(); }   // a test run leaves the save alone
   G.state = 'dead';
@@ -3438,7 +3510,7 @@ function frame(now) {
 resize(); soundLabels(); gfxLabels(); showTitle();
 if (new URLSearchParams(location.search).has('debug')) openDebug();   // the test bench, straight from the address
 // Debug handle for tools/smoke.js and for poking at the game from the browser console. Not used by the game.
-window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, BURST, ARC, burstGo, shipHit, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, simYAt, shipY, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
+window.__swarmfall = { G, P, S, meta, ET, UP, SHOP, UNLOCK, BOSSES, CLEAR, SWARM, ELITE, BLAST, SPLIT, SWAY, BURST, ARC, EMP, launchEmp, emps, burstGo, shipHit, bossSway, SHUTTLE, ESCORT, sendEscort, LATCH, SHK, SCRAP_RATE, eliteShare, shuttleAfter, wavesToShuttle, quietWave, SIM, SIMS, WARP, simPath, simYAt, shipY, startSim, simBegin, ST, backdrop: nebula.m, IN, INTRO, INTRO_TEXT, SIEGE, DART, CLOUD, SENTRY, LASER, SH, sats, clouds, launchCloud, GFX, FIN, camera, scene, recalc, nextWave, spawnEnemy, launchDive, fireMissile, spawnPick };
 requestAnimationFrame(frame);
 })();
 </script>
