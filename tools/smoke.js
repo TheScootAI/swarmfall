@@ -780,7 +780,7 @@ const GROUPS = {
       await T.wait(C.fly + 0.05); out.letDmg = T.took(e1); out.letWant = S.dmg * C.letDmg[0]; e1.dead = true; w.scene.remove(e1.g);
       G.pb.length = 0; const e2 = T.held('wasp', 100, 400); G.pb.push({ x: 100, y: 440, vx: 0, vy: -C.shardSpeed, dmg: S.dmg * C.shardDmg, pierce: 0, rico: 0, crit: false, kind: 4, hit: null, life: C.shardLife, dead: false }); const h0 = w.CLUS.shardHits;
       await T.wait(0.3); out.shardDmg = T.took(e2); out.shardWant = S.dmg * C.shardDmg; out.shardGone = G.pb.length === 0; out.counted = w.CLUS.shardHits - h0; return out; });
-    check(parts.letDmg >= parts.letWant && parts.letDmg <= parts.letWant + 4 * parts.shardWant, 'a small bomb\'s blast damages what it bursts beside', JSON.stringify({ took: parts.letDmg, blast: parts.letWant }));
+    check(parts.letDmg >= parts.letWant && parts.letDmg <= parts.letWant + C.shards[0] * parts.shardWant, 'a small bomb\'s blast damages what it bursts beside (which may take its shrapnel too)', JSON.stringify({ took: parts.letDmg, blast: parts.letWant }));
     check(parts.shardDmg === parts.shardWant && parts.shardGone && parts.counted === 1, 'a piece of shrapnel damages the first enemy it hits (' + parts.shardWant + ') and is spent', JSON.stringify(parts));
     // 4. levels: more small bombs and more shrapnel; a missile in the blast is destroyed; a latcher clamped onto the ship is not touched
     const more = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, C = w.CLUSTER, out = {}; T.field(); await T.wait(0.3);
