@@ -779,10 +779,11 @@ const GROUPS = {
       const L = w.spawnEnemy('latcher', null, null, { x: P.x + 10, y: P.y }); L.state = 'latch'; L.side = 1; L.fuse = 9; L.hx = P.x + 10; L.hy = P.y; L.hp0 = L.hp; T.hold.push(L);
       const other = T.held('mite', T.x + 30, P.y - 120); w.launchOrb(1); await T.pass(P.y - 260); out.latcher = T.took(L); out.other = T.took(other); L.dead = true; w.scene.remove(L.g); return out; });
     check(lat.latcher === 0 && lat.other > 0, 'it never strikes a latcher that has clamped onto the ship', JSON.stringify(lat));
-    // 5. level 1 strikes one thing at a time; level 3 two
-    const two = await page.evaluate(async () => { const w = window.__swarmfall, { G, P } = w, T = window.__t, out = {};
-      for (const lv of [1, 3]) { T.field(); T.hold = []; await T.wait(0.3); const a = T.held('wasp', T.x - 40, P.y - 200), b = T.held('wasp', T.x + 45, P.y - 200); let first = null;
-        w.launchOrb(lv); await T.pass(P.y - 330, () => { if (first === null && (T.took(a) > 0 || T.took(b) > 0)) first = (T.took(a) > 0 ? 1 : 0) + (T.took(b) > 0 ? 1 : 0); }); out['lv' + lv] = first; out['each' + lv] = Math.max(T.took(a), T.took(b)) > 0; }
+    // 5. level 1 strikes one thing at a time; level 3 two. (Counted as the most struck in any one frame of the whole pass. An
+    // earlier version looked only at the first arc, which now and then came in the instant when just one of the two was in reach.)
+    const two = await page.evaluate(async () => { const w = window.__swarmfall, { G, P, S } = w, T = window.__t, out = {};
+      for (const lv of [1, 3]) { T.field(); T.hold = []; await T.wait(0.3); const a = T.held('wasp', T.x - 42, P.y - 200), b = T.held('wasp', T.x + 42, P.y - 200), each = S.dmg * w.ORB.dmg[lv - 1]; let most = 0, was = 0;
+        w.launchOrb(lv); await T.pass(P.y - 330, () => { const now = Math.round((T.took(a) + T.took(b)) / each); most = Math.max(most, now - was); was = now; }); out['lv' + lv] = most; out['strikes' + lv] = was; }
       return out; });
     check(two.lv1 === 1 && two.lv3 === 2, 'one arc strikes one enemy at level 1 and two at level 3', JSON.stringify(two));
     // 6. a boss is struck too; and the bare ship of the training simulation has none
