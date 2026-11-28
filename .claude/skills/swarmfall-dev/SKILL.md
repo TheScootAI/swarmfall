@@ -64,7 +64,7 @@ node smoke.js --list
 - `node --check tools/smoke.js` catches a broken test script before a run. To check that the game's script parses without a browser:
 
 ```
-node -e "const s=require('fs').readFileSync('index.html','utf8');new Function(s.match(/<script>\n([\s\S]*)<\/script>/)[1]);console.log('parses')"
+node -e "const s=require('fs').readFileSync('index.html','utf8');new Function(s.split('<script>\n').pop().split('</script>')[0]);console.log('parses')"
 ```
 
 ## 5. Keep the docs in step
