@@ -57,6 +57,7 @@ All the numbers live in the "game data" section of the script in `index.html`:
 - `SCRAP_RATE`: one number that scales every enemy's scrap chance (bosses pay in full).
 - `BLAST`: Volatile Payload's reach and strength by level.
 - `SPLIT`: Split Barrel by level: how many extra shots, and on which volleys.
+- `ARC`: the Arc Caster by level: how often it strikes, how far it reaches, how many enemies the bolt jumps through and how hard it hits.
 - `BURST`: Burst Thrusters: how far the ship lunges and drops back, how it drifts home, and what counts as a flick.
 - `SWAY`: how a boss's sweep across the top varies its pace, its reach and its direction.
 - `BOSSES`: the bosses in the order they take turns. `CUBE`, `WARDEN`, `SIEGE` and `TRIAD`: each later boss's numbers.

@@ -667,6 +667,45 @@ const GROUPS = {
     check(s.state === 'station' && after.meta - before.meta === before.run - before.banked + r3.reward + r3.lines * V.line, 'a key carries on too, and the station banks what the simulation paid with the rest of the run\'s scrap', JSON.stringify({ before, after }));
     await page.context().close();
   },
+  // The Arc Caster: short-range lightning from the ship that jumps from enemy to enemy.
+  arc: async () => {
+    const { page, st, waitFor, shot } = await open(); let s;
+    await page.tap('#btnPlay'); await waitFor(x => x.state === 'play', 20000);
+    // Each trial: the field cleared, the ship in the middle with its own gun held, enemies set down where the trial
+    // wants them (as divers, held still), then what each has left after the first bolt (or after `wait` seconds if none comes).
+    const trial = (level, spots, wait = 3.2) => page.evaluate(([level, spots, wait]) => new Promise(res => { const w = window.__swarmfall, { G, P, S } = w, t0 = performance.now();
+      for (const e of G.enemies) { e.dead = true; w.scene.remove(e.g); } G.queue.length = 0; G.flights = 0; G.eb.length = 0; G.em.length = 0; G.wave = 1;
+      const guard = w.spawnEnemy('mite', 0, 0); guard.hp = guard.maxHp = 1e12;   // keeps the wave from counting as cleared; it sits in the formation, far out of reach
+      G.up = level ? { arc: level } : {}; w.recalc(); P.arcT = 0.4; P.x = 180; P.target = 180; const kills0 = G.run.kills;
+      const es = spots.map(([dx, dy, type, state]) => { const e = w.spawnEnemy(type || 'mite', null, null, { x: P.x + dx, y: P.y + dy }); if (state) { e.state = state; e.side = 1; e.fuse = 9; } else w.launchDive(e); e.hx = P.x + dx; e.hy = P.y + dy; e.hp0 = e.hp; return e; });
+      let frames = 0, hitAt = null, lines = 0;
+      (function f() { G.diveT = 99; G.shootT = 99; G.eb.length = 0; P.fireT = 9; P.inv = 9; guard.hp = 1e12; P.target = 180;
+        for (const e of es) if (!e.dead) { e.x = e.hx; e.y = e.hy; e.vx = e.vy = 0; if (e.state === 'latch') e.fuse = 9; }
+        const struck = es.filter(e => e.dead || e.hp < e.hp0).length; if (struck && hitAt === null) { hitAt = (performance.now() - t0) / 1000; lines = w.scene.children.filter(o => o.isLine && o.visible).length; }
+        if (hitAt !== null ? ++frames > 3 : performance.now() - t0 > wait * 1000) return res({ took: es.map(e => e.dead ? 'gone' : +(e.hp0 - e.hp).toFixed(1)), kills: G.run.kills - kills0, lines, dmg: S.dmg, guard: guard.hp === 1e12, state: G.state });
+        requestAnimationFrame(f); })(); }), [level, spots, wait]);
+    const A = await page.evaluate(() => window.__swarmfall.ARC);
+    // five mites in a row beside the ship, 40 apart, the first 60 away; and one far up the field
+    const row = [[60, -40], [100, -40], [140, -40], [180, -40], [220, -40], [0, -400]];
+    const none = await trial(0, row);
+    check(none.took.every(t => t === 0) && none.state === 'play', 'Arc Caster: without the booster nothing is struck', JSON.stringify(none.took));
+    const l1 = await trial(1, row); await shot('19-arc-caster');
+    check(l1.took.slice(0, 3).every(t => t === 'gone') && l1.took.slice(3).every(t => t === 0) && l1.kills === 3 && l1.lines >= 2, 'level 1: the bolt strikes the nearest and jumps on through the next two; three mites go at once, and the far one is left alone', JSON.stringify(l1));
+    const l3 = await trial(3, row);
+    check(l3.took.slice(0, 5).every(t => t === 'gone') && l3.took[5] === 0 && l3.kills === 5, 'level 3: five in a row go at once', JSON.stringify(l3));
+    // tougher enemies take its damage and live; a gap wider than its jump stops the chain
+    const tough = await trial(1, [[60, -40, 'beetle'], [100, -40, 'beetle'], [100 + A.jump + 30, -40, 'beetle']]);
+    check(tough.took[0] === tough.dmg * A.dmg[0] && tough.took[1] === tough.took[0] && tough.took[2] === 0 && tough.kills === 0, 'each enemy struck takes 2.5 times a shot\'s damage, and a gap wider than its jump stops the chain', JSON.stringify(tough));
+    // nothing within its short reach: it holds its charge, however long
+    const far = await trial(1, [[0, -(A.range[0] + 40)], [80, -(A.range[0] + 20)]], 3);
+    check(far.took.every(t => t === 0), 'an enemy just beyond its short reach is never struck', JSON.stringify({ reach: A.range[0], took: far.took }));
+    // a latcher clamped onto the ship is not a target, and does not stop it striking another
+    const lat = await trial(1, [[10, 0, 'latcher', 'latch'], [70, -50]]);
+    check(lat.took[0] === 0 && lat.took[1] === 'gone', 'it never strikes a latcher that has clamped onto the ship', JSON.stringify(lat.took));
+    const sim = await page.evaluate(() => { const w = window.__swarmfall; w.G.up = { arc: 2 }; w.G.sim = true; w.recalc(); const b = w.S.arc; w.G.sim = false; w.recalc(); return { inSim: b, after: w.S.arc }; });
+    check(sim.inSim === 0 && sim.after === 2, 'the bare ship of the training simulation has none', JSON.stringify(sim));
+    await page.context().close();
+  },
   // Burst Thrusters: a flick of the thumb up or down lunges the ship forward or drops it back, and it drifts home.
   burst: async () => {
     const { page, st, waitFor } = await open(); let s;
@@ -814,7 +853,7 @@ const GROUPS = {
     await page.reload(); await page.waitForTimeout(500);   // a fresh page for the next part
     await page.tap('#btnPlay'); await waitFor(x => x.state === 'cut'); await page.touchscreen.tap(195, 400); await waitFor(x => x.state === 'play');
     const stress = await page.evaluate(() => new Promise(res => { const s = window.__swarmfall;
-      for (const id of ['dash', 'twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
+      for (const id of ['dash', 'arc', 'twin', 'pierce', 'rico', 'drone', 'crit', 'blast', 'missile', 'chain', 'nova', 'shield', 'gas', 'flame', 'sentry', 'beam']) s.G.up[id] = 2;
       s.recalc(); s.G.wave = 15; s.nextWave(); s.S.maxHp = 9; s.P.hp = 9;
       const seen = { kills: 0, maxShots: 0, maxMissiles: 0, splits: 0, beams: 0, waves: new Set() }; const t0 = performance.now(); let k0 = s.G.run.kills;
       (function f() { const G = s.G;
@@ -998,6 +1037,7 @@ const ABOUT = {
   released: 'ships a boss releases',
   sentry: 'sentry satellites and the Laser Drone',
   sim: 'the simulation after a boss: the wavy scenes in and out, the grid and no station, bare ship only, harmless, a perfect score on every stage, the reward, pause, the result card and the touch that carries on, a part score in a real run on a short phone',
+  arc: 'the Arc Caster: short reach, the chain from enemy to enemy, its damage, what it will not strike',
   burst: 'Burst Thrusters: a flick up or down, what does not count as one, the drift home, the hit shape, the keys',
   latcher: 'the latcher: leaping by itself, clamping on, going off, shaken off, slammed off; the shield; no harm by touch',
   stress: 'Volatile Payload in a full formation; the hull cap; Split Barrel\'s three levels; every booster at once on late waves; pause; the Graphics button',
