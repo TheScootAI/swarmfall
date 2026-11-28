@@ -57,7 +57,6 @@ const NOTES = {
   'm:revive': 'The blow that would end the run leaves you on 1 hull instead, untouchable for 2.5 seconds, and blasts every enemy for 80 damage while wiping their shots.',
   'm:shield': 'The same shield as the Aegis Shell booster. With both, the recharge is 3.5 seconds shorter.',
   'm:charge': '2 seconds off the shield\'s recharge per level: 15 seconds down to 9 with all 3.',
-  'm:sentry': 'A heavier satellite than the Sentry Satellite booster\'s, and both can be out together. Twin guns firing 2.6, 3, then 3.4 volleys a second at 90% of your shot damage each. It lasts 14, 17, then 20 seconds and takes 5, 7, then 9 enemy shots. Eight seconds after it is gone, the next one deploys.',
   'm:drone': 'One drone from the first wave. It fires every 0.7 seconds for half your shot damage. Wing Drone boosters add more, up to 3.',
   'm:missile': 'One homing missile every 1.7 seconds from the first wave. Seeker Pod boosters make them come faster.',
   'm:scrap': '+20% scrap per level: +60% with all 3.',
