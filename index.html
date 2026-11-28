@@ -1088,7 +1088,7 @@ const SPLIT = [null, { every: 3, add: 1 }, { every: 1, add: 1 }, { every: 1, add
 // is left, each second); near: how close to home counts as home, when the next burst is allowed. flick: the thumb
 // movement that sets one off: at least `px` up or down within `ms`, and no more than `slant` times that sideways, so
 // that steering on a slant, and the wide side-to-side shake that throws a latcher off, never do.
-const BURST = { fwd: 60, back: 40, out: 0.14, hold: 0.2, home: 2.4, near: 1.5, flick: { px: 34, ms: 160, slant: 0.6 } };
+const BURST = { fwd: 110, back: 48, out: 0.16, hold: 0.2, home: 2.4, near: 1.5, flick: { px: 34, ms: 160, slant: 0.6 } };
 // A boss's sweep across the top (bossSway): its pace and its reach are each a share of the boss's own, drawn afresh
 // every `every` seconds; `turn` is the chance it also turns back; `ease` is how quickly it takes up the new ones.
 const SWAY = { pace: [0.6, 1.4], reach: [0.55, 1], every: [1.6, 3.6], turn: 0.3, ease: 1.2 };
